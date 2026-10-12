@@ -1,0 +1,9 @@
+Repository: https://github.com/rsc/plan9
+Revision: 13bd0c334646e584ddecc1b7b106c0183b164273
+Directory: sys/src/cmd/unix/u9fs
+
+The 34 original files were imported without modifications. Their original
+authors are Bob Flandrena, Ken Thompson, Rob Pike, and Russ Cox. See LICENSE
+in this directory for the complete original Lucent permission notice.
+
+This UPSTREAM file is a generated9 addition; see the repository root LICENSE.
