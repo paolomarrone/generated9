@@ -12,7 +12,7 @@ sys/src/cmd/unix/u9fs/LICENSE, not by a replacement license from this project.
 The MIT notice accompanying Russ Cox's boot/qemu source is reproduced in
 boot/LICENSE.rsc and applies to the portions derived from that source.
 
-The new generated9 contributions in .gitignore, README.md, CREDITS.md,
+The new generated9 contributions in .gitignore, README.md, AGENTS.md, CREDITS.md,
 sys/src/cmd/unix/u9fs/UPSTREAM, and the boot scripts, configuration, and
 documentation are provided under the following MIT license. This grant
 covers only the new contributions and does not relicense third-party code.
