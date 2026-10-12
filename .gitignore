@@ -11,6 +11,8 @@
 /mail/
 /adm/timezone/local
 /sys/log/
+/sys/lib/go/
+/sys/lib/tls/ca.pem
 
 # Host u9fs build products.
 /sys/src/cmd/unix/u9fs/*.o

@@ -1,0 +1,18 @@
+# Source with . /root/boot/goenv inside the diskless VM.
+# ramfs implements the exclusive-use files required by Go's cache locks.
+if(! test -d /mnt/go/build){
+	mkdir -p /mnt/go &&
+	ramfs -u -m /mnt/go &&
+	mkdir /mnt/go/build /mnt/go/mod /mnt/go/tmp
+}
+if(test -d /mnt/go/build && test -d /mnt/go/mod && test -d /mnt/go/tmp){
+	GOROOT=/sys/lib/go
+	GOPATH=$home/go
+	GOBIN=$home/bin/$cputype
+	GOCACHE=/mnt/go/build
+	GOMODCACHE=/mnt/go/mod
+	GOTMPDIR=/mnt/go/tmp
+	GOTOOLCHAIN=local
+	bind -b $GOROOT/bin /bin
+}
+if not echo 'goenv: could not prepare /mnt/go' >[1=2]

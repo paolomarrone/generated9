@@ -60,6 +60,73 @@ mk
 Then quit QEMU and use the `-kernel` command above to boot that result. To build
 the userland, run `cd /sys/src` followed by `mk install` inside 9front.
 
+## Go and gojq
+
+The optional Go bootstrap also needs Bash, bzip2, Python 3.12 or later, and
+Go 1.24.6 or later on the Linux host:
+
+```sh
+./boot/getgo
+./boot/qemu -m 4G
+```
+
+`boot/getgo` checks the official source archive's SHA-256 and runs Go's own
+`src/bootstrap.bash` to build Go 1.27.2 for `plan9/amd64`. It installs the
+toolchain, sources, and original licenses in `/sys/lib/go`. An existing
+installation is preserved; move it aside before rebuilding. If
+`/sys/lib/tls/ca.pem` is absent, it installs the pinned 2026-09-25 Mozilla CA
+bundle distributed by curl, also verified by SHA-256. Both downloads and the
+installed files are ignored by Git.
+
+Inside the VM, enter the Go environment and build gojq:
+
+```rc
+. /root/boot/goenv
+go version
+go install github.com/itchyny/gojq/cmd/gojq@v0.12.19
+echo '{"system":"generated9","cpus":2}' | gojq -c .
+```
+
+`/root/boot` exposes the checkout's boot directory; `/boot` contains the
+kernel's bootstrap programs. The environment binds Go's commands into `/bin`
+and installs Go programs in `$home/bin/$cputype`. The gojq binary remains
+available after reboot. No changes to Go or gojq sources are needed, and
+HTTPS certificate verification and Go's module checksum database remain enabled.
+The Plan 9 port has no cgo support. `GOTOOLCHAIN=local` keeps builds on the
+installed compiler.
+
+u9fs does not implement Plan 9 exclusive-use files, which Go uses for cache
+locks. `boot/goenv` mounts a ramfs at `/mnt/go` for the build cache, module
+cache, and compiler temporary files. Source projects and installed binaries
+remain on the shared checkout. Source the file once per shell namespace;
+repeating it reuses the existing cache. The caches consume guest RAM and are
+lost when the VM stops, so the first build after reboot downloads modules and
+rebuilds packages. The 4 GB VM configuration was used for this bootstrap.
+
+Before stopping the VM, retain gojq's downloaded sources and their license
+notices alongside its build information:
+
+```rc
+mkdir -p $home/lib/gojq
+go version -m $GOBIN/gojq > $home/lib/gojq/buildinfo
+@{cd $GOMODCACHE && tar cf $home/lib/gojq/modules.tar github.com}
+```
+
+This saves gojq and its GitHub dependencies, including their original
+`LICENSE` and `NOTICE` files, outside the volatile cache. The archive may
+also contain other GitHub modules downloaded in the same session.
+Keep these notices with any redistributed binary; see [CREDITS.md](../CREDITS.md).
+
+Native compilation, HTTPS module downloads, and JSON, YAML, Unicode, and
+large-integer queries were exercised with Go 1.27.2 and gojq v0.12.19.
+Go's `cmd/go/internal/lockedfile` tests pass with `TMPDIR=/mnt/go/tmp`.
+`go test ./...` in the cached gojq source has one failure:
+`TestCliRun/stream_option_with_unterminated_input` expects an older JSON error
+message and caret position. The same test fails on Linux with Go 1.27.2.
+The other gojq tests pass.
+
+## Shared filesystem
+
 QEMU invokes `boot/u9fs` for its guest-only address `10.0.2.1:564`; there is no
 9P listening port on the host. Like Russ's setup, this is an unauthenticated,
 writable development root mapped to the invoking host user. Guest changes

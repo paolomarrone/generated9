@@ -63,3 +63,46 @@ OF THIS SOFTWARE OR ITS FITNESS FOR ANY PARTICULAR PURPOSE.
 its SHA-256 against the [9front release announcement](https://9front.org/releases/2026/08/02/0/).
 The downloaded ISO and extracted runtime are not part of our Git commits.
 Their original distribution licenses continue to apply.
+
+## Optional Go environment
+
+`boot/getgo` downloads the unmodified
+[`go1.27.2.src.tar.gz`](https://go.dev/dl/#go1.27.2) release from the Go project
+and invokes its `src/bootstrap.bash` for `plan9/amd64`. The Go Authors retain
+their original copyrights. The installed `/sys/lib/go` tree includes the
+upstream BSD 3-clause `LICENSE`, `PATENTS`, and component-specific notices.
+The pinned archive SHA-256 is
+`03495da2ba64894d40f5c4992e49454fa78b50690604ff92b6afff5081b76e62`.
+The downloaded source and generated toolchain are not committed to this tree.
+
+The optional `/sys/lib/tls/ca.pem` is the unmodified
+[2026-09-25 Mozilla CA bundle](https://curl.se/ca/cacert-2026-09-25.pem)
+converted and distributed by the curl project. Its SHA-256 is
+`a41b5d356aea97a529fe27e0f7316d2f9d946d75927476cf9cf1b90637d00505`.
+It retains the original header and source reference, and is licensed under
+[Mozilla Public License 2.0](https://www.mozilla.org/MPL/2.0/), as documented
+by [curl's CA extraction service](https://curl.se/docs/caextract.html).
+The bootstrap preserves an existing CA bundle.
+
+The native build example uses itchyny's
+[`gojq` v0.12.19](https://github.com/itchyny/gojq/tree/b7ebffbfc038677520df0bae4c8c2d877f88ffea),
+commit `b7ebffbfc038677520df0bae4c8c2d877f88ffea`, under its original MIT license.
+No source modifications are applied. Its `plan9/amd64` binary links these
+modules in addition to Go's standard library:
+
+| Module | Version | License |
+| --- | --- | --- |
+| github.com/clipperhouse/stringish | v0.1.1 | MIT; `utf8` retains the Go Authors' BSD 3-clause notice |
+| github.com/clipperhouse/uax29/v2 | v2.3.0 | MIT |
+| github.com/itchyny/go-yaml | v0.0.0-20251001235044-fca9a0999f15 | Apache 2.0; libyaml-derived files retain MIT notices |
+| github.com/itchyny/timefmt-go | v0.1.8 | MIT |
+| github.com/mattn/go-isatty | v0.0.20 | MIT |
+| github.com/mattn/go-runewidth | v0.0.19 | MIT |
+
+The upstream tests also use `github.com/google/go-cmp` v0.7.0, under its
+BSD 3-clause license. `golang.org/x/sys` v0.38.0 is declared by gojq but is
+not linked into this Plan 9 binary. Module versions and checksums are recorded
+by `go version -m`; the recipe in [boot/README.md](boot/README.md) saves that
+output and archives the downloaded GitHub sources with all original license
+and notice files under `/usr/glenda/lib/gojq`. These local build artifacts
+are ignored by Git. Preserve their notices when distributing the binary.

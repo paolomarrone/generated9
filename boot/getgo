@@ -1,0 +1,68 @@
+#!/usr/bin/env python3
+"""Build and install a native plan9/amd64 Go toolchain from a Linux host."""
+import argparse
+import hashlib
+import os
+import pathlib
+import shutil
+import subprocess
+import tarfile
+import tempfile
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+VERSION = "go1.27.2"
+# Published at https://go.dev/dl/
+GO_SHA256 = "03495da2ba64894d40f5c4992e49454fa78b50690604ff92b6afff5081b76e62"
+CA_FILE = "cacert-2026-09-25.pem"
+# Published at https://curl.se/ca/cacert-2026-09-25.pem.sha256
+CA_SHA256 = "a41b5d356aea97a529fe27e0f7316d2f9d946d75927476cf9cf1b90637d00505"
+
+
+def fetch(name, url, checksum):
+    path = ROOT / "boot/cache" / name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if not path.exists():
+        part = path.with_suffix(path.suffix + ".part")
+        subprocess.run(["curl", "--fail", "--location", "--retry", "2",
+                        "--output", str(part), url], check=True)
+        part.replace(path)
+    with path.open("rb") as source:
+        digest = hashlib.file_digest(source, "sha256").hexdigest()
+    if digest != checksum:
+        raise SystemExit(f"boot/getgo: checksum mismatch: {path}")
+    return path
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.parse_args()
+    for command in ("go", "bash", "curl", "bzip2"):
+        if not shutil.which(command):
+            parser.error(f"install {command} on the host")
+    target = ROOT / "sys/lib/go"
+    if target.exists():
+        parser.error(f"{target} already exists; move it aside before rebuilding")
+    bootstrap = subprocess.check_output(["go", "env", "GOROOT"], text=True).strip()
+    archive = fetch(VERSION + ".src.tar.gz",
+                    f"https://go.dev/dl/{VERSION}.src.tar.gz", GO_SHA256)
+    ca = ROOT / "sys/lib/tls/ca.pem"
+    if not ca.exists():
+        bundle = fetch(CA_FILE, "https://curl.se/ca/" + CA_FILE, CA_SHA256)
+        ca.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(bundle, ca)
+    with tempfile.TemporaryDirectory(prefix="getgo-", dir=ROOT / "boot/cache") as scratch:
+        scratch = pathlib.Path(scratch)
+        with tarfile.open(archive) as source:
+            source.extractall(scratch, filter="data")
+        env = dict(os.environ, GOOS="plan9", GOARCH="amd64", GOAMD64="v1",
+                   CGO_ENABLED="0", GOROOT_BOOTSTRAP=bootstrap,
+                   GOROOT_FINAL="/sys/lib/go", GOTOOLCHAIN="local",
+                   GOENV="off", GOFLAGS="", GOEXPERIMENT="", GOWORK="off")
+        subprocess.run(["bash", "bootstrap.bash"], cwd=scratch / "go/src",
+                       env=env, check=True)
+        shutil.move(str(scratch / "go-plan9-amd64-bootstrap"), target)
+    print(f"{VERSION} installed in /sys/lib/go. See boot/README.md for guest setup.")
+
+
+if __name__ == "__main__":
+    main()
