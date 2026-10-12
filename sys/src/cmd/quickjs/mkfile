@@ -1,0 +1,60 @@
+</$objtype/mkfile
+
+TARG=qjs qjsc
+BIN=/$objtype/bin
+OFILES=quickjs.$O quickjs-libc.$O cutils.$O \
+	libregexp.$O libunicode.$O dtoa.$O plan9.$O poll9.$O \
+	math/__cos.$O math/__expo2.$O math/__math_divzero.$O math/__math_invalid.$O \
+	math/__math_oflow.$O math/__math_uflow.$O math/__math_xflow.$O math/__rem_pio2.$O \
+	math/__rem_pio2_large.$O math/__sin.$O math/__tan.$O math/acos.$O \
+	math/acosh.$O math/asin.$O math/asinh.$O math/atan.$O \
+	math/atan2.$O math/atanh.$O math/cbrt.$O math/ceil.$O \
+	math/cos.$O math/cosh.$O math/exp.$O math/exp_data.$O \
+	math/expm1.$O math/fabs.$O math/floor.$O math/fmod.$O \
+	math/frexp.$O math/hypot.$O math/ldexp.$O math/log.$O math/log10.$O \
+	math/log1p.$O math/log2.$O math/log2_data.$O math/log_data.$O \
+	math/modf.$O math/pow.$O math/pow_data.$O math/round.$O \
+	math/scalbn.$O math/sin.$O math/sinh.$O math/sqrt.$O \
+	math/sqrt_data.$O math/tan.$O math/tanh.$O math/trunc.$O
+HFILES=poll9.h quickjs.h quickjs-libc.h cutils.h plan9.h list.h \
+	dtoa.h libregexp.h libunicode.h libunicode-table.h \
+	quickjs-atom.h quickjs-opcode.h libregexp-opcode.h \
+	`{echo math/*.h}
+
+CC=pcc
+LD=pcc
+CFLAGS=-c -DPLAN9 -D_PLAN9_SOURCE -D_POSIX_SOURCE -D_BSD_EXTENSION -D_RESEARCH_SOURCE -I.
+
+all:V: $O.qjsc
+	mk $MKFLAGS $O.qjs
+	./$O.qjs -e 'if (NaN === NaN) throw Error("rebuild and install /sys/src/cmd/6c, then mk clean")'
+
+$O.qjs: qjs.$O repl.$O $OFILES
+	$LD -o $target $prereq
+
+$O.qjsc: qjsc.$O $OFILES
+	$LD -o $target $prereq
+
+%.$O: %.c $HFILES
+	$CC $CFLAGS -o $target $stem.c
+
+repl.c: $O.qjsc repl.js
+	./$O.qjsc -c -o $target -m repl.js
+
+install:V: all
+	cp $O.qjs $BIN/qjs
+	cp $O.qjsc $BIN/qjsc
+
+test:V: all
+	rc tests/plan9.rc ./$O.qjs
+	tmp=/tmp/qjsc-$pid
+	./$O.qjsc -e -o $tmp.c examples/hello.js
+	$CC $CFLAGS -o $tmp.$O $tmp.c
+	$LD -o $tmp $tmp.$O $OFILES
+	$tmp
+	rm -f $tmp.c $tmp.$O $tmp
+
+clean:V:
+	rm -f *.[$OS] math/*.[$OS] [$OS].qjs [$OS].qjsc repl.c
+
+nuke:V: clean

@@ -1,5 +1,27 @@
 # Credits and source provenance
 
+## QuickJS
+
+`sys/src/cmd/quickjs` imports [QuickJS 2026-06-04](https://bellard.org/quickjs/),
+by Fabrice Bellard and Charlie Gordon, under its preserved
+[MIT license](sys/src/cmd/quickjs/LICENSE). The archive SHA-256 is
+`b376e839b322978313d929fd20663b11ba58b75df5a46c126dd19ea2fa70ad2a`.
+The native APE build and compiler adaptations are documented in
+[UPSTREAM](sys/src/cmd/quickjs/UPSTREAM).
+
+[Anand Tamariya's Plan 9 port](https://gitlab.com/atamariya/qjs/-/tree/plan9),
+revision `e494138ed9f9e611fac8bb67e593a7f3c720df64`, informed the value
+constructors, closure layout and heap-frame approach. Its compatibility and
+graphical/browser layers were not imported.
+
+The accompanying double-precision math routines come from
+[musl 1.2.5](https://musl.libc.org/releases.html), archive SHA-256
+`a9a118bbe84d8764da0ea0d28b3ab3fae8477fc7e4085d90102b8596fc7c75e4`.
+They retain musl's [COPYRIGHT](sys/src/cmd/quickjs/math/COPYRIGHT), including
+the MIT license, and the original Arm, Sun and FreeBSD notices in individual
+files. The local adaptations preserve the numerical algorithms and supply
+the floating-point behavior needed by JavaScript. APE itself is unchanged.
+
 ## Plan 9 and 9front
 
 generated9 derives from Plan 9 from Bell Labs and the work of the 9front

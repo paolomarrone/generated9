@@ -60,6 +60,31 @@ mk
 Then quit QEMU and use the `-kernel` command above to boot that result. To build
 the userland, run `cd /sys/src` followed by `mk install` inside 9front.
 
+## QuickJS
+
+The QuickJS source is included in the checkout. Build, test and install it
+inside generated9 with its native compiler and APE:
+
+```rc
+cd /sys/src/cmd/6c
+mk
+mk test
+mk install
+cd /sys/src/cmd/quickjs
+mk clean
+mk
+mk test
+mk install
+qjs -e 'print(2n ** 100n)'
+```
+
+Rebuilding `6c` installs generated9's fix for floating-point comparisons with
+NaN; the bootstrap compiler predates that fix.
+
+See [README.Plan9](../sys/src/cmd/quickjs/README.Plan9) for the JavaScript
+REPL, module usage, validation and current platform limits. Exact source
+versions and licenses are recorded in [UPSTREAM](../sys/src/cmd/quickjs/UPSTREAM).
+
 ## Go and gojq
 
 The optional Go bootstrap also needs Bash, bzip2, Python 3.12 or later, and

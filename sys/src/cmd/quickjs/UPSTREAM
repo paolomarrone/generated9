@@ -1,0 +1,49 @@
+QuickJS 2026-06-04
+https://bellard.org/quickjs/
+https://bellard.org/quickjs/quickjs-2026-06-04.tar.xz
+SHA-256: b376e839b322978313d929fd20663b11ba58b75df5a46c126dd19ea2fa70ad2a
+
+Copyright Fabrice Bellard and Charlie Gordon; MIT, see LICENSE.
+Imported: top-level C, headers and JavaScript, Makefile, VERSION, Changelog,
+readme.txt, test262.conf, test262_errors.txt, tests/, examples/ and doc/.
+Release tooling and the separately distributed Test262 corpus are not included.
+
+Local changes:
+- Native pcc/mk build using APE. Compiler adaptations include value constructors,
+  uniform closure bitfields, flexible arrays, regexp stack fields, portable
+  constants and a switch-based interpreter.
+  On amd64, the build requires generated9's 6c unordered-comparison fix.
+- Checked heap allocations replace alloca; stack and memory limits remain active.
+- Plan 9 floating-point initialization and allocation accounting, environment
+  updates and realpath are in plan9.[ch]. Negative zero, subnormal and nonfinite
+  constants use their IEEE 754 representation to avoid 6c constant-folding errors.
+- poll9.[ch] adapts the event loop to APE select; handler registration checks its
+  descriptor limit. Workers, atomics and shared-library loading are disabled.
+- Plan 9 terminal/stat/time adaptations in quickjs-libc.c; regression tests and
+  build notes are local additions.
+
+Anand Tamariya's existing Plan 9 port was consulted:
+https://gitlab.com/atamariya/qjs/-/tree/plan9
+Revision: e494138ed9f9e611fac8bb67e593a7f3c720df64
+It informed the value-constructor, closure-layout and heap-frame adaptations.
+Its compat layer and graphical/browser additions were not imported. Its
+upstream MIT copyright and license notices are the same as LICENSE.
+
+math/: double-precision routines and supporting tables from musl 1.2.5
+https://musl.libc.org/
+https://musl.libc.org/releases/musl-1.2.5.tar.gz
+SHA-256: a9a118bbe84d8764da0ea0d28b3ab3fae8477fc7e4085d90102b8596fc7c75e4
+
+Sources correspond to src/math/<filename>. The common libm.h is adapted from
+src/internal/libm.h. Copyright and license information is retained in
+math/COPYRIGHT and the individual source files, including the Arm, Sun and
+FreeBSD notices. These routines supply C99 functions missing from APE and the
+IEEE 754 domain, signed-zero and subnormal behavior JavaScript requires.
+
+Local math changes: APE includes/types, portable union accessors in libm.h,
+hexadecimal floating literals rewritten as round-trip decimal literals,
+negative-zero literals and sign changes represented as bits, double operands
+in mixed-precision expressions, and invalid operations expressed using runtime
+values to avoid constant folding. No changes are made to APE itself.
+
+New generated9 files and contributions use the repository's root LICENSE.

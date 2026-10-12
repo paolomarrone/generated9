@@ -1,0 +1,17 @@
+#!/bin/rc
+# generated9 regression runner; see the repository LICENSE.
+qjs=$1
+for(t in closure language loop bigint cyclic_import builtin plan9){
+	echo test_$t.js
+	if(! $qjs --std tests/test_$t.js)
+		exit 'QuickJS test failed'
+}
+
+if($qjs -e 'throw Error("expected failure")')
+	exit 'exception returned success'
+if(! $qjs -e 'let caught=false; try { (function f(){return f()})() } catch(e) { if (e.name !== "InternalError" || e.message !== "stack overflow") throw e; caught=true; } if (!caught) throw Error("missing stack limit")')
+	exit 'recursion limit failed'
+if(! $qjs --memory-limit 4M -e 'let caught=false; try { new ArrayBuffer(16*1024*1024) } catch(e) { if (e.name !== "InternalError" || e.message !== "out of memory") throw e; caught=true; } if (!caught) throw Error("missing memory limit")')
+	exit 'memory limit failed'
+
+echo 'QuickJS tests passed'
