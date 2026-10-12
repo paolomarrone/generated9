@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# Diskless checkout boot, adapted from Russ Cox's rsc/plan9 boot/qemu.
+# Source revision: 13bd0c334646e584ddecc1b7b106c0183b164273.
+# License notices: LICENSE.rsc in this directory and ../LICENSE.
+set -euo pipefail
+cd -- "$(dirname -- "$0")/.."
+
+usage() {
+	cat <<'EOF'
+usage: boot/qemu [-vga] [-m memory] [-smp cpus] [-tcg]
+                 [-kernel file] [-ini file] [-- extra-qemu-options...]
+Boot amd64 9front with this checkout as its writable root filesystem.
+Default: serial console, 2G RAM, 2 CPUs, KVM when accessible.
+Exit the serial console with Ctrl-a x.
+EOF
+}
+die() { echo "boot/qemu: $*" >&2; exit 1; }
+kernel=amd64/9pc64
+ini=boot/plan9.ini
+mem=2G
+smp=2
+vga=false
+accel=(-accel tcg)
+if [[ -r /dev/kvm && -w /dev/kvm ]]; then accel=(-accel kvm -cpu host); fi
+while (($#)); do
+	case "$1" in
+	-h|--help) usage; exit 0 ;;
+	-vga) vga=true; shift ;;
+	-tcg) accel=(-accel tcg); shift ;;
+	-kernel|-ini|-m|-smp)
+		(($# >= 2)) || die "$1 requires a value"
+		case "$1" in
+		-kernel) kernel=$2 ;; -ini) ini=$2 ;; -m) mem=$2 ;; -smp) smp=$2 ;;
+		esac
+		shift 2 ;;
+	--) shift; break ;;
+	*) usage >&2; die "unknown option: $1" ;;
+	esac
+done
+[[ $smp =~ ^[1-9][0-9]*$ ]] || die '-smp requires a positive integer'
+command -v qemu-system-x86_64 >/dev/null || die 'install qemu-system-x86_64'
+[[ -f $ini ]] || die "missing configuration: $ini"
+[[ -f $kernel && -x amd64/bin/rc && -f amd64/init ]] ||
+	die 'missing kernel or runtime; run boot/getbin first'
+boot/mkdirs
+make -s -C sys/src/cmd/unix/u9fs
+
+# Relative paths keep QEMU's guestfwd command independent of spaces in $PWD.
+# The helper obtains the host user itself; no shell-interpolated user names.
+network='user,id=net0,guestfwd=tcp:10.0.2.1:564-cmd:boot/u9fs'
+graphics=(-display none)
+append='console=0 baud=115200 vgasize=text'
+if $vga; then
+	graphics=(-vga std)
+	append='console=0 baud=115200 monitor=vesa vgasize=1280x800x32 mouseport=ps2intellimouse'
+fi
+exec qemu-system-x86_64 "${accel[@]}" -m "$mem" -smp "$smp" \
+	"${graphics[@]}" -serial mon:stdio \
+	-device virtio-net-pci,netdev=net0,mac=52:54:00:12:34:56 \
+	-netdev "$network" -kernel "$kernel" -initrd "$ini" -append "$append" "$@"

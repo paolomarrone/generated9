@@ -1,0 +1,75 @@
+#!/usr/bin/env python3
+"""Install amd64 bootstrap binaries from a 9front ISO, leaving sources alone."""
+import argparse
+import gzip
+import hashlib
+import pathlib
+import shutil
+import subprocess
+import tempfile
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+RELEASE = "9front-11952.amd64.iso.gz"
+URL = "https://9front.org/iso/" + RELEASE
+# Published at https://9front.org/releases/2026/08/02/0/
+SHA256 = "59ba79f1304f02c1aae573b337fa2569fc78027ce8e4c2056c4117e971025b91"
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("iso", nargs="?", type=pathlib.Path,
+                        help="local amd64 .iso or .iso.gz (default: pinned release)")
+    args = parser.parse_args()
+    archive_tool = shutil.which("7z") or shutil.which("7zz")
+    if not archive_tool:
+        parser.error("install 7-Zip (7z or 7zz)")
+    if args.iso:
+        image = args.iso.resolve()
+        if not image.is_file():
+            parser.error(f"no such image: {image}")
+    else:
+        image = ROOT / "boot/cache" / RELEASE
+        image.parent.mkdir(parents=True, exist_ok=True)
+        if not image.exists():
+            part = image.with_suffix(image.suffix + ".part")
+            print(f"Downloading {URL}", flush=True)
+            subprocess.run(["curl", "--fail", "--location", "--retry", "2",
+                            "--output", str(part), URL], check=True)
+            part.replace(image)
+        digest = hashlib.sha256()
+        with image.open("rb") as source:
+            for block in iter(lambda: source.read(1024 * 1024), b""):
+                digest.update(block)
+        if digest.hexdigest() != SHA256:
+            parser.error(f"checksum mismatch: remove {image} and retry")
+    with tempfile.TemporaryDirectory(prefix="9front-getbin-") as scratch:
+        scratch = pathlib.Path(scratch)
+        iso = image
+        if image.suffix == ".gz":
+            iso = scratch / "9front.iso"
+            with gzip.open(image, "rb") as source, iso.open("wb") as target:
+                shutil.copyfileobj(source, target)
+        unpacked = scratch / "files"
+        print("Extracting amd64 binaries and libraries", flush=True)
+        subprocess.run([archive_tool, "x", "-y", "-bso0", f"-o{unpacked}", str(iso),
+                        "amd64/bin", "amd64/lib", "amd64/init", "amd64/9pc64",
+                        "acme/bin/amd64"], check=True)
+        required = ("amd64/9pc64", "amd64/init", "amd64/bin/rc", "amd64/bin/mk",
+                    "amd64/bin/6c", "amd64/bin/6l", "amd64/lib/libc.a")
+        for name in required:
+            if not (unpacked / name).is_file():
+                parser.error(f"image lacks {name}; use a 9front amd64 ISO")
+        subprocess.run([str(ROOT / "boot/mkdirs")], check=True)
+        for path in unpacked.rglob("*"):
+            relative = path.relative_to(unpacked)
+            dest = ROOT / relative
+            if path.is_dir():
+                dest.mkdir(parents=True, exist_ok=True)
+            else:
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(path, dest)
+                # ISO readers do not preserve Plan 9's native permission extension.
+                dest.chmod(0o755 if "bin" in relative.parts or path.name == "init" else 0o644)
+    print("Bootstrap runtime installed. Start 9front with boot/qemu.")
+
+if __name__ == "__main__":
+    main()

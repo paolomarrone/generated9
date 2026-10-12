@@ -1,0 +1,7 @@
+#!/bin/sh
+set -eu
+cd -- "$(dirname -- "$0")/.."
+# QEMU starts one server per guest connection, using stdin/stdout for 9P.
+# No listening TCP socket is opened on the host.
+mkdir -p boot/cache
+exec sys/src/cmd/unix/u9fs/u9fs -a none -u "$(id -un)" -l boot/cache/u9fs.log .

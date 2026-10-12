@@ -1,0 +1,17 @@
+# Downloaded bootstrap runtime and mutable guest state.
+/boot/cache/
+/amd64/bin/
+/amd64/lib/
+/amd64/init
+/amd64/9pc64
+/acme/bin/amd64/
+/usr/
+/tmp/
+/lib/ndb/
+/mail/
+/adm/timezone/local
+/sys/log/
+
+# Host u9fs build products.
+/sys/src/cmd/unix/u9fs/*.o
+/sys/src/cmd/unix/u9fs/u9fs

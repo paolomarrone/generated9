@@ -1,0 +1,9 @@
+# Initial /usr/glenda/lib/profile for the diskless development machine.
+# boot/mkdirs copies this only if the user has no profile already.
+if(~ $vgasize text none){
+	bind -a $home/bin/rc /bin
+	bind -a $home/bin/$cputype /bin
+	prompt=('term% ' '\t')
+	exec rc -i
+}
+if not . /sys/lib/dist/usr/glenda/lib/profile

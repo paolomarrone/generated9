@@ -1,0 +1,104 @@
+#!/usr/bin/env python3
+"""Boot 9front, compile native C, and check live host/guest file sharing."""
+import argparse
+import os
+import pathlib
+import select
+import signal
+import subprocess
+import sys
+import tempfile
+import time
+import uuid
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--tcg", action="store_true", help="test without KVM")
+    parser.add_argument("--timeout", type=int, default=120)
+    args = parser.parse_args()
+    subprocess.run([str(ROOT / "boot/mkdirs")], check=True)
+    command = [str(ROOT / "boot/qemu")]
+    if args.tcg:
+        command.append("-tcg")
+    with tempfile.TemporaryDirectory(prefix="qemu-smoke-", dir=ROOT / "usr/glenda/tmp") as scratch:
+        scratch = pathlib.Path(scratch)
+        proc = subprocess.Popen(command, cwd=ROOT, stdin=subprocess.PIPE,
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                start_new_session=True)
+        pending = b""
+
+        def wait_for(marker):
+            nonlocal pending
+            deadline = time.monotonic() + args.timeout
+            while marker not in pending:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise RuntimeError(f"timed out waiting for {marker!r}")
+                if not select.select([proc.stdout], [], [], min(remaining, 1))[0]:
+                    continue
+                chunk = os.read(proc.stdout.fileno(), 65536)
+                if not chunk:
+                    raise RuntimeError(f"QEMU exited before {marker!r}")
+                sys.stdout.buffer.write(chunk)
+                sys.stdout.buffer.flush()
+                pending += chunk
+            pending = pending.split(marker, 1)[1]
+
+        try:
+            wait_for(b"term% ")
+            # Create these only after boot: the running guest must see new host files.
+            token = uuid.uuid4().hex
+            (scratch / "input").write_text(token)
+            (scratch / "hello.c").write_text('''#include <u.h>
+#include <libc.h>
+
+void
+main(void)
+{
+	char buf[128];
+	int fd, n;
+	fd = open("input", OREAD);
+	if(fd < 0) sysfatal("open input: %r");
+	n = read(fd, buf, sizeof buf - 1);
+	if(n <= 0) sysfatal("read input: %r");
+	close(fd);
+	buf[n] = 0;
+	fd = create("output", OWRITE, 0666);
+	if(fd < 0 || write(fd, buf, n) != n) sysfatal("write output: %r");
+	close(fd);
+	print("SMOKE:%s\\n", buf);
+	exits(nil);
+}
+''')
+            (scratch / "mkfile").write_text(
+                "</$objtype/mkfile\nOFILES=hello.$O\n</sys/src/cmd/mkone\n")
+            guest = "/tmp/" + scratch.name
+            proc.stdin.write(f"cd {guest} && objtype=amd64 mk && ./6.out\n".encode())
+            proc.stdin.flush()
+            wait_for(("SMOKE:" + token).encode())
+            if (scratch / "output").read_text() != token:
+                raise RuntimeError("guest write did not reach the host")
+            print("\nPASS: diskless boot, host-to-guest reads, native mk/6c/6l, guest-to-host writes")
+        finally:
+            if proc.poll() is None:
+                try:
+                    proc.stdin.write(b"\x01x")
+                    proc.stdin.flush()
+                    proc.wait(timeout=10)
+                except (BrokenPipeError, subprocess.TimeoutExpired):
+                    if proc.poll() is None:
+                        os.killpg(proc.pid, signal.SIGTERM)
+                        proc.wait(timeout=10)
+            try:
+                proc.stdin.close()
+            except BrokenPipeError:
+                pass
+            proc.stdout.close()
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (RuntimeError, subprocess.CalledProcessError) as error:
+        sys.exit(f"boot/test: {error}")

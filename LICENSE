@@ -1,0 +1,38 @@
+generated9 licensing
+===================
+
+This is a derivative of 9front and Plan 9. Existing code keeps its original
+licenses and copyright notices. The upstream licensing notice, including its
+font, Ghostscript, and other exceptions, is in lib/legal/NOTICE. The upstream
+MIT license is in lib/legal/mit. Other component-specific notices remain in
+their original locations.
+
+The u9fs import is covered by its original permissive Lucent notice in
+sys/src/cmd/unix/u9fs/LICENSE, not by a replacement license from this project.
+The MIT notice accompanying Russ Cox's boot/qemu source is reproduced in
+boot/LICENSE.rsc and applies to the portions derived from that source.
+
+The new generated9 contributions in .gitignore, README.md, CREDITS.md,
+sys/src/cmd/unix/u9fs/UPSTREAM, and the boot scripts, configuration, and
+documentation are provided under the following MIT license. This grant
+covers only the new contributions and does not relicense third-party code.
+
+Copyright (c) 2026 Paolo Marrone
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
