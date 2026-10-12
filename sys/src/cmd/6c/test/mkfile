@@ -1,0 +1,13 @@
+</$objtype/mkfile
+
+test:V:
+	for(mode in optimized unoptimized){
+		flags=()
+		if(~ $mode unoptimized) flags=-N
+		../$O.out $flags -o compare.6 compare.c
+		6l -o 6.compare compare.6
+		./6.compare
+	}
+
+clean nuke:V:
+	rm -f compare.6 6.compare
