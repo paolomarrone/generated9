@@ -20,6 +20,11 @@ necessary. Follow the idioms of the subsystem you are changing.
 - Use existing Plan 9 mechanisms where they fit: files, 9P, namespaces,
   processes, pipes, and small composable programs. Understand their semantics
   before introducing a new interface or compatibility layer.
+- Remain compatible with upstream 9front whenever practical. Preserve its
+  interfaces, protocols, file formats, and build conventions where possible.
+  Keep divergence small so upstream fixes remain easy to integrate. When a
+  simpler design requires incompatibility, document the reason, affected
+  behavior, and migration path.
 - Prefer fixing the underlying model to adding another workaround. Radical
   changes are welcome when they simplify the whole design; explain the
   resulting behavior and any compatibility consequences.
