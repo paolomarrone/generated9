@@ -21,7 +21,7 @@ mem=2G
 smp=2
 vga=false
 accel=(-accel tcg)
-if [[ -r /dev/kvm && -w /dev/kvm ]]; then accel=(-accel kvm -cpu host); fi
+if [[ -r /dev/kvm && -w /dev/kvm ]]; then accel=(-accel kvm -cpu host,migratable=off); fi
 while (($#)); do
 	case "$1" in
 	-h|--help) usage; exit 0 ;;

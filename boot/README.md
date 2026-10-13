@@ -46,7 +46,9 @@ a text-only boot are harmless; the graphics mode initializes its screen later.
 ./boot/qemu -ini boot/my-plan9.ini
 ```
 
-KVM is selected when `/dev/kvm` is readable and writable. Arguments following
+KVM is selected when `/dev/kvm` is readable and writable. Its host CPU model
+uses `migratable=off` to expose the invariant TSC when available; these
+development VMs are not configured for live migration. Arguments following
 `--` go directly to QEMU. Kernel and ini paths are relative to the checkout
 (absolute paths also work), regardless of the launch directory.
 
