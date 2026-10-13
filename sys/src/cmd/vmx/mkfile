@@ -2,7 +2,7 @@
 
 BIN=/$objtype/bin
 TARG=vmx
-CLEANFILES=$O.vmxgdb test/$O.out test/$O.plan9 test/*.$O
+CLEANFILES=$O.vmxgdb test/$O.out test/$O.plan9 test/$O.device test/*.$O
 HFILES=dat.h fns.h x86.h
 TESTDEP=test/$O.out
 VMOFILES=\
@@ -48,3 +48,9 @@ test/$O.plan9: test/plan9.$O
 
 test/plan9.$O: test/plan9.c
 	$CC $CFLAGS -o $target test/plan9.c
+
+test/$O.device: test/device.$O
+	$LD $LDFLAGS -o $target $prereq
+
+test/device.$O: test/device.c
+	$CC $CFLAGS -o $target test/device.c

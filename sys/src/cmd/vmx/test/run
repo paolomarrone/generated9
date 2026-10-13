@@ -128,6 +128,14 @@ def main():
         wait_for(b"term% ")
         if (work / "build.status").read_text().strip():
             raise RuntimeError("native build failed; see build.log")
+        send(f"mk test/6.device >>{guest}/build.log >[2=1] && "
+             f"test/6.device >{guest}/device.log >[2=1]; "
+             f"echo $status >{guest}/device.status; echo DEVICE-DONE")
+        wait_for(b"DEVICE-DONE\r")
+        wait_for(b"term% ")
+        if (work / "device.status").read_text().strip():
+            raise RuntimeError("device lifetime test failed; see device.log")
+        print((work / "device.log").read_text().strip(), flush=True)
         for trial, count in enumerate(args.cpus):
             label = f"{trial}-{count}cpu"
             logfile = work / (label + ".log")

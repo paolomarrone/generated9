@@ -18,7 +18,7 @@ curl -fLO https://repo-default.voidlinux.org/live/20250202/void-live-x86_64-2025
 echo '40ff378e6cbc74680b30eb0af0003af0abc750b2589f18d4733f9f30bcc79d5b  void-live-x86_64-20250202-xfce.iso' | sha256sum -c -
 7z e void-live-x86_64-20250202-xfce.iso boot/vmlinuz boot/initrd
 cd ../../../..
-./boot/qemu -vga -m 8G -smp 4 -kernel sys/src/9/pc64/9pc64
+./boot/qemu -vga -m 6G -smp 4 -kernel sys/src/9/pc64/9pc64
 ```
 
 Inside a rio terminal:
@@ -54,9 +54,11 @@ Four concurrent SHA-256 jobs, each pinned to a different CPU and hashing
 Graphics use software rendering at a fixed resolution. Audio is not provided.
 The tested Intel host provides TSC_ADJUST; the guest selects `tsc` without
 clocksource overrides. ACPI is absent, so its missing-RSDP message is expected.
-The outer VM has 8 GB to leave room for restarting a 2 GB guest: `devvmx`
-retains the last removed virtual CPU, including its memory, for debugging.
-A restart with a 6 GB outer VM exhausted its available physical memory.
+Closing the monitor releases its virtual CPUs and guest memory. Two consecutive
+boots to Xfce were checked in the same 6 GB outer VM. After closing the first
+guest, allocated user memory dropped from about 2063 MiB to 8 MiB, and `#X`
+contained only `clone`. Keep at least four CPUs in the outer VM: oversubscribing
+them currently causes long stalls with the TSC clock enabled.
 
 The ISO is unmodified Void software with its original package licenses.
 It, the extracted boot files and local logs remain in the ignored temporary

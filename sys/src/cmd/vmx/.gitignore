@@ -4,3 +4,4 @@
 /test/*.[056789qvt]
 /test/[056789qvt].out
 /test/[056789qvt].plan9
+/test/[056789qvt].device

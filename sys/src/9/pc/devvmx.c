@@ -260,6 +260,9 @@ struct Vmx {
 	FPsave fp; /* page aligned */
 	u64int msrhost[MAXMSR*2]; /* 16 byte aligned */
 	u64int msrguest[MAXMSR*2]; /* 16 byte aligned */
+	Ref ref;	/* worker and open channels */
+	ulong vers;
+	int started;
 
 	enum {
 		VMXINIT,
@@ -330,10 +333,17 @@ static char *statenames[] = {
 	[VMXENDING]"ending"
 };
 
-static Vmx *moribund;
 static QLock vmxtablock;
 static Vmx **vmxtab;
 static int nvmxtab;
+static ulong vmxvers;
+
+static void
+vmxput(Vmx *vmx)
+{
+	if(vmx != nil && decref(&vmx->ref) == 0)
+		free(vmx);
+}
 
 void
 vmxprocrestore(Proc *p)
@@ -1215,6 +1225,7 @@ vmxstart(Vmx *vmx)
 			error("vmxon failed");
 	}
 	vmxmach->vms++;
+	vmx->started = 1;
 	qunlock(vmxmach);
 	poperror();
 
@@ -1270,26 +1281,27 @@ cmdquit(VmCmd *p, va_list va)
 	Vmx *vmx;
 	
 	vmx = p->vmx;
+	ilock(&vmx->cmdlock);
 	vmx->state = VMXENDING;
+	iunlock(&vmx->cmdlock);
 	killcmds(vmx, p);
 
 	cmdclearmeminfo(p, va);
 	
-	up->vmx = nil;
-	vmxprocrestore(up);
-	vmclear(PADDR(vmx->vmcs));
-	
-	qlock(vmxmach);
-	if(--vmxmach->vms == 0)
-		vmxoff();
-	qunlock(vmxmach);
+	if(vmx->started){
+		up->vmx = nil;
+		vmxprocrestore(up);
+		vmclear(PADDR(vmx->vmcs));
+		qlock(vmxmach);
+		if(--vmxmach->vms == 0)
+			vmxoff();
+		qunlock(vmxmach);
+	}
 	
 	qlock(&vmxtablock);
-	if(moribund == vmx)
-		moribund = nil;
 	vmxtab[vmx->index] = nil;
 	qunlock(&vmxtablock);
-	free(vmx);
+	vmxput(vmx);
 	
 	cmdrelease(p, 0);
 	pexit(Equit, 1);
@@ -1998,6 +2010,12 @@ static Cmdtab vmxctlmsg[] = {
 
 enum { AUXSIZE = 4096 };
 
+typedef struct VmxAux VmxAux;
+struct VmxAux {
+	Vmx *vmx;
+	char buf[AUXSIZE];
+};
+
 static Vmx *
 vmxlook(vlong n)
 {
@@ -2015,14 +2033,15 @@ vmxent(Qid q)
 {
 	Vmx *vmx;
 
-	eqlock(&vmxtablock);
-	if(waserror()){
-		qunlock(&vmxtablock);
-		nexterror();
-	}
+	qlock(&vmxtablock);
 	vmx = vmxlook(SLOT(q));
+	if(vmx != nil){
+		if(vmx->vers != q.vers)
+			vmx = nil;
+		else
+			incref(&vmx->ref);
+	}
 	qunlock(&vmxtablock);
-	poperror();
 	return vmx;
 }
 
@@ -2055,8 +2074,10 @@ vmxcmd(Vmx *vmx, int (*f)(VmCmd *, va_list), ...)
 	vmx->lastcmd = &cmd.next;
 	iunlock(&vmx->cmdlock);
 	
+	/* ORCLOSE must finish destroying the CPU even if its caller is killed. */
 	while(waserror())
-		cmd.scratched = 1;
+		if(f != cmdquit)
+			cmd.scratched = 1;
 	wakeup(&vmx->cmdwait);
 	if(vmx->machno != m->machno)
 		lapicipi(vmx->machno, VectorPIC+IrqVMX);
@@ -2079,12 +2100,14 @@ vmxnew(void)
 	int i, mi, mv;
 	
 	vmx = mallocalign(sizeof(Vmx), 4096, 0, 0);
+	if(vmx == nil)
+		error(Enomem);
 	if(waserror()){
-
 		free(vmx);
 		nexterror();
 	}
 	memset(vmx, 0, sizeof(Vmx));
+	vmx->ref.ref = 1;
 	vmx->state = VMXINIT;
 	vmx->lastcmd = &vmx->firstcmd;
 	vmx->mem.next = &vmx->mem;
@@ -2098,6 +2121,7 @@ vmxnew(void)
 		qunlock(&vmxtablock);
 		nexterror();
 	}
+	vmx->vers = ++vmxvers;
 	for(i = 0; i < nvmxtab; i++)
 		if(vmxtab[i] == nil){
 			vmxtab[i] = vmx;
@@ -2120,12 +2144,22 @@ vmxnew(void)
 			mv = vmxmachp(i)->vms;
 		}
 	vmx->machno = mi;
+	incref(&vmx->ref);	/* worker */
 	kproc("kvmx", vmxproc, vmx);
 	qunlock(&vmxtablock);
 	poperror();
 	poperror();
+	if(waserror()){
+		if(!waserror()){
+			vmxcmd(vmx, cmdquit);
+			poperror();
+		}
+		vmxput(vmx);
+		nexterror();
+	}
 	if(vmxcmd(vmx, cmdstatus, up->errstr) == VMXDEAD)
 		error(up->errstr);
+	poperror();
 	return vmx;
 }
 
@@ -2133,10 +2167,26 @@ void
 vmxshutdown(void)
 {
 	int i;
+	Vmx *vmx;
 	
-	for(i = 0; i < nvmxtab; i++)
-		if(vmxtab[i] != nil)
-			vmxcmd(vmxtab[i], cmdquit);
+	for(i = 0; ; i++){
+		qlock(&vmxtablock);
+		if(i >= nvmxtab){
+			qunlock(&vmxtablock);
+			break;
+		}
+		vmx = vmxtab[i];
+		if(vmx != nil)
+			incref(&vmx->ref);
+		qunlock(&vmxtablock);
+		if(vmx == nil)
+			continue;
+		if(!waserror()){
+			vmxcmd(vmx, cmdquit);
+			poperror();
+		}
+		vmxput(vmx);
+	}
 }
 
 static Chan *
@@ -2151,8 +2201,14 @@ static int
 vmxgen(Chan *c, char *, Dirtab *, int, int s, Dir *dp)
 {
 	Dirtab *tab;
+	Vmx *vmx;
 	int path;
 
+	if(SLOT(c->qid) >= 0){
+		vmx = vmxlook(SLOT(c->qid));
+		if(vmx == nil || vmx->vers != c->qid.vers)
+			return -1;
+	}
 	if(s == DEVDOTDOT){
 		devdir(c, (Qid){Qdir, 0, QTDIR}, "#X", 0, eve, 0555, dp);
 		return 1;
@@ -2162,10 +2218,10 @@ vmxgen(Chan *c, char *, Dirtab *, int, int s, Dir *dp)
 			goto clone;
 		if(s >= nvmxtab)
 			return -1;
-		if(vmxlook(s) == nil)
+		if((vmx = vmxlook(s)) == nil)
 			return 0;
 		sprint(up->genbuf, "%d", s);
-		devdir(c, (Qid){QIDPATH(s, Qdir), 0, QTDIR}, up->genbuf, 0, eve, DMDIR|0555, dp);
+		devdir(c, (Qid){QIDPATH(s, Qdir), vmx->vers, QTDIR}, up->genbuf, 0, eve, DMDIR|0555, dp);
 		return 1;
 	}
 	if(c->qid.path == Qclone){
@@ -2178,7 +2234,7 @@ vmxgen(Chan *c, char *, Dirtab *, int, int s, Dir *dp)
 		return -1;
 	tab = &vmxdir[s];
 	path = QIDPATH(SLOT(c->qid), 0);
-	devdir(c, (Qid){tab->qid.path|path, tab->qid.vers, tab->qid.type}, tab->name, tab->length, eve, tab->perm, dp);
+	devdir(c, (Qid){tab->qid.path|path, c->qid.vers, tab->qid.type}, tab->name, tab->length, eve, tab->perm, dp);
 	return 1;
 }
 
@@ -2219,12 +2275,26 @@ vmxopen(Chan* c, int omode)
 {
 	Chan *ch;
 	Vmx *vmx;
+	VmxAux *aux;
+	int cloned;
 
-	if(c->qid.path == Qclone){
+	aux = smalloc(sizeof(VmxAux));
+	cloned = c->qid.path == Qclone;
+	if(waserror()){
+		if(cloned && aux->vmx != nil && !waserror()){
+			vmxcmd(aux->vmx, cmdquit);
+			poperror();
+		}
+		vmxput(aux->vmx);
+		free(aux);
+		nexterror();
+	}
+	if(cloned){
 		if(!iseve())
 			error(Eperm);
-		vmx = vmxnew();
+		aux->vmx = vmx = vmxnew();
 		c->qid.path = QIDPATH(vmx->index, Qctl);
+		c->qid.vers = vmx->vers;
 	}
 	eqlock(&vmxtablock);
 	if(waserror()){
@@ -2232,51 +2302,68 @@ vmxopen(Chan* c, int omode)
 		nexterror();
 	}
 	vmx = vmxlook(SLOT(c->qid));
-	if(SLOT(c->qid) >= 0 && vmx == nil)
+	if(SLOT(c->qid) >= 0 && (vmx == nil || vmx->vers != c->qid.vers))
 		error(Enonexist);
 	if(FILE(c->qid) != Qdir && !iseve())
 		error(Eperm);
+	if(!cloned && vmx != nil){
+		incref(&vmx->ref);
+		aux->vmx = vmx;
+	}
 	ch = devopen(c, omode, nil, 0, vmxgen);
 	qunlock(&vmxtablock);
 	poperror();
-	ch->aux = smalloc(AUXSIZE);
 	if(SLOT(ch->qid) >= 0 && FILE(ch->qid) == Qmap){
 		if((omode & OTRUNC) != 0)
 			vmxcmd(vmx, cmdclearmeminfo);
 	}
+	ch->aux = aux;
+	poperror();
 	return ch;
 }
 
 static void
 vmxclunk(Chan *ch)
 {
-	free(ch->aux);
+	VmxAux *aux;
+
+	aux = ch->aux;
 	ch->aux = nil;
+	if(aux != nil){
+		vmxput(aux->vmx);
+		free(aux);
+	}
 }
 
 static void
 vmxremove(Chan *ch)
 {
-	Vmx *vmx, *old;
+	Vmx *vmx;
 
-	vmxclunk(ch);
+	if(waserror()){
+		vmxclunk(ch);
+		nexterror();
+	}
 	if(SLOT(ch->qid) == -1 || FILE(ch->qid) != Qctl)
 		error(Eperm);
 	vmx = vmxent(ch->qid);
 	if(vmx == nil)
 		error(Enonexist);
-	qlock(&vmxtablock);
-	old = moribund;
-	moribund = vmx;
-	qunlock(&vmxtablock);
-	if(old != nil)
-		vmxcmd(old, cmdquit);
+	if(waserror()){
+		vmxput(vmx);
+		nexterror();
+	}
+	vmxcmd(vmx, cmdquit);
+	poperror();
+	vmxput(vmx);
+	poperror();
+	vmxclunk(ch);
 }
 
 static void
 vmxclose(Chan *ch)
 {
-	if((ch->flag & CRCLOSE) != 0)
+	if(ch->aux != nil && (ch->flag & CRCLOSE) != 0)
 		vmxremove(ch);
 	else
 		vmxclunk(ch);
@@ -2288,6 +2375,7 @@ vmxread(Chan* c, void* a, long n, vlong off)
 {
 	int rc;
 	Vmx *vmx;
+	VmxAux *aux;
 
 	if(SLOT(c->qid) == -1){
 		switch((int)c->qid.path){
@@ -2306,7 +2394,8 @@ vmxread(Chan* c, void* a, long n, vlong off)
 			error(Egreg);
 		}
 	}
-	vmx = vmxent(c->qid);
+	aux = c->aux;
+	vmx = aux->vmx;
 	if(vmx == nil)
 		error(Enonexist);
 	switch(FILE(c->qid)){
@@ -2321,12 +2410,12 @@ vmxread(Chan* c, void* a, long n, vlong off)
 		}
 	case Qregs:
 		if(off == 0)
-			vmxcmd(vmx, cmdgetregs, c->aux, (char *) c->aux + AUXSIZE);
-		return readstr(off, a, n, c->aux);
+			vmxcmd(vmx, cmdgetregs, aux->buf, aux->buf + AUXSIZE);
+		return readstr(off, a, n, aux->buf);
 	case Qmap:
 		if(off == 0)
-			vmxcmd(vmx, cmdgetmeminfo, c->aux, (char *) c->aux + AUXSIZE);
-		return readstr(off, a, n, c->aux);
+			vmxcmd(vmx, cmdgetmeminfo, aux->buf, aux->buf + AUXSIZE);
+		return readstr(off, a, n, aux->buf);
 	case Qstatus:
 		{
 			char buf[ERRMAX+128];
@@ -2390,7 +2479,7 @@ vmxwrite(Chan* c, void* a, long n, vlong off)
 			error(Egreg);
 		}
 	}
-	vmx = vmxent(c->qid);
+	vmx = ((VmxAux*)c->aux)->vmx;
 	if(vmx == nil)
 		error(Enonexist);
 	switch(FILE(c->qid)){

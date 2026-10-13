@@ -43,6 +43,13 @@ CPUID describes one thread per
 core and one package, and reports the TSC/APIC frequency ratio at MHz
 resolution when the host supplies a cycle frequency.
 
+Removing a virtual CPU's ctl, including closing it with ORCLOSE, now destroys
+it immediately. Guest memory is released when its last mapping is removed.
+Open descriptors hold the CPU object alive, without retaining its mappings;
+they cannot reach a new CPU that reuses its directory number. The old practice
+of keeping the last removed CPU for debugging is no longer supported; inspect
+a stopped CPU before removing its ctl.
+
 Tests
 
 Inside generated9, mk test checks instruction decoding against real APIC
@@ -81,6 +88,15 @@ including after CPU hotplug. A five-second guest sleep is compared with the
 outer Linux host's clock (four to seven seconds, allowing scheduling delays).
 The single-CPU test exercises the original PIC path; it does not require TSC.
 That configuration still lacks PIT mode 4, needed for one-shot timer events.
+
+The runner also builds and runs test/6.device on the generated9 host. It checks
+32 allocation/removal cycles with 64 MiB mappings, ORCLOSE, explicit quit and
+remove, failed opens, concurrent register reads, blocked waits, and stale open
+descriptors and bound directories after slot reuse. It verifies that guest
+pages are released even while old descriptors remain open. To run it alone:
+
+	mk test/6.device
+	test/6.device
 
 In an amd64 generated9 guest, a native process test is also available:
 

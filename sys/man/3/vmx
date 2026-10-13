@@ -37,7 +37,11 @@ file provides the main control interface. See below for
 a list of commands. Reading returns the subdirectory number.
 Removing the
 .B ctl
-file marks the virtual CPU as moribund.
+file destroys the virtual CPU and releases its memory mappings before returning.
+This also applies to closing a file opened with
+.BR ORCLOSE .
+Outstanding commands fail with an error; existing descriptors cannot access
+a new virtual CPU that reuses the same directory number.
 The
 .B status
 file contains the current status of the virtual CPU, which is one of
