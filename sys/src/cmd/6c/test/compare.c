@@ -23,7 +23,9 @@ fvalue(float x)
 	r = 1;\
 	if(!(a op b)) r = 0;\
 	if(r != (want)) sysfatal("%s: %s inverted branch", type, name);\
-	if((evalfn(a) op evalfn(b)) != (want)) sysfatal("%s: %s calls", type, name)
+	if((evalfn(a) op evalfn(b)) != (want)) sysfatal("%s: %s calls", type, name);\
+	if((a op evalfn(b)) != (want)) sysfatal("%s: %s right call", type, name);\
+	if((evalfn(a) op b) != (want)) sysfatal("%s: %s left call", type, name)
 
 #define Comparisons(evalfn)\
 	Check(==, "==", eq, evalfn);\
@@ -54,7 +56,8 @@ fcompare(float a, float b, int eq, int lt, int gt)
 void
 main(void)
 {
-	double d[7];
+	uvlong bits = 0x7ff8000000000000ULL;
+	double d[8];
 	float f;
 	int i, j, a, b, eq, lt, gt, truth, r;
 
@@ -67,6 +70,8 @@ main(void)
 	d[4] = 1;
 	d[5] = Inf(1);
 	d[6] = NaN();
+	/* Quiet NaN as well as the signaling NaN returned by NaN(). */
+	memmove(&d[7], &bits, sizeof d[7]);
 	for(i = 0; i < nelem(d); i++){
 		truth = i != 2 && i != 3;
 		assert(!!d[i] == truth);
@@ -76,7 +81,7 @@ main(void)
 		assert((d[i] < 0.0) == (i < 2));
 		assert((0.0 <= d[i]) == (i >= 2 && i < 6));
 		assert((dvalue(d[i]) > 0.0) == (i == 4 || i == 5));
-		assert(!(d[i] >= 0.0) == (i < 2 || i == 6));
+		assert(!(d[i] >= 0.0) == (i < 2 || i >= 6));
 		r = 0;
 		if(d[i]) r = 1;
 		assert(r == truth);

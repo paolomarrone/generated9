@@ -35,6 +35,13 @@ remain unchanged, including the documented exceptions for fonts, Ghostscript,
 and separately licensed components. Local runtime configuration is seeded from
 9front's existing `sys/lib/dist` templates.
 
+The amd64 compiler's handling of negated floating-point comparisons follows
+Richard Miller's `5c-nan-cmp` design, integrated into 9front by cinap_lenrek in
+commit [`0d7e3fd4a27a8494d8e513b43cac12b7d9b9dea6`](https://github.com/9front/9front/commit/0d7e3fd4a27a8494d8e513b43cac12b7d9b9dea6).
+The adaptation uses the same `BTRUE` flag, with amd64-specific comparison and
+branch selection. The original code remains under the upstream licenses above;
+new generated9 additions use the [root license](LICENSE).
+
 ## Russ Cox's diskless boot workflow
 
 `boot/qemu` adapts the workflow from

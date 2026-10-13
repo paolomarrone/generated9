@@ -1204,44 +1204,6 @@ bcgen(Node *n, int true)
 		boolgen(n, true, Z);
 }
 
-/* Emit one patchable branch, including the unordered floating-point case. */
-static void
-cmpgen(int o, Type *t, Node *f, Node *to, int invert)
-{
-	Prog *p1, *p2;
-	int a, unordered;
-
-	unordered = (o == ONE) != invert;
-	if(typefd[t->etype])
-		o = invrel[relindex(logrel[relindex(o)])];
-	if(invert)
-		o = comrel[relindex(o)];
-	gopcode(o, t, f, to);
-	if(!typefd[t->etype])
-		return;
-	/* UCOMIS sets ZF, PF and CF for unordered operands. */
-	if(unordered == (o == OEQ || o == OLO || o == OLS))
-		return;
-	a = p->as;
-	p1 = p;
-	p1->as = AJPS;
-	if(!unordered){
-		gins(a, Z, Z);
-		patch(p1, pc);
-	}else{
-		switch(a){
-		case AJNE: a = AJEQ; break;
-		case AJCC: a = AJCS; break;
-		case AJHI: a = AJLS; break;
-		}
-		gins(a, Z, Z);
-		p2 = p;
-		patch(p1, pc);
-		gbranch(OGOTO);
-		patch(p2, pc);
-	}
-}
-
 void
 boolgen(Node *n, int true, Node *nn)
 {
@@ -1261,15 +1223,17 @@ boolgen(Node *n, int true, Node *nn)
 
 	default:
 		o = ONE;
+		if(true)
+			o = OEQ;
 		/* bad, 13 is address of external that becomes constant */
 		if(n->addable >= INDEXED && n->addable != 13) {
 			if(typefd[n->type->etype]) {
 				regalloc(&nod1, n, Z);
 				gmove(nodfconst(0.0), &nod1);	/* TO DO: FREGZERO */
-				cmpgen(o, n->type, n, &nod1, true);
+				gopcode(true ? o | BTRUE : o, n->type, n, &nod1);
 				regfree(&nod1);
 			} else
-				cmpgen(o, n->type, n, nodconst(0), true);
+				gopcode(o, n->type, n, nodconst(0));
 			goto com;
 		}
 		regalloc(&nod, n, nn);
@@ -1277,10 +1241,10 @@ boolgen(Node *n, int true, Node *nn)
 		if(typefd[n->type->etype]) {
 			regalloc(&nod1, n, Z);
 			gmove(nodfconst(0.0), &nod1);	/* TO DO: FREGZERO */
-			cmpgen(o, n->type, &nod, &nod1, true);
+			gopcode(true ? o | BTRUE : o, n->type, &nod, &nod1);
 			regfree(&nod1);
 		} else
-			cmpgen(o, n->type, &nod, nodconst(0), true);
+			gopcode(o, n->type, &nod, nodconst(0));
 		regfree(&nod);
 		goto com;
 
@@ -1360,6 +1324,8 @@ boolgen(Node *n, int true, Node *nn)
 	case OLO:
 	case OLS:
 		o = n->op;
+		if(true)
+			o = comrel[relindex(o)];
 		if(l->complex >= FNX && r->complex >= FNX) {
 			regret(&nod, r);
 			cgen(r, &nod);
@@ -1377,37 +1343,40 @@ boolgen(Node *n, int true, Node *nn)
 			if(r->addable < INDEXED || r->addable == 13) {
 				regalloc(&nod, r, nn);
 				cgen(r, &nod);
-				cmpgen(o, l->type, &nod, l, true);
+				gopcode(o, l->type, &nod, l);
 				regfree(&nod);
 			} else
-				cmpgen(o, l->type, r, l, true);
+				gopcode(o, l->type, r, l);
 			goto com;
 		}
+		if(typefd[l->type->etype])
+			o = invrel[relindex(logrel[relindex(o)])];
 		if(l->complex >= r->complex) {
 			regalloc(&nod, l, nn);
 			cgen(l, &nod);
 			if(r->addable < INDEXED || hardconst(r) || typefd[l->type->etype]) {
 				regalloc(&nod1, r, Z);
 				cgen(r, &nod1);
-				cmpgen(o, l->type, &nod, &nod1, true);
+				gopcode(true ? o | BTRUE : o, l->type, &nod, &nod1);
 				regfree(&nod1);
 			} else
-				cmpgen(o, l->type, &nod, r, true);
+				gopcode(true ? o | BTRUE : o, l->type, &nod, r);
 			regfree(&nod);
 			goto com;
 		}
 		regalloc(&nod, r, nn);
 		cgen(r, &nod);
-		if(l->addable < INDEXED || l->addable == 13 || hardconst(l)) {
+		/* Keep floating operands in registers for either compare order. */
+		if(l->addable < INDEXED || l->addable == 13 || hardconst(l) || typefd[l->type->etype]) {
 			regalloc(&nod1, l, Z);
 			cgen(l, &nod1);
 			if(typechl[l->type->etype] && ewidth[l->type->etype] <= ewidth[TINT])
-				cmpgen(o, types[TINT], &nod1, &nod, true);
+				gopcode(true ? o | BTRUE : o, types[TINT], &nod1, &nod);
 			else
-				cmpgen(o, l->type, &nod1, &nod, true);
+				gopcode(true ? o | BTRUE : o, l->type, &nod1, &nod);
 			regfree(&nod1);
 		} else
-			cmpgen(o, l->type, l, &nod, true);
+			gopcode(true ? o | BTRUE : o, l->type, l, &nod);
 		regfree(&nod);
 
 	com:
