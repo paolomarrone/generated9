@@ -1,0 +1,127 @@
+void
+eval_inner(struct atom *p1)
+{
+	int h = tos;
+
+	// evaluate from right to left
+
+	p1 = cdr(p1);
+
+	while (iscons(p1)) {
+		push(car(p1));
+		p1 = cdr(p1);
+	}
+
+	if (h == tos)
+		stopf("inner: no args");
+
+	evalg();
+
+	while (tos - h > 1) {
+		swap();
+		evalg();
+		swap();
+		inner();
+	}
+}
+
+void
+inner(void)
+{
+	int i, j, k, n, mcol, mrow, ncol, ndim, nrow;
+	struct atom *p1, *p2, *p3;
+
+	p2 = pop();
+	p1 = pop();
+
+	if (!istensor(p1) && !istensor(p2)) {
+		push(p1);
+		push(p2);
+		multiply();
+		return;
+	}
+
+	if (istensor(p1) && !istensor(p2)) {
+		p3 = p1;
+		p1 = p2;
+		p2 = p3;
+	}
+
+	if (!istensor(p1) && istensor(p2)) {
+		p2 = copy_tensor(p2);
+		n = p2->u.tensor->nelem;
+		for (i = 0; i < n; i++) {
+			push(p1);
+			push(p2->u.tensor->elem[i]);
+			multiply();
+			p2->u.tensor->elem[i] = pop();
+		}
+		push(p2);
+		return;
+	}
+
+	k = p1->u.tensor->ndim - 1;
+
+	ncol = p1->u.tensor->dim[k];
+	mrow = p2->u.tensor->dim[0];
+
+	if (ncol != mrow)
+		stopf("inner: dimension err");
+
+	ndim = p1->u.tensor->ndim + p2->u.tensor->ndim - 2;
+
+	if (ndim > MAXDIM)
+		stopf("inner: rank exceeds max");
+
+	//	nrow is the number of rows in p1
+	//
+	//	mcol is the number of columns p2
+	//
+	//	Example:
+	//
+	//	A[3][3][4] B[4][4][3]
+	//
+	//	  3  3				nrow = 3 * 3 = 9
+	//
+	//	                4  3		mcol = 4 * 3 = 12
+
+	nrow = p1->u.tensor->nelem / ncol;
+	mcol = p2->u.tensor->nelem / mrow;
+
+	p3 = alloc_tensor(nrow * mcol);
+
+	for (i = 0; i < nrow; i++) {
+		for (j = 0; j < mcol; j++) {
+			for (k = 0; k < ncol; k++) {
+				push(p1->u.tensor->elem[i * ncol + k]);
+				push(p2->u.tensor->elem[k * mcol + j]);
+				multiply();
+			}
+			add_terms(ncol);
+			p3->u.tensor->elem[i * mcol + j] = pop();
+		}
+	}
+
+	if (ndim == 0) {
+		push(p3->u.tensor->elem[0]); // scalar result
+		return;
+	}
+
+	// dim info
+
+	p3->u.tensor->ndim = ndim;
+
+	k = 0;
+
+	n = p1->u.tensor->ndim - 1;
+
+	for (i = 0; i < n; i++)
+		p3->u.tensor->dim[k++] = p1->u.tensor->dim[i];
+
+	n = p2->u.tensor->ndim;
+
+	for (i = 1; i < n; i++)
+		p3->u.tensor->dim[k++] = p2->u.tensor->dim[i];
+
+	push(p3);
+}

@@ -1,0 +1,41 @@
+"Testing arctanh"
+
+clear
+
+check(arctanh(0) == 0)
+check(arctanh(tanh(x)) == x)
+check(arctanh(-x) == -arctanh(x))
+check(arctanh((x,y)) == (arctanh(x),arctanh(y)))
+
+check(prefixform(arctanh(1)) == "(arctanh 1)")
+check(prefixform(arctanh(-1)) == "(arctanh -1)")
+
+check(prefixform(arctanh(1.0)) == "(arctanh 1.0)")
+check(prefixform(arctanh(-1.0)) == "(arctanh -1.0)")
+
+-- compare intrinsic
+
+for(x,-2,2,
+  d = float(arctanh(x/3)) - arctanh(float(x/3)),
+  check(abs(d) < 1.0 10^(-6))
+)
+
+-- complex arg
+
+for(x,-2,2,for(y,-2,2,
+  z = 1/3.0 (x + i y),
+  test(and(1 + z,1 - z),do(
+    w = 1/2 log(1 + z) - 1/2 log(1 - z),
+    check(abs(arctanh(z) - w) < 1.0 10^(-6))
+  ))
+))
+
+z1 =  0.2 + 0.3 i
+z2 =  0.2 - 0.3 i
+z3 = -0.2 + 0.3 i
+z4 = -0.2 - 0.3 i
+
+check(infixform(arctanh(tanh(z1))) == infixform(z1))
+check(infixform(arctanh(tanh(z2))) == infixform(z2))
+check(infixform(arctanh(tanh(z3))) == infixform(z3))
+check(infixform(arctanh(tanh(z4))) == infixform(z4))

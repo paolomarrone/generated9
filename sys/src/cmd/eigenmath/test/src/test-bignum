@@ -1,0 +1,12 @@
+"Testing bignum"
+clear
+W = (0, 1, 2^31 - 1, 2^31, 2^31 + 1, 2^32 - 2, 2^32 - 1)
+N = zero(343)
+for(I, 1, 7, for(J, 1, 7, for(K, 1, 7,
+ N[49 I + 7 J + K - 56] = 2^64 W[I] + 2^32 W[J] + W[K]
+)))
+for(I,1,343,for(J,2,343,
+  Q = floor(N[I]/N[J]),
+  R = mod(N[I],N[J]),
+  check(N[I] == N[J] Q + R)
+))

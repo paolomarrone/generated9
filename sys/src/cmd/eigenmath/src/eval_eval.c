@@ -1,0 +1,169 @@
+void
+eval_eval(struct atom *p1)
+{
+	push(cadr(p1));
+	evalf();
+	p1 = cddr(p1);
+	while (iscons(p1)) {
+		push(car(p1));
+		evalf();
+		push(cadr(p1));
+		evalf();
+		asubst();
+		p1 = cddr(p1);
+	}
+}
+
+// arithmetic subst (different from classic textual subst)
+
+void
+asubst(void)
+{
+	int h, i, n;
+	struct atom *p1, *p2, *p3;
+
+	p3 = pop(); // new expr
+	p2 = pop(); // old expr
+	p1 = pop(); // expr
+
+	if (p2 == symbol(NIL) || p3 == symbol(NIL)) {
+		push(p1);
+		return;
+	}
+
+	if (istensor(p1)) {
+		p1 = copy_tensor(p1);
+		n = p1->u.tensor->nelem;
+		for (i = 0; i < n; i++) {
+			push(p1->u.tensor->elem[i]);
+			push(p2);
+			push(p3);
+			asubst();
+			p1->u.tensor->elem[i] = pop();
+		}
+		push(p1);
+		return;
+	}
+
+	if (equal(p1, p2)) {
+		push(p3);
+		return;
+	}
+
+	if (!iscons(p1)) {
+		push(p1);
+		return;
+	}
+
+	// leave unevaluated if target is derivative or integral
+
+	if ((car(p1) == symbol(DERIVATIVE) || car(p1) == symbol(INTEGRAL)) && findf(p1, p2)) {
+		push(symbol(EVAL));
+		push(p1);
+		push(p2);
+		push(p3);
+		list(4);
+		return;
+	}
+
+	// depth first
+
+	h = tos;
+
+	push(car(p1)); // func name
+	p1 = cdr(p1);
+
+	while (iscons(p1)) {
+		push(car(p1));
+		push(p2);
+		push(p3);
+		asubst();
+		p1 = cdr(p1);
+	}
+
+	list(tos - h);
+
+	evalf(); // normalize
+
+	p1 = pop();
+
+	if (addcmp(p1, p2)) {
+		push(p1);
+		push(p2);
+		subtract();
+		push(p3);
+		add();
+		return;
+	}
+
+	if (mulcmp(p1, p2) || powcmp(p1, p2)) {
+		push(p1);
+		push(p2);
+		divide();
+		push(p3);
+		multiply();
+		return;
+	}
+
+	push(p1);
+}
+
+// so that eval(a+b+c,b+c,d) -> a+d
+
+int
+addcmp(struct atom *p1, struct atom *p2)
+{
+	if (car(p1) != symbol(ADD) || car(p2) != symbol(ADD))
+		return 0;
+	p1 = cdr(p1);
+	p2 = cdr(p2);
+	while (iscons(p1) && iscons(p2)) {
+		if (equal(car(p1), car(p2)))
+			p2 = cdr(p2); // next term on list
+		p1 = cdr(p1);
+	}
+	if (iscons(p2))
+		return 0;
+	else
+		return 1; // all terms matched
+}
+
+int
+mulcmp(struct atom *p1, struct atom *p2)
+{
+	if (car(p1) != symbol(MULTIPLY) || car(p2) != symbol(MULTIPLY))
+		return 0;
+	p1 = cdr(p1);
+	p2 = cdr(p2);
+	while (iscons(p1) && iscons(p2)) {
+		if (equal(car(p1), car(p2)) || powcmp(car(p1), car(p2)))
+			p2 = cdr(p2); // next factor on list
+		p1 = cdr(p1);
+	}
+	if (iscons(p2))
+		return 0;
+	else
+		return 1; // all factors matched
+}
+
+int
+powcmp(struct atom *p1, struct atom *p2)
+{
+	if (car(p1) != symbol(POWER) || car(p2) != symbol(POWER))
+		return 0;
+	if (!equal(cadr(p1), cadr(p2)))
+		return 0; // bases don't match
+	p1 = caddr(p1); // exponent
+	p2 = caddr(p2); // exponent
+	if (car(p1) != symbol(ADD))
+		return 0; // p1 and p2 already failed exact match
+	if (car(p2) == symbol(ADD))
+		return addcmp(p1, p2);
+	p1 = cdr(p1);
+	while (iscons(p1)) {
+		if (equal(car(p1), p2))
+			return 1;
+		p1 = cdr(p1);
+	}
+	return 0;
+}

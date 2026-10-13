@@ -1,0 +1,49 @@
+"Testing arctan"
+
+clear
+
+check(arctan(-y,x) == -arctan(y,x))
+check(arctan((y1,y2),x) == (arctan(y1,x),arctan(y2,x)))
+check(infixform(arctan(x))="arctan(x,1)")
+
+check(arctan(1,1)=pi/4)
+check(arctan(1,-1)=3*pi/4)
+check(arctan(-1,1)=-pi/4)
+check(arctan(-1,-1)=-3*pi/4)
+
+check(arctan(0,3)=0)
+check(arctan(0,-3)=-pi)
+check(arctan(3,0)=pi/2)
+check(arctan(-3,0)=-pi/2)
+
+check(arctan(3,3)=pi/4)
+check(arctan(3,-3)=3*pi/4)
+check(arctan(-3,3)=-pi/4)
+check(arctan(-3,-3)=-3*pi/4)
+
+check(infixform(arctan(2,4))="arctan(1,2)")
+check(infixform(arctan(2,-4))="arctan(1,-2)")
+check(infixform(arctan(-2,4))="-arctan(1,2)")
+check(infixform(arctan(-2,-4))="-arctan(1,-2)")
+
+check(infixform(arctan(1/2))="arctan(1,2)")
+
+-- complex arg
+
+for(x,-3,3,for(y,-3,3,
+  z = 1/3.0 (x + i y),
+  test(and(i - z,i + z),do(
+    w = -1/2 i log((i - z) / (i + z)),
+    check(abs(arctan(z) - w) < 1.0 10^(-6))
+  ))
+))
+
+z1 =  0.2 + 0.3 i
+z2 =  0.2 - 0.3 i
+z3 = -0.2 + 0.3 i
+z4 = -0.2 - 0.3 i
+
+check(infixform(arctan(tan(z1))) == infixform(z1))
+check(infixform(arctan(tan(z2))) == infixform(z2))
+check(infixform(arctan(tan(z3))) == infixform(z3))
+check(infixform(arctan(tan(z4))) == infixform(z4))

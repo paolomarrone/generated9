@@ -1,0 +1,21 @@
+# Verify a harmonic oscillator symbolically, then integrate its displacement.
+tty=1
+u=A cos(w t)+B sin(w t)
+v=d(u,t)
+a=d(v,t)
+
+"Displacement"
+u
+"Velocity"
+v
+"Acceleration"
+a
+
+check(simplify(a+w^2 u)==0)
+"The equation a+w^2 u=0 is satisfied."
+
+"Integral of displacement"
+integral(u,t)
+
+"Taylor expansion at t=0"
+taylor(u,t,4,0)

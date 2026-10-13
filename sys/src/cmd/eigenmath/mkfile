@@ -1,0 +1,36 @@
+</$objtype/mkfile
+
+TARG=eigenmath
+BIN=/$objtype/bin
+CORE=`{ls src/*.c | grep -v '^src/(main|readfile)\.c$'}
+MATH=\
+	math/acosh.$O math/asinh.$O math/atanh.$O math/log1p.$O \
+	math/erf.$O math/tgamma.$O math/lgamma_r.$O math/scalbn.$O \
+	math/trunc.$O math/__sin.$O math/__cos.$O math/sin.$O math/cos.$O \
+	math/__rem_pio2.$O math/__rem_pio2_large.$O math/tan.$O math/__tan.$O \
+	math/support.$O
+OFILES=core.$O plan9.$O $MATH
+HFILES=plan9.h src/defs.h src/prototypes.h math/libm.h
+CFLAGS=$CFLAGS -DPLAN9 -I.
+TESTDEP=$O.mathtest
+
+</sys/src/cmd/mkone
+
+core.c: src/LICENSE src/defs.h src/prototypes.h $CORE
+	cat $prereq >$target
+
+%.$O: %.c
+	$CC $CFLAGS -o $target $stem.c
+
+test:V: $O.out $TESTDEP
+	./$O.out test/selftest
+	./$O.mathtest
+	rc test/plan9.rc ./$O.out
+
+$O.mathtest: test/math.$O $MATH
+	$LD $LDFLAGS -o $target $prereq
+
+clean:V:
+	rm -f *.[$OS] math/*.[$OS] test/*.[$OS] [$OS].out [$OS].mathtest core.c
+
+nuke:V: clean

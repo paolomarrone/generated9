@@ -1,0 +1,14 @@
+"Testing float"
+
+clear
+
+T = float(x + pi)
+check(infixform(T)="x + 3.14159")
+T = float(x + exp(1))
+check(infixform(T)="x + 2.71828")
+T = float(x + y + 1/4)
+check(infixform(T)="x + y + 0.25")
+T = float(1/4 x y)
+check(infixform(T)="0.25 x y")
+T = float(sqrt(2))
+check(infixform(T)="1.41421")

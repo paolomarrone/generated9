@@ -1,5 +1,19 @@
 # Credits and source provenance
 
+## Eigenmath
+
+`sys/src/cmd/eigenmath` imports [Eigenmath](https://github.com/georgeweigt/eigenmath),
+by George Weigt, at revision `751f8d59dbc303fe527d84de948ce6035adc386c`,
+under its preserved [BSD-2-Clause license](sys/src/cmd/eigenmath/LICENSE).
+Its incomplete beta function by Lewis Van Winkle retains the original
+copyright and zlib license in `src/eval_incbeta.c`.
+
+The native Plan 9 build uses selected routines from musl 1.2.5, with source
+and adaptation details in [UPSTREAM](sys/src/cmd/eigenmath/UPSTREAM).
+Their [COPYRIGHT](sys/src/cmd/eigenmath/math/COPYRIGHT), including the MIT
+license, and the Sun notices in individual files are preserved.
+New generated9 integration code uses the [root license](LICENSE).
+
 ## QuickJS
 
 `sys/src/cmd/quickjs` imports [QuickJS 2026-06-04](https://bellard.org/quickjs/),

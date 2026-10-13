@@ -1,0 +1,23 @@
+"Testing cosh"
+
+clear
+
+check(cosh(0) == 1)
+check(cosh(-x) == cosh(x))
+check(cosh(arccosh(x)) == x)
+check(cosh((x,y)) == (cosh(x),cosh(y)))
+
+-- compare intrinsic
+
+for(x,-12,12,
+  d = float(cosh(x/12)) - cosh(float(x/12)),
+  check(abs(d) < 1.0 10^(-6))
+)
+
+-- complex arg
+
+for(x,-3,3,for(y,-3,3,
+  z = 1/3.0 (x + i y),
+  w = 1/2 exp(z) + 1/2 exp(-z),
+  check(abs(cosh(z) - w) < 1.0 10^(-6))
+))

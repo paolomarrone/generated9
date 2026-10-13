@@ -1,0 +1,35 @@
+"Testing arccosh"
+
+clear
+
+check(arccosh(1) == 0)
+check(arccosh(cosh(x)) == x)
+check(arccosh((x,y)) == (arccosh(x),arccosh(y)))
+
+-- compare intrinsic
+
+for(x,-12,12,
+  d = float(arccosh(x/12)) - arccosh(float(x/12)),
+  check(abs(d) < 1.0 10^(-6))
+)
+
+-- complex arg
+
+for(x,0,3,for(y,0,3,
+  z = 1/3.0 (x + i y),
+  w = log(z + sqrt(z^2 - 1)),
+  check(abs(arccosh(z) - float(w)) < 1.0 10^(-6))
+))
+
+z1 =  0.2 + 0.3 i
+z2 =  0.2 - 0.3 i
+z3 = -0.2 + 0.3 i
+z4 = -0.2 - 0.3 i
+
+check(infixform(cosh(z3)) == infixform(cosh(z2))) -- because cosh(-x) = cosh(x)
+check(infixform(cosh(z4)) == infixform(cosh(z1))) -- because cosh(-x) = cosh(x)
+
+check(infixform(arccosh(cosh(z1))) == infixform(z1))
+check(infixform(arccosh(cosh(z2))) == infixform(z2))
+check(infixform(arccosh(cosh(z3))) == infixform(z2)) -- because cosh(-x) = cosh(x)
+check(infixform(arccosh(cosh(z4))) == infixform(z1)) -- because cosh(-x) = cosh(x)

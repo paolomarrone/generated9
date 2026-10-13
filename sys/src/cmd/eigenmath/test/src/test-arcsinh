@@ -1,0 +1,33 @@
+"Testing arcsinh"
+
+clear
+
+check(arcsinh(0) == 0)
+check(arcsinh(sinh(x)) == x)
+check(arcsinh(-x) == -arcsinh(x))
+check(arcsinh((x,y)) == (arcsinh(x),arcsinh(y)))
+
+-- compare intrinsic
+
+for(x,-12,12,
+  d = float(arcsinh(x/12)) - arcsinh(float(x/12)),
+  check(abs(d) < 1.0 10^(-6))
+)
+
+-- complex arg
+
+for(x,-3,3,for(y,-3,3,
+  z = 1/3.0 (x + i y),
+  w = log(z + sqrt(z^2 + 1)),
+  check(abs(arcsinh(z) - w) < 1.0 10^(-6))
+))
+
+z1 =  0.2 + 0.3 i
+z2 =  0.2 - 0.3 i
+z3 = -0.2 + 0.3 i
+z4 = -0.2 - 0.3 i
+
+check(infixform(arcsinh(sinh(z1))) == infixform(z1))
+check(infixform(arcsinh(sinh(z2))) == infixform(z2))
+check(infixform(arcsinh(sinh(z3))) == infixform(z3))
+check(infixform(arcsinh(sinh(z4))) == infixform(z4))

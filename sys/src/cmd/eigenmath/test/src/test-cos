@@ -1,0 +1,85 @@
+"Testing cos"
+
+clear
+
+check(cos(-x) == cos(x))
+check(cos(arctan(y,x)) == x (x^2 + y^2)^(-1/2))
+check(cos(arccos(x)) == x)
+check(cos(-arccos(x)) == x)
+check(cos(arcsin(x)) == sqrt(1 - x^2))
+check(cos((x,y)) == (cos(x),cos(y)))
+
+-- special angles
+
+check(cos(90/360 2 pi) == 0)
+check(cos(270/360 2 pi) == 0)
+
+check(cos(60/360 2 pi) == 1/2)
+check(cos(300/360 2 pi) == 1/2)
+
+check(cos(120/360 2 pi) == -1/2)
+check(cos(240/360 2 pi) == -1/2)
+
+check(cos(45/360 2 pi) == 1/2 sqrt(2))
+check(cos(315/360 2 pi) == 1/2 sqrt(2))
+
+check(cos(135/360 2 pi) == -1/2 sqrt(2))
+check(cos(225/360 2 pi) == -1/2 sqrt(2))
+
+check(cos(30/360 2 pi) == 1/2 sqrt(3))
+check(cos(330/360 2 pi) == 1/2 sqrt(3))
+
+check(cos(150/360 2 pi) == -1/2 sqrt(3))
+check(cos(210/360 2 pi) == -1/2 sqrt(3))
+
+check(cos(0/360 2 pi) == 1)
+check(cos(180/360 2 pi) == -1)
+
+-- negative
+
+check(cos(-90/360 2 pi) == 0)
+check(cos(-270/360 2 pi) == 0)
+
+check(cos(-60/360 2 pi) == 1/2)
+check(cos(-300/360 2 pi) == 1/2)
+
+check(cos(-120/360 2 pi) == -1/2)
+check(cos(-240/360 2 pi) == -1/2)
+
+check(cos(-45/360 2 pi) == 1/2 sqrt(2))
+check(cos(-315/360 2 pi) == 1/2 sqrt(2))
+
+check(cos(-135/360 2 pi) == -1/2 sqrt(2))
+check(cos(-225/360 2 pi) == -1/2 sqrt(2))
+
+check(cos(-30/360 2 pi) == 1/2 sqrt(3))
+check(cos(-330/360 2 pi) == 1/2 sqrt(3))
+
+check(cos(-150/360 2 pi) == -1/2 sqrt(3))
+check(cos(-210/360 2 pi) == -1/2 sqrt(3))
+
+check(cos(-0/360 2 pi) == 1)
+check(cos(-180/360 2 pi) == -1)
+
+-- compare intrinsic
+
+for(x,-720,720,
+  d = float(cos(2 pi x / 360)) - cos(float(2 pi x / 360)),
+  check(abs(d) < 1.0 10^(-6))
+)
+
+-- complex arg
+
+for(x,-3,3,for(y,-3,3,
+  z = 1/3.0 (x + i y),
+  w = 1/2 exp(i z) + 1/2 exp(-i z),
+  check(abs(cos(z) - w) < 1.0 10^(-6))
+))
+
+-- implicit float pi
+
+for(x,-1,1,
+  a = infixform(cos(x pi / 3.0)),
+  b = infixform(cos(x float(pi) / 3.0)),
+  check(a == b)
+)

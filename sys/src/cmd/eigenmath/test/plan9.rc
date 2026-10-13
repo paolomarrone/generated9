@@ -1,0 +1,91 @@
+#!/bin/rc
+# generated9 CLI regression tests; see the repository LICENSE.
+em=$1
+tmp=/tmp/eigenmath-$pid
+if(! mkdir $tmp)
+	exit 'cannot create test directory'
+fn sigexit { rm -rf $tmp }
+fn fail { echo $* >[1=2]; exit 'Eigenmath test failed' }
+
+cat >$tmp/input <<'EOF'
+tty=1
+d(sin(x),x)
+integral(x^2,x)
+det(((a,b),(c,d)))
+2^100
+EOF
+cat >$tmp/expected <<'EOF'
+cos(x)
+1/3 x^3
+a d - b c
+1267650600228229401496703205376
+EOF
+if(! $em $tmp/input >$tmp/out)
+	fail 'script failed'
+if(! cmp -s $tmp/out $tmp/expected)
+	fail 'unexpected symbolic results'
+if(! $em <$tmp/input >$tmp/out)
+	fail 'stdin failed'
+if(! cmp -s $tmp/out $tmp/expected)
+	fail 'stdin differs from file input'
+cat $tmp/input | $em >$tmp/out
+if(! cmp -s $tmp/out $tmp/expected)
+	fail 'pipe differs from file input'
+if(! $em - <$tmp/input >$tmp/out)
+	fail 'explicit stdin failed'
+if(! cmp -s $tmp/out $tmp/expected)
+	fail 'explicit stdin differs from file input'
+
+echo -n 'tty=1
+d(sin(x),x)' >$tmp/input
+echo 'cos(x)' >$tmp/expected
+if(! $em <$tmp/input >$tmp/out)
+	fail 'input without final newline failed'
+if(! cmp -s $tmp/out $tmp/expected)
+	fail 'last expression was lost'
+if(! $em </dev/null >$tmp/out)
+	fail 'empty input failed'
+if(test -s $tmp/out)
+	fail 'empty input produced output'
+
+echo 'a=7' >$tmp/first
+echo 'check(a==7)' >$tmp/second
+if(! $em $tmp/first $tmp/second)
+	fail 'state was not preserved between files'
+echo 'check(1/3+1/6==1/2)' >$tmp/'caffè ledger'
+echo 'run("'^$tmp^'/caffè ledger")' >$tmp/input
+if(! $em $tmp/input)
+	fail 'run with a UTF-8 file name failed'
+
+awk 'BEGIN {printf "check("; for(i=0;i<2000;i++) printf " "; print "1==1)"}' >$tmp/input
+if(! $em <$tmp/input)
+	fail 'long input line failed'
+
+for(expr in 'check(0)' 'd(' 'run("/no-such-eigenmath-input")'){
+	echo $expr >$tmp/input
+	if($em $tmp/input >$tmp/out >[2]$tmp/err)
+		fail 'error returned success:' $expr
+	if(test -s $tmp/out)
+		fail 'diagnostic leaked to stdout'
+	if(! grep -s 'Stop:' $tmp/err)
+		fail 'missing diagnostic'
+}
+if($em $tmp/missing >$tmp/out >[2]$tmp/err)
+	fail 'missing file returned success'
+if(! test -s $tmp/err)
+	fail 'missing file produced no diagnostic'
+
+echo 'check(0)' >$tmp/first
+echo '"must not run"' >$tmp/second
+if($em $tmp/first $tmp/second >$tmp/out >[2]$tmp/err)
+	fail 'failed first script returned success'
+if(test -s $tmp/out)
+	fail 'execution continued after a failed script'
+
+dd -if /dev/zero -of $tmp/input -bs 1 -count 1 >[2]/dev/null
+if($em $tmp/input >$tmp/out >[2]$tmp/err)
+	fail 'NUL input was accepted'
+if(! grep -s 'NUL in input' $tmp/err)
+	fail 'missing NUL diagnostic'
+
+echo 'Eigenmath CLI tests passed'

@@ -85,6 +85,25 @@ See [README.Plan9](../sys/src/cmd/quickjs/README.Plan9) for the JavaScript
 REPL, module usage, validation and current platform limits. Exact source
 versions and licenses are recorded in [UPSTREAM](../sys/src/cmd/quickjs/UPSTREAM).
 
+## Eigenmath
+
+Eigenmath builds directly with the native Plan 9 compiler and libraries:
+
+```rc
+cd /sys/src/cmd/eigenmath
+mk
+mk test
+mk install
+echo 'd(sin(x),x)' | eigenmath
+eigenmath /sys/src/cmd/eigenmath/examples/oscillator
+```
+
+As with QuickJS, amd64 needs generated9's rebuilt `6c`. Run `eigenmath`
+without arguments for an interactive session, and enter `exit` to leave it.
+See [README.Plan9](../sys/src/cmd/eigenmath/README.Plan9) for file and pipe
+usage, tests and limitations. This port provides the terminal interface;
+it does not display graphs.
+
 ## Go and gojq
 
 The optional Go bootstrap also needs Bash, bzip2, Python 3.12 or later, and

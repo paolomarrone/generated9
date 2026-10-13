@@ -1,0 +1,70 @@
+.TH EIGENMATH 1
+.SH NAME
+eigenmath \- symbolic mathematics
+.SH SYNOPSIS
+.B eigenmath
+[
+.I file ...
+]
+.SH DESCRIPTION
+.I Eigenmath
+evaluates symbolic and numerical expressions, including derivatives,
+integrals, exact rational arithmetic, complex numbers, matrices and tensors.
+The named files are evaluated in order in a shared context.
+A file named
+.B -
+denotes standard input.
+With no arguments, standard input is read;
+when both input and output are the console, a question-mark prompt is shown
+and each line is evaluated separately.
+.PP
+Newlines separate expressions. Multiplication can be implicit:
+.B "2 x"
+means twice
+.BR x .
+Assignment uses
+.B =
+and equality testing uses
+.BR == .
+.B check(e)
+stops evaluation if
+.I e
+is false.
+.B run("file")
+evaluates another script.
+.B exit
+or console end-of-file ends the session.
+.PP
+The assignment
+.B tty=1
+selects linear text output;
+.B tty=0
+restores two-dimensional formulas.
+Results are written to standard output and diagnostics to standard error.
+.SH EXAMPLES
+.EX
+echo 'd(sin(x),x)' | eigenmath
+echo 'integral(x^2,x)' | eigenmath
+echo 'det(((a,b),(c,d)))' | eigenmath
+eigenmath /sys/src/cmd/eigenmath/examples/oscillator
+.EE
+.SH SOURCE
+.B /sys/src/cmd/eigenmath
+.SH SEE ALSO
+.IR hoc (1),
+.IR bc (1),
+.IR dc (1)
+.br
+Eigenmath user guide,
+.B https://georgeweigt.github.io/
+.SH DIAGNOSTICS
+Evaluation and I/O errors produce a failing exit status.
+A failed script prevents subsequent command-line files from running.
+Interactive evaluation errors return to the prompt but retain a failing
+session exit status.
+.SH LIMITATIONS
+Scripts and redirected input are limited to 1,000,000 bytes.
+Interactive expressions occupy one line.
+As in the upstream terminal program,
+.B draw
+produces no graph.

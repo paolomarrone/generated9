@@ -1,0 +1,43 @@
+Eigenmath
+  Author: George Weigt
+  Source: https://github.com/georgeweigt/eigenmath
+  Revision: 751f8d59dbc303fe527d84de948ce6035adc386c (2026-10-03)
+  License: BSD-2-Clause; see LICENSE and src/LICENSE.
+
+Imported: README.md, LICENSE, src/, demo/, test/src/, and the upstream
+selftest, demotest, misctest, logform and chartest scripts. Browser and
+macOS front ends are not included.
+
+The incomplete beta routine in src/eval_incbeta.c is by Lewis Van Winkle,
+copyright 2016, 2017, under the zlib license reproduced in that file.
+It was already included in the pinned Eigenmath revision.
+
+Local changes to Eigenmath:
+  - src/defs.h selects the native Plan 9 declarations with PLAN9.
+  - src/prototypes.h declares a void main for Plan 9.
+  - src/eval_incbeta.c uses INFINITY rather than constant division by zero,
+    which the Plan 9 compiler rejects. The numerical method is unchanged.
+  - mkfile builds the core without upstream main.c and readfile.c, using
+    plan9.c for console, file, pipe and error handling instead.
+
+math/ imports double-precision routines from musl 1.2.5:
+  Source: https://musl.libc.org/releases/musl-1.2.5.tar.gz
+  SHA-256: a9a118bbe84d8764da0ea0d28b3ab3fae8477fc7e4085d90102b8596fc7c75e4
+  License: math/COPYRIGHT, including MIT and the per-file Sun notices.
+
+The sin, cos, tan, __tan, __rem_pio2 and __rem_pio2_large files reuse the
+musl adaptations in generated9's QuickJS port at commit
+4dc00e5a1463f87ca823923d916e1f5919cd09b7.
+The remaining imported routines come directly from the archive above.
+
+Math adaptations: exact hexadecimal floating constants are written in
+decimal; double-only branches replace preprocessor expressions unsupported
+by the native compiler; unused disabled code and the lgamma_r weak alias
+are omitted; constant division by zero uses NaN/Inf; explicit sign-bit
+negation preserves signed zero. libm.h supplies the needed native types
+and bit operations. support.c supplies lgamma, sign-bit negation and the
+zero/infinity cases missing from Plan 9 log. The upstream algorithms and
+coefficient tables are preserved. The system libraries are unchanged.
+
+New generated9 files use the repository's root LICENSE. Original authors'
+notices must accompany source and binary redistribution.

@@ -1,0 +1,27 @@
+"Testing transpose"
+
+clear
+
+check(transpose((1,2,3)) == (1,2,3))
+
+T = transpose(((a,b),(c,d)))
+check(T = ((a,c),(b,d)))
+T = transpose(((a,b),(c,d)),1,2)
+check(T = ((a,c),(b,d)))
+T = transpose(((a,b,c),(d,e,f)),1,2)
+check(T = ((a,d),(b,e),(c,f)))
+T = transpose(((a,d),(b,e),(c,f)),1,2)
+check(T = ((a,b,c),(d,e,f)))
+
+v1 = (A1,B1,C1)
+v2 = (A2,B2,C2)
+v3 = (A3,B3,C3)
+
+A = outer(v1,v2,v3)
+
+check(transpose(A) == outer(v2,v1,v3))
+check(transpose(A,1,2) == outer(v2,v1,v3))
+check(transpose(A,2,3) == outer(v1,v3,v2))
+check(transpose(A,1,3) == outer(v3,v2,v1))
+check(transpose(A,1,2,2,3) == outer(v2,v3,v1))
+check(transpose(A,2,3,1,2) == outer(v3,v1,v2))

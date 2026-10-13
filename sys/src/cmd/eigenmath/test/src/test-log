@@ -1,0 +1,69 @@
+"Testing log"
+
+clear
+
+check(log((x,y)) == (log(x),log(y)))
+
+check(infixform(log(0)) == "log(0)")
+check(log(x^2) == 2 log(x))
+check(log(1 / x) == -log(x))
+check(log(x y) == log(x) + log(y))
+check(log(x^y) == y log(x))
+check(log(exp(x)) == x)
+check(log(1/3) + log(3) == 0)
+check(log(-1) == i pi)
+check(infixform(log(-1.0)) == "3.14159 i")
+
+-- log of number is factored
+
+check(infixform(log(1/10)) = "-log(2) - log(5)")
+
+-- compare intrinsic
+
+for(x,1,10,
+  d = float(log(x/3)) - log(float(x/3)),
+  check(abs(d) < 1.0 10^(-6))
+)
+
+-- negative arg
+
+for(x,1,10,
+  d = exp(log(-x/3.0)) + x/3.0,
+  check(abs(d) < 1.0 10^(-6))
+)
+
+-- complex arg
+
+z1 =  0.2 + 0.3 i
+z2 =  0.2 - 0.3 i
+z3 = -0.2 + 0.3 i
+z4 = -0.2 - 0.3 i
+
+check(infixform(exp(log(z1))) == infixform(z1))
+check(infixform(exp(log(z2))) == infixform(z2))
+check(infixform(exp(log(z3))) == infixform(z3))
+check(infixform(exp(log(z4))) == infixform(z4))
+
+z = 1.0 i
+w = log(z + sqrt(z^2 - 1))
+check(infixform(w) == "0.881374 + 1.5708 i") -- bug fix
+check(log(0.0) == log(0))
+
+for(x,-2,2,for(y,-2,2,
+ z = float(x + i y),
+ test(y,check(abs(log(z) - log(mag(z)) - i arg(z)) < 0.000001))
+))
+
+for(x,-2,2,for(y,-2,2,
+ z = float(x + i y),
+ check(abs(exp(log(z)) - z) < 0.000001),
+ check(abs(log(exp(z)) - z) < 0.000001)
+))
+
+-- pathological cases
+check(infixform(log(log(0))) == "log(log(0))")
+check(infixform(log(log(0.0))) == "log(log(0))")
+check(infixform(log(2 log(0))) == "log(2) + log(log(0))")
+check(infixform(log(2.0 log(0))) == "log(log(0)) + 0.693147")
+check(infixform(log(2 + log(0))) == "log(log(0) + 2)")
+check(infixform(log(2.0 + log(0))) == "log(log(0) + 2)")
