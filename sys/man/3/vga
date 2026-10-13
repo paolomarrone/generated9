@@ -88,7 +88,8 @@ is one of
 .BR nvidia ,
 .BR radeon ,
 .BR s3 ,
-.BR t2r4
+.BR t2r4 ,
+.BR virtio
 and
 .BR vmware .
 .IP
@@ -100,6 +101,10 @@ It is the job of
 .IR vga (8)
 to recognize which particular chip is being used and to initialize it
 appropriately.
+The
+.B virtio
+controller uses an existing 32-bit software screen and the display path in
+.IR gpu (3).
 .TP
 .BI hwgc " gc"
 Set the type of hardware graphics cursor being used.

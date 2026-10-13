@@ -1,6 +1,6 @@
 .TH GPU 3
 .SH NAME
-gpu \- VirtIO GPU VirGL command transport
+gpu \- VirtIO GPU display and VirGL command transport
 .SH SYNOPSIS
 .nf
 .B bind '#∇' /mnt/gpu
@@ -15,9 +15,12 @@ gpu \- VirtIO GPU VirGL command transport
 The experimental
 .I gpu
 device provides off-screen VirGL rendering on the first VirtIO GPU PCI
-device. It requires the modern VirtIO interface and VirGL feature.
+device. It requires the modern VirtIO interface; rendering contexts
+also require the VirGL feature.
 It is included in the amd64 pc64 kernel.
-It does not change the display controller or the draw protocol.
+The optional
+.B virtio
+display controller uses the same transport without changing the draw protocol.
 .PP
 Opening
 .B clone
@@ -34,6 +37,7 @@ Closing the last open file in a context releases its resources and the context.
 .PP
 .B caps
 contains the binary little-endian VirGL capability set 1, version 1.
+It is empty on devices without VirGL, which cannot open rendering contexts.
 Applications must consult its format and feature masks before using
 optional rendering features.
 .PP
@@ -82,6 +86,27 @@ Control operations, command submission and backing access are serialized.
 All device requests are fenced.
 A command timeout resets and disables the device before releasing DMA memory;
 subsequent rendering requires rebooting the guest.
+.SS Display
+The
+.B virtio
+controller in
+.IR vga (3)
+presents the software screen through a separate 2D resource on scanout zero.
+The initial screen must use
+.B x8r8g8b8
+with no rotation, at most 4096 by 4096 pixels.
+Use the software cursor.
+Screen damage is collected by a kernel process, which copies changed
+rectangles into private backing memory and completes each transfer before
+reusing it. Screen updates are asynchronous and may be combined.
+The framebuffer is recreated when the screen dimensions change.
+VirGL is not required for this display path.
+.PP
+This replaces framebuffer writes to the emulated VGA device.
+Drawing and window composition still use software; 3D clients still read
+their rendered pixels back for libdraw.
+Display errors are reported on the kernel console and stop updates until
+the controller is selected again. Device failure still requires rebooting.
 .SH EXAMPLE
 .EX
 cd /sys/src/cmd/gputest
@@ -90,26 +115,36 @@ mk test
 6.gputest
 6.teapot
 .EE
+.PP
+With a VirtIO VGA device and an existing 32-bit VESA software screen:
+.EX
+echo type virtio > /dev/vgactl
+.EE
 .SH SOURCE
 .B /sys/src/9/pc/devgpu.c
+.br
+.B /sys/src/9/pc/vgavirtio.c
 .br
 .B /sys/src/cmd/gputest
 .SH SEE ALSO
 .IR gputest (1),
 .IR teapot (1),
+.IR vga (3),
 .IR draw (3)
 .SH BUGS
 This is an experimental privileged interface, not an OpenGL implementation.
 It supports one GPU, 32 contexts, 64 resources and 64 MiB of backing per context.
-There is one synchronous control queue; asynchronous submission, scanout,
+There is one synchronous control queue; asynchronous command submission,
 cursor queues, buffer sharing and device recovery are not implemented.
+The display uses a separate backing allocation of up to 64 MiB.
 .PP
 Resource targets are 0 through 8. Buffers are limited to 64 MiB;
 texture dimensions to 16384, array size to 2048, highest mip level to 14,
 and sample count to 64. The host may impose lower limits.
 Backing size and transfer layout must match the resource format.
 Guest backing limits do not bound the host GPU memory consumed by a resource.
-Only buffers and single-level BGRA images have been exercised so far.
+Buffers, single-level BGRA colour and Z32 depth images, and BGRX display
+resources have been exercised.
 .PP
 QEMU does not propagate all VirGL renderer errors to the guest.
 A successful write confirms transport completion, not a valid rendering result.

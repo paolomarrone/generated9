@@ -145,6 +145,7 @@ misc
 #	vgatvp3020	=cur
 #	vgatvp3026	=cur
 	vgavesa
+	vgavirtio
 #	vgavmware	+cur
 
 	dtracysys

@@ -1,4 +1,4 @@
-/* VirtIO 1.2 GPU, VirGL command transport. See gpu(3).
+/* VirtIO 1.2 GPU display and VirGL command transport. See gpu(3).
  * Wire layouts follow virtio_gpu.h; its notice follows.
  */
 /*
@@ -47,8 +47,18 @@
 #include "../port/error.h"
 #include "../port/virtio10.h"
 
+#define Image IMAGE
+#include <draw.h>
+#include <memdraw.h>
+#include <cursor.h>
+#include "screen.h"
+
 enum {
+	Create2d = 0x101,
 	Unref = 0x102,
+	Scanout,
+	Flush,
+	Transfer,
 	Attach = 0x106,
 	Capinfo = 0x108,
 	Getcap = 0x109,
@@ -105,6 +115,8 @@ static struct {
 	u32int nextid;
 	uchar *caps;
 	ulong ncaps;
+	Resource fb;
+	int width, height;
 	Context ctx[Maxctx];
 } gpu;
 
@@ -250,10 +262,10 @@ gpuprobe(void)
 	lo = vin32(&gpu.cfg, Vconf_devfeat);
 	vout32(&gpu.cfg, Vconf_devfeatsel, 1);
 	hi = vin32(&gpu.cfg, Vconf_devfeat);
-	if((lo&1) == 0 || (hi&Fversion1) == 0)
-		error("gpu requires VirtIO 1.0 and VirGL");
+	if((hi&Fversion1) == 0)
+		error("gpu requires VirtIO 1.0");
 	vout32(&gpu.cfg, Vconf_drvfeatsel, 0);
-	vout32(&gpu.cfg, Vconf_drvfeat, 1);
+	vout32(&gpu.cfg, Vconf_drvfeat, lo&1);
 	vout32(&gpu.cfg, Vconf_drvfeatsel, 1);
 	vout32(&gpu.cfg, Vconf_drvfeat, Fversion1);
 	vout8(&gpu.cfg, Vconf_status, Sacknowledge|Sdriver|Sfeaturesok);
@@ -294,7 +306,7 @@ gpuprobe(void)
 	coherence();
 	vout8(&gpu.cfg, Vconf_status, Sacknowledge|Sdriver|Sfeaturesok|Sdriverok);
 	gpu.failed = 0;
-	for(i=0; i<n; i++){
+	for(i=0; (lo&1) != 0 && i<n; i++){
 		memset(req, 0, sizeof(req));
 		req[0] = Capinfo;
 		req[6] = i;
@@ -319,7 +331,7 @@ gpuprobe(void)
 		poperror();
 		break;
 	}
-	if(gpu.caps == nil)
+	if((lo&1) != 0 && gpu.caps == nil)
 		error("gpu has no VirGL 1 capabilities");
 	gpu.ready = 1;
 	poperror();
@@ -343,6 +355,128 @@ rescmd(int op, u32int ctx, u32int id)
 	req[4] = ctx;
 	req[6] = id;
 	command(req, sizeof(req));
+}
+
+static void
+attachbacking(Resource *r)
+{
+	u32int req[12];
+
+	memset(req, 0, sizeof(req));
+	req[0] = Attach;
+	req[6] = r->id;
+	req[7] = 1;
+	req[8] = PADDR(r->data);
+	req[9] = (uvlong)PADDR(r->data) >> 32;
+	req[10] = r->size;
+	command(req, sizeof(req));
+}
+
+static void
+freefb(void)
+{
+	u32int req[12];
+
+	if(waserror()){
+		/* Teardown must stop DMA even if the device rejects the unref. */
+		gpufail();
+		free(gpu.fb.data);
+		memset(&gpu.fb, 0, sizeof(gpu.fb));
+		nexterror();
+	}
+	if(gpu.fb.id != 0 && !gpu.failed){
+		memset(req, 0, sizeof(req));
+		req[0] = Scanout;
+		command(req, sizeof(req));
+		rescmd(Unref, 0, gpu.fb.id);
+	}
+	poperror();
+	free(gpu.fb.data);
+	memset(&gpu.fb, 0, sizeof(gpu.fb));
+}
+
+/* Called by the display process with drawlock held; no interrupt-time DMA. */
+void
+gpudisplay(Memimage *m, Rectangle r)
+{
+	u32int req[14], id;
+	uchar *src, *dst;
+	int w, h, y, n;
+
+	qlock(&gpulock);
+	if(waserror()){
+		qunlock(&gpulock);
+		nexterror();
+	}
+	gpuprobe();
+	if(m == nil){
+		freefb();
+		goto Out;
+	}
+	w = Dx(m->r);
+	h = Dy(m->r);
+	if(m->chan != XRGB32 || !eqpt(m->r.min, ZP)
+	|| w <= 0 || h <= 0 || w > 4096 || h > 4096)
+		error("virtio display requires x8r8g8b8, at most 4096x4096");
+	if(gpu.fb.id == 0 || gpu.width != w || gpu.height != h){
+		freefb();
+		gpu.width = w;
+		gpu.height = h;
+		id = newid();
+		gpu.fb.size = w*h*4;
+		gpu.fb.data = malloc(gpu.fb.size);
+		if(gpu.fb.data == nil)
+			error(Enomem);
+		if(waserror()){
+			if(!waserror()){
+				freefb();
+				poperror();
+			}
+			nexterror();
+		}
+		memset(req, 0, sizeof(req));
+		req[0] = Create2d;
+		req[6] = id;
+		req[7] = 2;	/* B8G8R8X8 */
+		req[8] = w;
+		req[9] = h;
+		command(req, 40);
+		gpu.fb.id = id;
+		attachbacking(&gpu.fb);
+		memset(req, 0, sizeof(req));
+		req[0] = Scanout;
+		req[8] = w;
+		req[9] = h;
+		req[11] = gpu.fb.id;
+		command(req, 48);
+		r = m->r;
+		poperror();
+	}
+	if(!rectclip(&r, m->r))
+		goto Out;
+	n = (r.min.y*w+r.min.x)*4;
+	src = byteaddr(m, r.min);
+	dst = gpu.fb.data+n;
+	for(y=r.min.y; y<r.max.y; y++){
+		memmove(dst, src, Dx(r)*4);
+		src += m->width*sizeof(ulong);
+		dst += w*4;
+	}
+	memset(req, 0, sizeof(req));
+	req[0] = Transfer;
+	req[6] = r.min.x;
+	req[7] = r.min.y;
+	req[8] = Dx(r);
+	req[9] = Dy(r);
+	req[10] = n;
+	req[12] = gpu.fb.id;
+	command(req, sizeof(req));
+	req[0] = Flush;
+	req[10] = gpu.fb.id;
+	command(req, 48);
+Out:
+	qunlock(&gpulock);
+	poperror();
 }
 
 static void
@@ -497,6 +631,8 @@ gpuopen(Chan *c, int mode)
 	if(!(c->qid.type&QTDIR) && FILE(c->qid) != Qcaps && !iseve())
 		error(Eperm);
 	if(c->qid.path == Qclone){
+		if(gpu.caps == nil)
+			error("gpu requires VirGL for rendering contexts");
 		if(openmode(mode) != ORDWR)
 			error(Eperm);
 		for(i=0; i<Maxctx && gpu.ctx[i].ref != 0; i++)
@@ -678,14 +814,7 @@ control(Context *ctx, Cmdbuf *cb)
 			}
 			nexterror();
 		}
-		memset(req, 0, sizeof(req));
-		req[0] = Attach;
-		req[6] = r->id;
-		req[7] = 1;
-		req[8] = PADDR(r->data);
-		req[9] = (uvlong)PADDR(r->data) >> 32;
-		req[10] = r->size;
-		command(req, 48);
+		attachbacking(r);
 		rescmd(Ctxattach, ctx->id, r->id);
 		ctx->bytes += r->size;
 		ctx->last = r->id;

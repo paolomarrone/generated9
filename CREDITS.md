@@ -8,6 +8,9 @@ and Gerd Hoffmann, Copyright Red Hat, Inc. 2013-2014, from Linux v6.12,
 revision `adc218676eef25575469234709c2d87185ca223a`. The original notice is
 preserved in [devgpu.c](sys/src/9/pc/devgpu.c). The transport reuses 9front's
 VirtIO register access and follows its existing PCI and split queue idioms.
+The native display backend uses the same protocol's 2D resources, backing
+attachments, transfers and scanout commands, integrated with 9front's VGA
+and software-screen interfaces.
 
 The native triangle and command encoder adapt the MIT-licensed tests and
 protocol definitions in virglrenderer, Copyright Red Hat 2014-2015,

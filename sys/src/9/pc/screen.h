@@ -156,6 +156,9 @@ extern void	setscreenimageclipr(Rectangle);
 extern void	drawflush(void);
 extern QLock	drawlock;
 
+/* devgpu.c */
+extern void	gpudisplay(Memimage*, Rectangle);
+
 /* vga.c */
 extern void	vgascreenwin(VGAscr*);
 extern void	vgaimageinit(ulong);

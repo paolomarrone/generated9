@@ -115,7 +115,7 @@ $ETHER: 			../port/etherif.h ../port/netif.h
 $AUDIO:				../port/audioif.h
 ether8003.$O ether8390.$O:	ether8390.h
 etheryuk.$O:			yukdump.h
-$VGA mouse.$O:			screen.h /sys/include/memdraw.h
+$VGA mouse.$O devgpu.$O:		screen.h /sys/include/memdraw.h
 vgavesa.$O:			/386/include/ureg.h
 
 mp.$O:				mp.h apbootstrap.i
