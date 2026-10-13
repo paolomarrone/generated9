@@ -36,6 +36,7 @@ enum {
 	IrqTIMER	= 18,
 	IrqERROR	= 19,
 	IrqPCINT	= 20,
+	IrqVMX		= 21,		/* wake a virtual CPU */
 	IrqSPURIOUS	= 31,		/* must have bits [3-0] == 0x0F */
 	MaxIrqLAPIC	= 31,
 

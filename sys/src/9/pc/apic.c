@@ -137,6 +137,29 @@ lapicicr(uvlong cmd)
 	lapicw(LapicICRLO, cmd);
 }
 
+void
+lapicipi(int machno, int vector)
+{
+	Apic *apic;
+	uvlong dest;
+	int s;
+
+	for(apic = mplapic; apic != nil; apic = apic->next){
+		if(!apic->online || apic->machno != machno)
+			continue;
+		dest = (uvlong)apic->apicno << 32;
+		if(lapicbase != nil)
+			dest <<= 24;
+		/* Keep the destination and command writes on this processor. */
+		s = splhi();
+		while((lapicr(LapicICRLO) & ApicDELIVS) != 0)
+			;
+		lapicicr(dest | vector);
+		splx(s);
+		return;
+	}
+}
+
 static ulong
 lapicesr(void)
 {

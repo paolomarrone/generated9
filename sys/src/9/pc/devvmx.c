@@ -5,6 +5,8 @@
 #include "fns.h"
 #include "../port/error.h"
 #include "ureg.h"
+#include "io.h"
+#include "mp.h"
 
 extern int vmxon(u64int);
 extern int vmxoff(void);
@@ -30,6 +32,7 @@ enum {
 	VMX_CR0_FIXED1 = 0x487,
 	VMX_CR4_FIXED0 = 0x488,
 	VMX_CR4_FIXED1 = 0x489,
+	VMX_EPT_VPID_CAP = 0x48C,
 	VMX_VMCS_ENUM = 0x48A,
 	VMX_PROCB_CTLS2_MSR = 0x48B,
 	VMX_TRUE_PINB_CTLS_MSR = 0x48D,
@@ -41,6 +44,7 @@ enum {
 	PINB_CTLS = 0x4000,
 	PINB_EXITIRQ = 1<<0,
 	PINB_EXITNMI = 1<<3,
+	PINB_VIRTUALNMI = 1<<5,
 	
 	PROCB_CTLS = 0x4002,
 	PROCB_IRQWIN = 1<<2,
@@ -54,6 +58,7 @@ enum {
 	PROCB_EXITCR3ST = 1<<16,
 	PROCB_EXITCR8LD = 1<<19,
 	PROCB_EXITCR8ST = 1<<20,
+	PROCB_NMIWIN = 1<<22,
 	PROCB_EXITMOVDR = 1<<23,
 	PROCB_EXITIO = 1<<24,
 	PROCB_MONTRAP = 1<<27,
@@ -266,19 +271,19 @@ struct Vmx {
 	int index, machno;
 	char errstr[ERRMAX];
 	Ureg ureg;
-	uvlong tscoffset;
-	u32int procbctls;
+	uvlong eptp;
 	uintptr cr2;
 	uintptr xcr0;
 	uintptr dr[8]; /* DR7 is also kept in VMCS */
 	u8int launched;
 	u8int vpid;
+	int flushvpid;	/* set by context switches, cleared with interrupts disabled */
 	enum {
-		FLUSHVPID = 1,
 		FLUSHEPT = 2,
 		STEP = 4,
 		POSTEX = 8,
 		POSTIRQ = 16,
+		POSTNMI = 32,
 	} onentry;
 	
 	Rendez cmdwait;
@@ -290,6 +295,8 @@ struct Vmx {
 	enum {
 		GOTEXIT = 1,
 		GOTIRQACK = 2,
+		GOTINIT = 4,
+		GOTNMIACK = 8,
 	} got;
 	VmIntr exc, irq, irqack;
 
@@ -339,6 +346,8 @@ vmxprocrestore(Proc *p)
 	if(vmxmach->active != vmx){
 		if(vmx != nil && vmptrld(PADDR(vmx->vmcs)) < 0)
 			panic("VMPTRLD(%p) failed", vmx->vmcs);
+		if(vmx != nil)
+			vmx->flushvpid = 1;
 		vmxmach->active = vmx;
 	}
 	splx(s);
@@ -899,6 +908,12 @@ cmdsetmeminfo(VmCmd *cmd, va_list va)
 }
 
 static void
+vmxinterrupt(Ureg*, void*)
+{
+	/* Wake an idle processor or leave VMX non-root mode to process commands. */
+}
+
+static void
 vmxreset(void)
 {
 	ulong regs[4];
@@ -933,6 +948,8 @@ vmxreset(void)
 		if(vmxmachp(i) == nil)
 			error(Enomem);
 	}
+	if(conf.nmach > 1)
+		intrenable(IrqVMX, vmxinterrupt, nil, BUSUNKNOWN, "vmx");
 	gotvmx = 1;
 }
 
@@ -1000,7 +1017,7 @@ vmcsinit(Vmx *vmx)
 	if(rdmsr(VMX_PINB_CTLS_MSR, &msr) < 0)
 		error("rdmsr(VMX_PINB_CTLS_MSR failed");
 	x = (u32int)pinb_ctls | 1<<1 | 1<<2 | 1<<4; /* currently reserved default1 bits */
-	x |= PINB_EXITIRQ | PINB_EXITNMI;
+	x |= PINB_EXITIRQ | PINB_EXITNMI | PINB_VIRTUALNMI;
 	x &= pinb_ctls >> 32;
 	vmcswrite(PINB_CTLS, x);
 	
@@ -1009,10 +1026,10 @@ vmcsinit(Vmx *vmx)
 	x = (u32int)procb_ctls | 1<<1 | 7<<4 | 1<<8 | 1<<13 | 1<<14 | 1<<26; /* currently reserved default1 bits */
 	x |= PROCB_TSCOFFSET | PROCB_EXITMWAIT | PROCB_EXITMONITOR | PROCB_EXITHLT;
 	x |= PROCB_EXITMOVDR | PROCB_EXITIO | PROCB_MSRBITMAP;
+	x |= PROCB_EXITCR8LD | PROCB_EXITCR8ST;
 	x |= PROCB_USECTLS2;
 	x &= msr >> 32;
 	vmcswrite(PROCB_CTLS, x);
-	vmx->procbctls = x;
 	
 	if(rdmsr(VMX_PROCB_CTLS2_MSR, &msr) < 0)
 		error("rdmsr(VMX_PROCB_CTLS2_MSR failed");
@@ -1103,13 +1120,20 @@ vmcsinit(Vmx *vmx)
 	vmcswrite(GUEST_TRLIMIT, 0xffff);
 	vmcswrite(GUEST_TRPERM, (SEGTSS|SEGPL(0)|SEGP) >> 8 | 2);
 
-	vmcswrite(VM_EPTP, PADDR(vmx->pml4) | 3<<3);
+	if(rdmsr(VMX_EPT_VPID_CAP, &msr) < 0)
+		error("rdmsr(VMX_EPT_VPID_CAP) failed");
+	if((msr & ((1<<14)|(1<<8))) == 0)
+		error("no supported EPT memory type");
+	/* Prefer write-back; nested VMX need not support uncacheable tables. */
+	vmx->eptp = PADDR(vmx->pml4) | 3<<3 | ((msr & 1<<14) != 0 ? 6 : 0);
+	vmcswrite(VM_EPTP, vmx->eptp);
 	vmx->vpid = 1;
 	vmcswrite(VM_VPID, vmx->vpid);
 	
 	vmcswrite(GUEST_RFLAGS, 2);
 	
-	vmx->onentry = FLUSHVPID | FLUSHEPT;
+	vmx->flushvpid = 1;
+	vmx->onentry = FLUSHEPT;
 
 	s = splhi();
 #ifdef KFPSTATE
@@ -1127,10 +1151,8 @@ vmcsinit(Vmx *vmx)
 	vmcswrite(VMEXIT_MSRLDADDR, PADDR(vmx->msrhost));
 	vmcswrite(MSR_BITMAP, PADDR(vmx->msrbits));
 
-	if(vmx->procbctls & PROCB_TSCOFFSET){
-		cycles(&vmx->tscoffset);
-		vmcswrite(VMCS_TSC_OFFSET, vmx->tscoffset);
-	}
+	/* All virtual CPUs share the host clock, including time spent in exits. */
+	vmcswrite(VMCS_TSC_OFFSET, 0);
 
 	if(sizeof(uintptr) == 8){
 		vmxaddmsr(vmx, Star, 0);
@@ -1444,6 +1466,28 @@ cmdstatus(VmCmd *cmd, va_list va)
 	return cmd->vmx->state;
 }
 
+/* Stop at an INIT boundary. The monitor supplies the real-mode registers. */
+static int
+cmdinit(VmCmd *cmd, va_list)
+{
+	Vmx *vmx;
+
+	vmx = cmd->vmx;
+	if(vmx->state != VMXREADY && vmx->state != VMXRUNNING)
+		error("VM not ready or running");
+	vmx->state = VMXREADY;
+	vmx->onentry &= ~(POSTEX|POSTIRQ|POSTNMI|STEP);
+	vmx->flushvpid = 1;
+	vmx->got = GOTINIT;
+	vmcswrite(GUEST_CANINTR, 0);
+	vmcswrite(VMENTRY_INTRINFO, 0);
+	memset(vmx->dr, 0, sizeof(vmx->dr));
+	vmx->cr2 = 0;
+	/* INIT preserves floating-point state and the syscall MSRs. */
+	vmx->xcr0 = 1;
+	return 0;
+}
+
 static char *exitreasons[] = {
 	[0] "exc",
 	[1] "extirq",
@@ -1545,6 +1589,14 @@ cmdwait(VmCmd *cp, va_list va)
 	vmx = cp->vmx;
 	p0 = p = va_arg(va, char *);
 	e = va_arg(va, char *);
+	if((vmx->got & GOTINIT) != 0){
+		vmx->got &= ~GOTINIT;
+		return snprint(p, e-p, "*init 0\n");
+	}
+	if((vmx->got & GOTNMIACK) != 0){
+		vmx->got &= ~GOTNMIACK;
+		return snprint(p, e-p, "*nmi 0\n");
+	}
 	if((vmx->got & GOTIRQACK) != 0){
 		p = seprint(p, e, "*ack %d\n", vmx->irqack.info & 0xff);
 		vmx->got &= ~GOTIRQACK;
@@ -1671,6 +1723,15 @@ cmdirq(VmCmd *cmd, va_list va)
 }
 
 static int
+cmdnmi(VmCmd *cmd, va_list)
+{
+	if((vmcsread(PINB_CTLS) & PINB_VIRTUALNMI) == 0)
+		error("virtual NMIs not supported");
+	cmd->vmx->onentry |= POSTNMI;
+	return 0;
+}
+
+static int
 cmdextrap(VmCmd *, va_list va)
 {
 	char *p, *q;
@@ -1719,8 +1780,8 @@ markppcmddone(VmCmd **pp)
 }
 
 
-static void
-runcmd(Vmx *vmx)
+static VmCmd **
+runpostponed(Vmx *vmx)
 {
 	VmCmd *p, **pp;
 	
@@ -1736,6 +1797,15 @@ runcmd(Vmx *vmx)
 		poperror();
 		pp = markppcmddone(pp);
 	}
+	return pp;
+}
+
+static void
+runcmd(Vmx *vmx)
+{
+	VmCmd *p, **pp;
+
+	pp = runpostponed(vmx);
 	for(;;){
 		ilock(&vmx->cmdlock);
 		p = vmx->firstcmd;
@@ -1760,14 +1830,15 @@ runcmd(Vmx *vmx)
 		poperror();
 		markcmddone(p, &pp);
 	}
+	/* A command may satisfy a wait while leaving the CPU stopped (INIT). */
+	runpostponed(vmx);
 }
 
 static void
 vmxproc(void *vmxp)
 {
-	int init, rc, x, useend;
+	int init, rc, x, injected;
 	u32int procbctls, defprocbctls;
-	u64int start, end, adj;
 	vlong v;
 	Vmx *vmx;
 
@@ -1775,8 +1846,6 @@ vmxproc(void *vmxp)
 	procwired(up, vmx->machno);
 	sched();
 	init = 0;
-	useend = 0;
-	adj = 0;
 	defprocbctls = 0;
 	while(waserror()){
 		kstrcpy(vmx->errstr, up->errstr, ERRMAX);
@@ -1793,15 +1862,26 @@ vmxproc(void *vmxp)
 		if(vmx->state == VMXRUNNING){
 			procbctls = defprocbctls;
 			if((vmx->onentry & STEP) != 0)
-				defprocbctls |= PROCB_MONTRAP;
+				procbctls |= PROCB_MONTRAP;
+			injected = 0;
 			if((vmx->onentry & POSTEX) != 0){
 				vmcswrite(VMENTRY_INTRINFO, vmx->exc.info);
 				vmcswrite(VMENTRY_INTRCODE, vmx->exc.code);
 				vmcswrite(VMENTRY_INTRILEN, vmx->exc.ilen);
 				vmx->onentry &= ~POSTEX;
+				injected = 1;
+			}
+			if((vmx->onentry & POSTNMI) != 0 && (vmx->onentry & STEP) == 0){
+				if(!injected && (vmcsread(GUEST_CANINTR) & (1<<3|3)) == 0){
+					vmcswrite(VMENTRY_INTRINFO, 1U<<31 | 2<<8 | 2);
+					vmx->onentry &= ~POSTNMI;
+					vmx->got |= GOTNMIACK;
+					injected = 1;
+				}else
+					procbctls |= PROCB_NMIWIN;
 			}
 			if((vmx->onentry & POSTIRQ) != 0 && (vmx->onentry & STEP) == 0){
-				if((vmx->onentry & POSTEX) == 0 && (vmcsread(GUEST_RFLAGS) & 1<<9) != 0 && (vmcsread(GUEST_CANINTR) & 3) == 0){
+				if(!injected && (vmcsread(GUEST_RFLAGS) & 1<<9) != 0 && (vmcsread(GUEST_CANINTR) & 3) == 0){
 					vmcswrite(VMENTRY_INTRINFO, vmx->irq.info);
 					vmcswrite(VMENTRY_INTRCODE, vmx->irq.code);
 					vmcswrite(VMENTRY_INTRILEN, vmx->irq.ilen);
@@ -1811,13 +1891,8 @@ vmxproc(void *vmxp)
 				}else
 					procbctls |= PROCB_IRQWIN;
 			}
-			if((vmx->onentry & FLUSHVPID) != 0){
-				if(invvpid(INVLOCAL, vmx->vpid, 0) < 0)
-					error("invvpid failed");
-				vmx->onentry &= ~FLUSHVPID;
-			}
 			if((vmx->onentry & FLUSHEPT) != 0){
-				if(invept(INVLOCAL, PADDR(vmx->pml4) | 3<<3, 0) < 0)
+				if(invept(INVLOCAL, vmx->eptp, 0) < 0)
 					error("invept failed");
 				vmx->onentry &= ~FLUSHEPT;
 			}
@@ -1825,6 +1900,14 @@ vmxproc(void *vmxp)
 			vmx->got &= ~GOTEXIT;
 			
 			x = splhi();
+			/* No other VCPU may reuse the VPID between flushing and entry. */
+			if(vmx->flushvpid){
+				if(invvpid(INVLOCAL, vmx->vpid, 0) < 0){
+					splx(x);
+					error("invvpid failed");
+				}
+				vmx->flushvpid = 0;
+			}
 			if(sizeof(uintptr) == 8){
 				rdmsr(FSbase, &v);
 				vmwrite(HOST_FSBASE, v);
@@ -1839,18 +1922,7 @@ vmxproc(void *vmxp)
 				putxcr0(vmx->xcr0);
 			if(vmx->cr2 != getcr2())
 				putcr2(vmx->cr2);
-			cycles(&start);
-			if(useend){
-				vmx->tscoffset -= end - start + adj;
-				vmcswrite(VMCS_TSC_OFFSET, vmx->tscoffset);
-			}
-			if(adj == 0){
-				cycles(&adj);
-				adj -= start;
-			}
 			rc = vmlaunch(&vmx->ureg, vmx->launched);
-			cycles(&end);
-			useend = vmx->procbctls & PROCB_TSCOFFSET;
 			vmx->cr2 = getcr2();
 			if(vmx->xcr0 != m->xcr0)
 				putxcr0(m->xcr0);
@@ -1900,6 +1972,8 @@ enum {
 	CMexc,
 	CMirq,
 	CMextrap,
+	CMinit,
+	CMnmi,
 };
 
 static Cmdtab vmxctlmsg[] = {
@@ -1910,6 +1984,8 @@ static Cmdtab vmxctlmsg[] = {
 	CMexc,		"exc",		2,
 	CMirq,		"irq",		0,
 	CMextrap,	"extrap",	2,
+	CMinit,		"init",		1,
+	CMnmi,		"nmi",		1,
 };
 
 enum { AUXSIZE = 4096 };
@@ -1974,6 +2050,8 @@ vmxcmd(Vmx *vmx, int (*f)(VmCmd *, va_list), ...)
 	while(waserror())
 		cmd.scratched = 1;
 	wakeup(&vmx->cmdwait);
+	if(vmx->machno != m->machno)
+		lapicipi(vmx->machno, VectorPIC+IrqVMX);
 	do
 		sleep(&cmd, iscmddone, &cmd);
 	while(!iscmddone(&cmd));
@@ -2026,10 +2104,6 @@ vmxnew(void)
 		vmxtab[nvmxtab] = vmx;
 		vmx->index = nvmxtab++;
 	}
-	kproc("kvmx", vmxproc, vmx);
-	qunlock(&vmxtablock);
-	poperror();
-	poperror();
 	mi = 0;
 	mv = 0x7fffffff;
 	for(i = 0; i < conf.nmach; i++)
@@ -2038,6 +2112,10 @@ vmxnew(void)
 			mv = vmxmachp(i)->vms;
 		}
 	vmx->machno = mi;
+	kproc("kvmx", vmxproc, vmx);
+	qunlock(&vmxtablock);
+	poperror();
+	poperror();
 	if(vmxcmd(vmx, cmdstatus, up->errstr) == VMXDEAD)
 		error(up->errstr);
 	return vmx;
@@ -2338,6 +2416,12 @@ vmxwrite(Chan* c, void* a, long n, vlong off)
 			break;
 		case CMstop:
 			vmxcmd(vmx, cmdstop);
+			break;
+		case CMinit:
+			vmxcmd(vmx, cmdinit);
+			break;
+		case CMnmi:
+			vmxcmd(vmx, cmdnmi);
 			break;
 		case CMexc:
 			s = nil;

@@ -133,6 +133,13 @@ The virtual CPU attempted to execute the instruction \fIinstr\fR.
 .TP
 \fL*ack\fR
 Not an actual exit, but acknowledgement that an interrupt request (IRQ) was posted.
+.TP
+\fL*nmi\fR
+Acknowledgement that a non-maskable interrupt was posted.
+.TP
+\fL*init\fR
+The virtual CPU has stopped at an INIT boundary.
+Earlier exit and interrupt notifications may precede this notification.
 
 .PD
 .PP
@@ -154,6 +161,24 @@ Launch the virtual CPU.
 .B stop
 Stop the virtual CPU.
 .TP
+.B init
+Stop the virtual CPU and discard pending exits, exceptions and interrupts.
+Clear interruptibility and debug state, CR2, and extended-state enables other than x87.
+Floating-point state and syscall MSRs are preserved.
+The monitor must supply the remaining INIT register state before launching the CPU again.
+A
+.B *init
+notification is sent to
+.BR wait .
+.TP
+.B nmi
+Queue a non-maskable interrupt.
+It is delivered independently of the interrupt-enable flag, once NMI blocking ends.
+A
+.B *nmi
+notification is sent when the interrupt is posted.
+This command requires VMX virtual-NMI support.
+.TP
 \fLstep\fR [ \fIregs\fR ]
 Executes a single instruction with the virtual CPU.
 \fIRegs\fR is optinal, same as \fLgo\fR.
@@ -174,6 +199,9 @@ cancels any interrupts that have been previously posted but not yet delivered an
 .TP
 \fLextrap\fR \fIbitmap\fR
 Changes the exception bitmap. Set bits cause a VM exits.
+.PP
+Virtual CPUs use the host's timestamp counter without stopping it during VM exits.
+Multiprocessor guests require synchronized host timestamp counters.
 .SH SOURCE
 .B /sys/src/9/pc/devvmx.c
 .SH "SEE ALSO"
