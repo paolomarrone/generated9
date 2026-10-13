@@ -217,7 +217,7 @@ x86access(int seg, uintptr addr0, int asz, uvlong *val, int sz, int acc, TLB *tl
 		r = tlb->reg;
 		goto fast;
 	}
-	if(sizeof(uintptr) == 8 && asz == 8){
+	if(sizeof(uintptr) == 8 && (rget("csperm") & 1<<13) != 0){
 		if(seg == SEGFS || seg == SEGGS)
 			addr += rget(baser[seg]);
 		if((u16int)(((u64int)addr >> 48) + 1) > 1){
@@ -299,8 +299,10 @@ x86access(int seg, uintptr addr0, int asz, uvlong *val, int sz, int acc, TLB *tl
 			tlb->pabase = pa[0] - addr0;
 		}
 	fast:
-		if(r->mmio != nil)
-			r->mmio(pa[0], val, sz, (u8int)acc == ACCW);
+		if(r->mmio != nil){
+			if(r->mmio(pa[0], val, sz, (u8int)acc == ACCW) < 0)
+				goto gpf;
+		}
 		else if(acc == ACCW)
 			switch(sz){
 			case 1: PUT8(ptr, 0, *val); break;
@@ -327,13 +329,17 @@ x86access(int seg, uintptr addr0, int asz, uvlong *val, int sz, int acc, TLB *tl
 				vmerror("x86access: access to unmapped address %#p", pa[i]);
 			else if(acc == ACCW){
 				tval = GET8(val, i);
-				if(r->mmio != nil)
-					r->mmio(pa[i], &tval, 1, 1);
+				if(r->mmio != nil){
+					if(r->mmio(pa[i], &tval, 1, 1) < 0)
+						goto gpf;
+				}
 				else
 					PUT8(r->v, pa[i] - r->start, tval);
 			}else{
-				if(r->mmio != nil)
-					r->mmio(pa[i], &tval, 1, 0);
+				if(r->mmio != nil){
+					if(r->mmio(pa[i], &tval, 1, 0) < 0)
+						goto gpf;
+				}
 				else
 					tval = GET8(r->v, pa[i] - r->start);
 				PUT8(val, i, tval);
@@ -492,7 +498,7 @@ struct Instr {
 	int nbytes;
 	u8int opcode; /* first byte after the prefixes */
 	u32int inf;
-	u8int modrm, sib;
+	u8int modrm, sib, rex;
 	vlong disp;
 	uvlong imm;
 	enum {
@@ -564,7 +570,7 @@ fetch32(int acc)
 	if(r1 = fetch8(acc), r1 < 0) return -1;
 	if(r2 = fetch8(acc), r2 < 0) return -1;
 	if(r3 = fetch8(acc), r3 < 0) return -1;
-	return r0 | r1 << 8 | r2 << 16 | r3 << 24;
+	return (u32int)(r0 | r1 << 8 | r2 << 16 | r3 << 24);
 }
 
 static int
@@ -632,16 +638,33 @@ grab(void)
 again:
 	op = fetch8(0);
 	if(op < 0) return -1;
+	if(step.mode == 8 && (op & 0xf0) == 0x40){
+		step.rex = op;
+		goto again;
+	}
 	inf = optab[op];
 	if(inf == 0){ giveup(); return -1; }
 	switch((u8int)inf){
-	case OLOCK: step.flags |= INSLOCK; goto again;
-	case OREP: step.flags |= INSREP; goto again;
-	case OREPNE: step.flags |= INSREPNE; goto again;
-	case OOSZ: step.flags |= INSOSZ; step.osz = step.osz == 2 ? 4 : 2; goto again;
-	case OASZ: step.flags |= INSASZ; step.asz = step.asz == 2 ? 4 : 2; goto again;
-	case OSEG: step.seg = inf >> 8; goto again;
+	case OLOCK: step.flags |= INSLOCK; break;
+	case OREP: step.flags |= INSREP; break;
+	case OREPNE: step.flags |= INSREPNE; break;
+	case OOSZ: step.flags |= INSOSZ; break;
+	case OASZ: step.flags |= INSASZ; break;
+	case OSEG: step.seg = inf >> 8 & 15; break;
+	default: goto opcode;
 	}
+	/* A legacy prefix cancels any preceding REX. */
+	step.rex = 0;
+	goto again;
+opcode:
+	step.osz = step.mode == 2 ? 2 : 4;
+	if((step.flags & INSOSZ) != 0)
+		step.osz = step.osz == 2 ? 4 : 2;
+	if((step.rex & 8) != 0)
+		step.osz = 8;
+	step.asz = step.mode;
+	if((step.flags & INSASZ) != 0)
+		step.asz = step.mode == 4 ? 2 : 4;
 	step.opcode = op;
 	if((u8int)(inf >> 8) >= AMODRM || (u8int)(inf >> 16) >= AMODRM || inf == OEX){
 		rc = fetch8(0);
@@ -760,7 +783,7 @@ decreg(Oper *o, int n, int sz)
 {
 	o->type = OPREG;
 	o->sz = sz;
-	if(sz == 1 && n >= 4){
+	if(sz == 1 && n >= 4 && n < 8 && step.rex == 0){
 		o->addr = n ^ 0x14;
 		o->val = (u8int)(rget(x86reg[n&3]) >> 8);
 	}else{
@@ -777,7 +800,7 @@ decmodrm(Oper *o, int sz)
 	mod = step.modrm >> 6;
 	m = step.modrm & 7;
 	if(mod == 3){
-		decreg(o, m, sz);
+		decreg(o, m | (step.rex & 1)<<3, sz);
 		return;
 	}
 	o->type = OPMEM;
@@ -787,7 +810,7 @@ decmodrm(Oper *o, int sz)
 		case 0: o->addr = rget(RBX) + rget(RSI); break;
 		case 1: o->addr = rget(RBX) + rget(RDI); break;
 		case 2: o->addr = rget(RBP) + rget(RSI); break;
-		case 3: o->addr = rget(RBX) + rget(RDI); break;
+		case 3: o->addr = rget(RBP) + rget(RDI); break;
 		case 4: o->addr = rget(RSI); break;
 		case 5: o->addr = rget(RDI); break;
 		case 6: o->addr = mod == 0 ? 0 : rget(RBP); break;
@@ -795,38 +818,33 @@ decmodrm(Oper *o, int sz)
 		}
 		o->addr = (u16int)(o->addr + step.disp);
 		if(step.seg < 0)
-			if(m == 6 && mod != 0)
+			if(m == 2 || m == 3 || m == 6 && mod != 0)
 				step.seg = SEGSS;
 			else
 				step.seg = SEGDS;
 		return;
 	}
 	if(m != 4){
-		if((step.modrm & 0xc7) == 5)
-			o->addr = 0;
+		if(m == 5 && mod == 0)
+			o->addr = step.mode == 8 ? step.npc : 0;
 		else
-			o->addr = rget(x86reg[m]);
-		o->addr = (u32int)(o->addr + step.disp);
+			o->addr = rget(x86reg[m | (step.rex & 1)<<3]);
 		if(step.seg < 0)
-			if(m == 5 && mod != 0)
-				step.seg = SEGSS;
-			else
-				step.seg = SEGDS; 
-		return;
-	}
-	if((step.sib >> 3 & 7) != 4)
-		o->addr = rget(x86reg[step.sib >> 3 & 7]);
-	else
-		o->addr = 0;
-	o->addr <<= step.sib >> 6;
-	if((step.sib & 7) != 5 || mod != 0)
-		o->addr += rget(x86reg[step.sib & 7]);
-	o->addr = (u32int)(o->addr + step.disp);
-	if(step.seg < 0)
-		if((step.sib & 7) == 4 || (step.sib & 7) == 5 && mod != 0)
-			step.seg = SEGSS;
+			step.seg = m == 5 && mod != 0 ? SEGSS : SEGDS;
+	}else{
+		if((step.sib >> 3 & 7) != 4 || (step.rex & 2) != 0)
+			o->addr = rget(x86reg[(step.sib >> 3 & 7) | (step.rex & 2)<<2]);
 		else
-			step.seg = SEGDS;
+			o->addr = 0;
+		o->addr <<= step.sib >> 6;
+		if((step.sib & 7) != 5 || mod != 0)
+			o->addr += rget(x86reg[(step.sib & 7) | (step.rex & 1)<<3]);
+		if(step.seg < 0)
+			step.seg = (step.sib & 7) == 4 || (step.sib & 7) == 5 && mod != 0 ? SEGSS : SEGDS;
+	}
+	o->addr += step.disp;
+	if(step.asz == 4)
+		o->addr = (u32int)o->addr;
 }
 
 static int
@@ -876,7 +894,7 @@ parseoper(void)
 			o->sz = 1;
 			break;
 		case AGb:
-			decreg(o, step.modrm >> 3 & 7, sizes[f & 0xf]);
+			decreg(o, (step.modrm >> 3 & 7) | (step.rex & 4)<<1, sizes[f & 0xf]);
 			break;
 		}
 	}
@@ -1088,19 +1106,24 @@ x86step(void)
 	step.seg = -1;
 	step.pc = rget(RPC);
 	step.npc = step.pc;
-	step.mode = 4;
-	step.asz = step.osz = step.mode;
+	step.mode = (rget("csperm") & 1<<13) != 0 ? 8 : (rget("csperm") & 1<<14) != 0 ? 4 : 2;
 	if(grab() < 0 || parseoper() < 0)
 		return 0;
 //	print("flags=%#ux modrm=%#ux sib=%#ux disp=%#ullx imm=%#ullx\n", step.flags, step.modrm, step.sib, step.disp, step.imm);
 //	print("op0: type=%#ux addr=%#ullx val=%#ullx sz=%d\n", , );
 //	print("op1: type=%#ux addr=%#ullx val=%#ullx sz=%d\n", step.op[1].type, step.op[1].addr, step.op[1].val, step.op[1].sz);
-	print("%#.*p %s (%#ux,%d,%#ullx,%#ullx) (%#ux,%d,%#ullx,%#ullx) si %#llux di %#llux\n", 2*step.mode, step.pc, enumconv((u8int)step.inf,buf,onames), step.op[0].type, step.op[0].sz, (uvlong)step.op[0].addr, step.op[0].val, step.op[1].type, step.op[1].sz, (uvlong)step.op[1].addr, step.op[1].val, rget(RSI), rget(RDI));
+	vmdebug("%#.*p %s (%#ux,%d,%#ullx,%#ullx) (%#ux,%d,%#ullx,%#ullx) si %#llux di %#llux\n", 2*step.mode, step.pc, enumconv((u8int)step.inf,buf,onames), step.op[0].type, step.op[0].sz, (uvlong)step.op[0].addr, step.op[0].val, step.op[1].type, step.op[1].sz, (uvlong)step.op[1].addr, step.op[1].val, rget(RSI), rget(RDI));
 	switch((u8int)step.inf){
 	case OMOV:
 		if((step.flags & (INSREP|INSREPNE|INSLOCK)) != 0) {giveup(); return 0;}
 		if(opread(&step.op[1], &val) < 0) return 0;
 		if(opwrite(&step.op[0], val) < 0) return 0;
+		return 1;
+	case OXCHG:
+		if(opread(&step.op[0], &val) < 0 || opread(&step.op[1], &valb) < 0)
+			return 0;
+		if(opwrite(&step.op[0], valb) < 0 || opwrite(&step.op[1], val) < 0)
+			return 0;
 		return 1;
 	case OSTOS: case OLODS: case OMOVS:
 		if((step.flags & (INSREPNE|INSLOCK)) != 0) {giveup(); return 0;}

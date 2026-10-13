@@ -315,7 +315,7 @@ rdwrmsr(ExitInfo *ei)
 	
 	rd = ei->name[1] == 'r';
 	cx = rget(RCX);
-	val = (uvlong)rget(RDX) << 32 | rget(RAX);
+	val = rget(RDX) << 32 | (u32int)rget(RAX);
 	switch(cx){
 	case 0x277:
 		if(rd) val = rget("pat");
