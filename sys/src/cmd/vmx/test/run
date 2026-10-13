@@ -148,16 +148,27 @@ def main():
             send(f"rc {guest}/run.rc")
             wait_for(b"term% ")
             deadline = time.monotonic() + args.timeout
+            clockstart = clockend = None
             passed = f"VMX-SMP-PASS cpus={count} total={count*8*25000}"
             while True:
                 log = logfile.read_text(errors="replace")
-                if "VMX-SMP-FAIL" in log or "Kernel panic" in log:
+                now = time.monotonic()
+                if clockstart is None and "VMX-CLOCK-START" in log:
+                    clockstart = now
+                if clockend is None and "VMX-CLOCK-END" in log:
+                    clockend = now
+                if any(marker in log for marker in
+                       ("VMX-SMP-FAIL", "Kernel panic", "BUG: soft lockup", "hard LOCKUP")):
                     raise RuntimeError(f"guest failed: {logfile}")
                 if passed in log:
                     break
                 if time.monotonic() >= deadline:
                     raise RuntimeError(f"guest timed out: {logfile}")
                 read_console(0.25)
+            if count > 1:
+                if clockstart is None or clockend is None or not 4 <= clockend-clockstart <= 7:
+                    raise RuntimeError(f"guest clock rate differs from host: {logfile}")
+                print(f"Guest sleep(5): {clockend-clockstart:.2f}s on host", flush=True)
             print(passed, flush=True)
             pid = (work / "pid").read_text().strip()
             if not pid.isdecimal():

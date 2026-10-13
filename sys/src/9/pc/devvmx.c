@@ -994,6 +994,7 @@ vmcsinit(Vmx *vmx)
 {
 	vlong msr;
 	u32int x;
+	ulong regs[4];
 	int s;
 	
 	memset(&vmx->ureg, 0, sizeof(vmx->ureg));
@@ -1151,8 +1152,15 @@ vmcsinit(Vmx *vmx)
 	vmcswrite(VMEXIT_MSRLDADDR, PADDR(vmx->msrhost));
 	vmcswrite(MSR_BITMAP, PADDR(vmx->msrbits));
 
-	/* All virtual CPUs share the host clock, including time spent in exits. */
-	vmcswrite(VMCS_TSC_OFFSET, 0);
+	/* Undo per-CPU software adjustments, leaving the hardware clock running. */
+	msr = 0;
+	cpuid(0, 0, regs);
+	if(regs[0] >= 7){
+		cpuid(7, 0, regs);
+		if((regs[1] & 1<<1) != 0 && rdmsr(0x3b, &msr) < 0)
+			error("rdmsr(IA32_TSC_ADJUST) failed");
+	}
+	vmcswrite(VMCS_TSC_OFFSET, 0ULL - msr);
 
 	if(sizeof(uintptr) == 8){
 		vmxaddmsr(vmx, Star, 0);

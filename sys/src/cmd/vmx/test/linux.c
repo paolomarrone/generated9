@@ -29,6 +29,29 @@ static void fail(const char *what)
 	for(;;) pause();
 }
 
+static void clocktest(void)
+{
+	char source[64];
+	FILE *f;
+
+	/* The single-CPU PIC/PIT configuration does not advertise TSC frequency. */
+	if(ncpu == 1)
+		return;
+	/* Allow Linux's deferred TSC clocksource registration to finish. */
+	sleep(2);
+	f = fopen("/sys/devices/system/clocksource/clocksource0/current_clocksource", "r");
+	if(f == NULL || fscanf(f, "%63s", source) != 1)
+		fail("read clocksource");
+	fclose(f);
+	printf("VMX-CLOCK source=%s\n", source);
+	if(strcmp(source, "tsc") != 0)
+		fail("TSC rejected");
+	/* The runner measures this interval using the outer Linux host clock. */
+	puts("VMX-CLOCK-START");
+	sleep(5);
+	puts("VMX-CLOCK-END");
+}
+
 static void rendezvous(void)
 {
 	int rc = pthread_barrier_wait(&barrier);
@@ -247,6 +270,7 @@ int main(int argc, char **argv)
 		close(fd);
 	}
 	interrupts();
+	clocktest();
 	printf("VMX-SMP-PASS cpus=%lu total=%lu\n", ncpu, atomic_load(&total));
 	for(;;) pause();
 }

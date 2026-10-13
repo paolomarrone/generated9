@@ -201,7 +201,10 @@ cancels any interrupts that have been previously posted but not yet delivered an
 Changes the exception bitmap. Set bits cause a VM exits.
 .PP
 Virtual CPUs use the host's timestamp counter without stopping it during VM exits.
-Multiprocessor guests require synchronized host timestamp counters.
+When the processor provides IA32_TSC_ADJUST, the VMCS offset cancels software
+adjustments to each host CPU's counter. Multiprocessor guests then require
+synchronized hardware counters. Otherwise the counters are used unchanged
+and must already be synchronized by the host.
 .SH SOURCE
 .B /sys/src/9/pc/devvmx.c
 .SH "SEE ALSO"

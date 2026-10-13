@@ -52,8 +52,8 @@ Four concurrent SHA-256 jobs, each pinned to a different CPU and hashing
 64 MiB of zeroes, matched the result calculated on the Linux host.
 
 Graphics use software rendering at a fixed resolution. Audio is not provided.
-The guest currently rejects the TSC synchronization and uses `refined-jiffies`
-as its clocksource. ACPI is absent, so its missing-RSDP message is expected.
+The tested Intel host provides TSC_ADJUST; the guest selects `tsc` without
+clocksource overrides. ACPI is absent, so its missing-RSDP message is expected.
 The outer VM has 8 GB to leave room for restarting a 2 GB guest: `devvmx`
 retains the last removed virtual CPU, including its memory, for debugging.
 A restart with a 6 GB outer VM exhausted its available physical memory.
