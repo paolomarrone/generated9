@@ -1,0 +1,131 @@
+.TH TINYGL 2
+.SH NAME
+tglinit, tglresize, tglread, tglclose \- classic OpenGL subset over GPU files
+.SH SYNOPSIS
+.B #include <u.h>
+.br
+.B #include <libc.h>
+.br
+.B #include <GL/gl.h>
+.br
+.B #include <tinygl.h>
+.PP
+.B
+void tglinit(char *device, int width, int height)
+.PP
+.B
+void tglresize(int width, int height)
+.PP
+.B
+void tglread(void *pixels, int bytes)
+.PP
+.B
+void tglclose(void)
+.SH DESCRIPTION
+TinyGL implements a subset of classic OpenGL using native Plan 9 C.
+Matrix transformations and vertex lighting run on the CPU.
+Clipping, interpolation, rasterization and depth testing use VirGL through
+.IR gpu (3).
+No Mesa, GLX, external compiler or Linux emulation is required in the guest.
+.PP
+.I Tglinit
+creates the process's single current context and an off-screen color/depth
+target of the requested size.
+.I Device
+is the directory containing the GPU's
+.B clone
+and
+.B caps
+files; nil selects
+.BR #∇ .
+The directory can be bound elsewhere in the caller's namespace.
+Both dimensions must be between 1 and 2048.
+The initial viewport covers the target.
+.PP
+The supported GL operations include immediate points, lines, triangles,
+strips, fans, quads and convex polygons; float vertex/color/normal arrays
+through
+.BR glArrayElement ;
+flat and smooth colors; matrix stacks, transformations and perspective;
+face culling; one-sided vertex lighting and materials; display lists;
+and clearing color and depth.
+Depth testing uses LESS and writes depth while enabled.
+Points and lines have size one. Polygons are filled.
+The header declares the available entry points, not a complete GL API.
+.PP
+Float array strides are byte counts; zero means tightly packed.
+Display lists own the values obtained by
+.BR glArrayElement ,
+not pointers to client arrays.
+List names are in the range 1 through 1023 and nesting is limited to 64.
+Generated names are reserved but remain undefined until
+.BR glEndList .
+Redefinition preserves the old list until compilation finishes.
+Calls to undefined lists do nothing.
+.PP
+.I Tglresize
+finishes pending drawing and replaces the render target, releasing the old
+resources. Its contents become undefined.
+It does not change GL state or the viewport: call
+.B glViewport
+as appropriate for the new size.
+Viewport dimensions may be zero and are limited to 4096; coordinates are
+limited to the range -4096 through 4096.
+.PP
+.I Tglread
+finishes pending drawing, downloads the color target and copies it into
+.IR pixels .
+.I Bytes
+must be at least width times height times four.
+Pixels are tightly packed, top row first, in the XRGB32 byte layout used by
+.IR draw (2).
+GL window coordinates still have their origin at the lower left.
+The application owns the buffer and chooses how to display or save it.
+.PP
+.B glFlush
+submits pending primitives and waits for completion.
+Batches also finish when full or when incompatible drawing state changes.
+.I Tglclose
+finishes pending drawing, closes the GPU context and frees its resources,
+display lists, matrix stacks and other CPU allocations.
+A subsequent
+.I tglinit
+creates fresh state.
+.SH EXAMPLE
+.EX
+uchar pixels[64*64*4];
+
+tglinit(nil, 64, 64);
+glClearColor(0, 0, 0, 1);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glBegin(GL_TRIANGLES);
+glColor3f(1, 0, 0); glVertex2f(-.8, -.8);
+glColor3f(0, 1, 0); glVertex2f(.8, -.8);
+glColor3f(0, 0, 1); glVertex2f(0, .8);
+glEnd();
+tglread(pixels, sizeof pixels);
+tglclose();
+.EE
+.SH SOURCE
+.B /sys/src/libtinygl
+.SH SEE ALSO
+.IR glgears (1),
+.IR gpu (2),
+.IR gpu (3),
+.IR draw (2)
+.SH DIAGNOSTICS
+As in TinyGL, invalid or unsupported operations are fatal.
+There is no recoverable GL error queue.
+.SH BUGS
+This is an experimental subset, not a conformant OpenGL implementation.
+There are no textures, blending, stencil, scissor, fog, programmable shaders,
+selection, polygon offset, non-fill polygon modes or two-sided lighting.
+Unsupported operations are rejected; functions absent from the header are
+not provided. Lighting retains TinyGL's approximations.
+.PP
+Only one current context per process is supported; calls are not thread-safe.
+There is no GLX, EGL, GLUT, surface sharing or direct presentation.
+Readback and libdraw composition still copy pixels through CPU memory.
+The client has been tested on amd64 with QEMU VirGL and inherits the
+privileges and failure behavior described in
+.IR gpu (3).

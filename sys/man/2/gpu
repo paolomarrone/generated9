@@ -75,6 +75,7 @@ returns a float's 32-bit wire representation.
 .B /sys/src/libgpu
 .SH SEE ALSO
 .IR gputest (1),
+.IR tinygl (2),
 .IR gpu (3)
 .SH DIAGNOSTICS
 Errors are fatal. The client is synchronous and not thread-safe.

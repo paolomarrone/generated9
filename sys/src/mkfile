@@ -38,6 +38,7 @@ LIBS=\
 	libstdio\
 	libsunrpc\
 	libthread\
+	libtinygl\
 	libttf\
 	libventi\
 	libdtracy\

@@ -1,0 +1,30 @@
+</$objtype/mkfile
+
+CFLAGS=$CFLAGS -p
+
+LIB=/$objtype/lib/libtinygl.a
+OFILES=\
+	api.$O\
+	arrays.$O\
+	clear.$O\
+	get.$O\
+	init.$O\
+	light.$O\
+	list.$O\
+	matrix.$O\
+	misc.$O\
+	specbuf.$O\
+	vertex.$O\
+	zmath.$O\
+	native.$O\
+	virgl.$O
+HFILES=\
+	zgl.h\
+	zmath.h\
+	opinfo.h\
+	specbuf.h\
+	/sys/include/GL/gl.h\
+	/sys/include/tinygl.h\
+	/sys/include/gpu.h
+
+</sys/src/cmd/mksyslib

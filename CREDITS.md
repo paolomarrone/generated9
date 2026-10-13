@@ -1,5 +1,16 @@
 # Credits and source provenance
 
+## TinyGL
+
+`sys/src/libtinygl` imports the API, matrix, lighting and display-list parts of
+[Fabrice Bellard's TinyGL 0.4.1](https://bellard.org/TinyGL/), under its preserved
+[MIT license](sys/src/libtinygl/LICENSE). The archive SHA-256 is
+`b314f019a778d583a3778cb14bcc2a57626a8f866cbed0693705bb1bb785b16f`.
+The public header retains TinyGL's attribution of constants to Mesa.
+[UPSTREAM](sys/src/libtinygl/UPSTREAM) records the native port and corrections.
+The new VirGL backend uses the protocol and MIT notice described below;
+new integration code and tests use the root [LICENSE](LICENSE).
+
 ## VirtIO GPU and VirGL
 
 The native GPU transport implements the [VirtIO 1.2 GPU protocol](https://docs.oasis-open.org/virtio/virtio/v1.2/virtio-v1.2.html).

@@ -1,0 +1,43 @@
+TinyGL 0.4.1 by Fabrice Bellard
+
+Source: https://bellard.org/TinyGL/
+Archive: https://bellard.org/TinyGL/TinyGL-0.4.1.tar.gz
+SHA-256: b314f019a778d583a3778cb14bcc2a57626a8f866cbed0693705bb1bb785b16f
+
+Selected API, matrix, lighting and display-list sources from src/ and
+include/GL/gl.h. LICENSE preserves the archive's MIT notice, copyright
+1997-2022 Fabrice Bellard. gl.h retains the attribution of constants to Mesa.
+
+Local adaptations:
+- Native Plan 9 libc, memory and fatal-error handling; mk and 6c -p.
+  The -p option uses Plan 9's own ANSI preprocessor for the opcode table.
+- No GLX, operating-system toolkit, software rasterizer or z-buffer code.
+- virgl.c batches transformed vertices through libgpu and gpu(3). Matrices
+  and vertex lighting run on the guest CPU; clipping, interpolation,
+  rasterization and depth testing run through host VirGL. Frame readback
+  returns top-down XRGB32 bytes; libdraw window policy stays in the app.
+- Explicit rejection of unsupported textures, selection, polygon offset,
+  non-fill polygon modes and two-sided lighting; this is not conformant GL.
+- Correct homogeneous transforms, matrix invalidation when lighting changes,
+  general-axis rotation and frustum validation, flat provoking colors for
+  assembled primitives, polygon winding, default normal/light/depth state,
+  and cleanup of context-owned allocations.
+- Filled convex polygons stream through a fixed four-vertex assembly buffer.
+- Bounded display-list indices and nesting, nonzero generated list names,
+  glDeleteLists, and validation of operations inside glBegin/glEnd. New lists
+  remain private until glEndList; calls and deletion see the old definition.
+  Reserved names are distinct from defined lists.
+- Float client arrays use byte strides and copy values into display lists;
+  corrected normal components and removed integer-color overreads.
+- Correct scalar/vector argument lengths, material-list parameter ownership,
+  linked light removal, local-viewer vector components and color-material
+  tracking when enabled or reconfigured.
+
+VirGL encoding derives from the existing generated9 examples and
+virglrenderer at 4d8bd3c9954a9599e0de70a2e432c761da80398d.
+See ../libgpu/UPSTREAM and ../libgpu/LICENSE for exact references and the
+Red Hat MIT notice. LICENSE.virgl preserves that notice here as well.
+New native integration and tests use the generated9 root LICENSE.
+
+The native binding supports one current context per process and terminates
+on errors, following TinyGL's error model. See tinygl(2) for limitations.

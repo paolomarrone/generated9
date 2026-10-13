@@ -1,0 +1,11 @@
+</$objtype/mkfile
+
+TARG=gltest
+OFILES=gltest.$O
+HFILES=/sys/include/GL/gl.h /sys/include/tinygl.h
+LIB=/$objtype/lib/libtinygl.a /$objtype/lib/libgpu.a
+
+</sys/src/cmd/mkone
+
+test:V: $O.out
+	./$O.out
