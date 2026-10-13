@@ -761,8 +761,8 @@ linuxbootmod(char *fn, void *zp, u32int kend)
 	addr = GET32(zp, 0x22c);
 	memend = (1<<20) + gavail(gptr(1<<20, 0));
 	if(addr >= memend) addr = memend - 1;
-	if((addr - (sz - 1) & -4) < kend) sysfatal("linux: no room for initrd");
-	addr = addr - (sz - 1) & -4;
+	if((addr - (sz - 1) & -4096) < kend) sysfatal("linux: no room for initrd");
+	addr = addr - (sz - 1) & -4096;
 	v = gptr(addr, sz);
 	if(v == nil) sysfatal("linux: initrd: gptr failed");
 	seek(fd, 0, 0);
@@ -799,7 +799,7 @@ linuxscreeninfo(void *zp)
 		PUT16(zp, 0x14, curmode->h);
 		PUT16(zp, 0x16, chantodepth(curmode->chan));
 		PUT32(zp, 0x18, fbaddr);
-		PUT32(zp, 0x1C, fbsz);
+		PUT32(zp, 0x1C, fbsz >> 16); /* 64 KB units */
 		PUT16(zp, 0x24, curmode->hbytes);
 		for(i = 0, p = 0; i < 4; i++){
 			s = curmode->chan >> 8 * i & 15;

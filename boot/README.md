@@ -169,6 +169,11 @@ Go's `cmd/go/internal/lockedfile` tests pass with `TMPDIR=/mnt/go/tmp`.
 message and caret position. The same test fails on Linux with Go 1.27.2.
 The other gojq tests pass.
 
+## Void Linux
+
+For a four-CPU Void Linux live guest with Xfce inside generated9's `vmx`,
+see [VOID.md](VOID.md).
+
 ## Shared filesystem
 
 QEMU invokes `boot/u9fs` for its guest-only address `10.0.2.1:564`; there is no

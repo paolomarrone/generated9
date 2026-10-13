@@ -735,7 +735,7 @@ vgafbparse(char *fbstring)
 	if(vesamode == 0){
 		curmode = modes;
 		curhbytes = curmode->hbytes;
-		fbsz = -(-fbsz & -4096);
+		fbsz = -(-fbsz & -65536); /* VESA memory size units */
 		novga = 1;
 	}else{
 		curmode = &textmode;
