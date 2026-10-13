@@ -5,6 +5,7 @@ renders a triangle through VirGL, reads its pixels back, checks the result,
 and displays it with libdraw. `teapot` animates the Utah teapot with smooth
 normals, perspective, a depth buffer and per-pixel lighting. Both run
 directly in generated9, using the same small VirGL encoder in `libgpu`.
+`glgears` uses the new native TinyGL library for a subset of classic OpenGL.
 
 The host needs QEMU with `virtio-gpu-gl-pci`, virglrenderer, an OpenGL-capable
 display backend, and access to a DRM render node. The guest needs no Mesa,
@@ -41,6 +42,56 @@ teapot
 In `teapot`, space pauses rotation and resizing recreates the render targets.
 Type `q` to close either program. QEMU may also show a second, unused display
 for the off-screen GPU; select the standard VGA display containing rio.
+
+## Classic OpenGL through GPU files
+
+Build with the native Plan 9 toolchain:
+
+```rc
+cd /sys/src/libgpu
+mk install
+cd /sys/src/libtinygl
+mk install
+mk test
+cd /sys/src/cmd/glgears
+mk install
+glgears
+```
+
+`glgears` adapts Brian Paul's public-domain classic gears. Space pauses,
+arrow keys rotate the view, and `q` exits. `glgears -n 300` measures the full
+window path; `glgears -b 300` measures rendering and readback without a window;
+`glgears -o /tmp/gears.image` saves a frame.
+
+The application uses `<GL/gl.h>` plus four native binding calls from
+`<tinygl.h>`: initialize, resize, read pixels and close. TinyGL 0.4.1 supplies
+matrix transformations, vertex lighting, primitive assembly and display lists.
+The new backend batches clip-space vertices; VirGL clips, interpolates,
+rasterizes and depth-tests them. The library opens `clone`, `cmd` and resource
+files through `libgpu`. Passing a device directory to `tglinit` allows normal
+namespace bindings; nil uses `#∇`. No kernel changes or new kernel GL API are
+needed. Window presentation stays in the application and uses libdraw.
+
+This is a classic GL **subset**, not full or conformant OpenGL. The first
+backend supports geometry, flat/smooth colors, float client arrays, matrices,
+one-sided lighting, culling, display lists and LESS depth testing. It has no
+textures, blending, stencil, GLSL, EGL or GLX. Unsupported operations fail
+explicitly. There is one current context per process and errors are fatal,
+following TinyGL's model. See [tinygl(2)](../sys/man/2/tinygl) for exact limits.
+
+Tests exercise rendered pixels, image orientation, clipping, homogeneous
+coordinates, depth ordering, culling, viewport changes, flat provoking colors,
+smooth colors, points, lines, array strides, list replacement and ownership,
+large convex polygons, lighting and color-material tracking,
+invalid operations and repeated target/context recreation. Existing triangle
+and teapot tests also exercise the shared `libgpu` encoder.
+
+Validation on the development amd64 QEMU guest also passed with the GPU bound
+at another namespace path and with the window resized while animating.
+A 300-frame `glgears -n 300` run at 808×608 measured about 58 fps including
+readback and libdraw presentation, with the VirtIO desktop active. The demo's
+17 ms event timer limits the window rate to about 59 fps; this is not a GPU
+throughput measurement. Pixel readback and desktop composition remain copies.
 
 ## Presenting the desktop through VirtIO
 
@@ -110,7 +161,8 @@ because they temporarily fill the context table. The display can remain active.
 The interface is documented in `gpu(3)`. It uses one synchronous
 queue and copies the completed image back to guest memory for libdraw.
 It does not accelerate drawing in existing rio applications, expose
-OpenGL/Vulkan, or drive a physical GPU when booted on bare hardware.
+a complete OpenGL or Vulkan implementation, or drive a physical GPU when
+booted on bare hardware.
 The teapot keeps its 5,408 vertices, 9,216 indexed triangles, shaders and
 render targets across frames. Only the transformation matrices change.
 Window animation is paced at about 60 fps, and paused windows stop rendering.

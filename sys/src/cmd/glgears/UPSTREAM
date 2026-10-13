@@ -1,0 +1,12 @@
+Classic gears by Brian Paul, public domain.
+
+Source: examples/gears.c in TinyGL 0.4.1
+https://bellard.org/TinyGL/TinyGL-0.4.1.tar.gz
+SHA-256: b314f019a778d583a3778cb14bcc2a57626a8f866cbed0693705bb1bb785b16f
+
+The geometry, three display lists, materials, lights and scene placement
+come from that example. The public-domain attribution remains in glgears.c.
+The GLX/ui toolkit is replaced with native libdraw/event window handling,
+TinyGL context/readback calls, elapsed-time animation and frame timing.
+Projection preserves the view along the shorter window dimension.
+New generated9 integration uses the root LICENSE.

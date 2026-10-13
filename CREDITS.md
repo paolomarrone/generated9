@@ -1,6 +1,6 @@
 # Credits and source provenance
 
-## TinyGL
+## TinyGL and classic gears
 
 `sys/src/libtinygl` imports the API, matrix, lighting and display-list parts of
 [Fabrice Bellard's TinyGL 0.4.1](https://bellard.org/TinyGL/), under its preserved
@@ -10,6 +10,10 @@ The public header retains TinyGL's attribution of constants to Mesa.
 [UPSTREAM](sys/src/libtinygl/UPSTREAM) records the native port and corrections.
 The new VirGL backend uses the protocol and MIT notice described below;
 new integration code and tests use the root [LICENSE](LICENSE).
+
+`glgears` adapts Brian Paul's public-domain `examples/gears.c` from that same
+archive. Its attribution remains in [glgears.c](sys/src/cmd/glgears/glgears.c);
+[UPSTREAM](sys/src/cmd/glgears/UPSTREAM) records the native window adaptation.
 
 ## VirtIO GPU and VirGL
 

@@ -1,0 +1,46 @@
+.TH GLGEARS 1
+.SH NAME
+glgears \- animate classic OpenGL gears with TinyGL and VirGL
+.SH SYNOPSIS
+.B glgears
+[
+.B -b
+.I frames
+|
+.B -n
+.I frames
+]
+[
+.B -o
+.I image
+]
+.SH DESCRIPTION
+.I Glgears
+runs Brian Paul's classic three-gear scene in a native rio window using
+.IR tinygl (2).
+The application uses classic GL display lists, matrices, materials and lights.
+TinyGL transforms and lights vertices on the CPU and submits primitives
+through GPU files for VirGL rasterization and depth testing.
+.PP
+Space pauses rotation, arrow keys rotate the view, and
+.B q
+quits. Resizing recreates the off-screen color and depth targets.
+The window reports frame rate including rendering, readback and presentation.
+.PP
+.B -n
+runs for a fixed number of frames in a window and reports the average rate.
+.B -b
+runs that many frames without a window at 640 by 480, including pixel
+readback but excluding presentation and the initial warm-up frame.
+.B -o
+runs without a window and saves the final frame in Plan 9 image format.
+Without a frame count it renders one measured frame.
+.SH SOURCE
+.B /sys/src/cmd/glgears
+.SH SEE ALSO
+.IR tinygl (2),
+.IR gpu (3),
+.IR teapot (1)
+.SH BUGS
+Requires the host owner and a VirtIO GPU with VirGL.
+The demo is not an OpenGL conformance test or a general GPU benchmark.

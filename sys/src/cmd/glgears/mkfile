@@ -1,0 +1,9 @@
+</$objtype/mkfile
+
+TARG=glgears
+OFILES=glgears.$O
+HFILES=/sys/include/GL/gl.h /sys/include/tinygl.h
+LIB=/$objtype/lib/libtinygl.a /$objtype/lib/libgpu.a
+BIN=/$objtype/bin
+
+</sys/src/cmd/mkone
