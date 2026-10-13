@@ -200,6 +200,14 @@ rcload(void)
 	}
 }
 
+int
+rhave(char *reg)
+{
+	if(rclookup(reg) < 0)
+		rcload();
+	return rclookup(reg) >= 0;
+}
+
 uvlong
 rget(char *reg)
 {

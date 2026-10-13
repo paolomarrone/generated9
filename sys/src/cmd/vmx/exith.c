@@ -233,6 +233,7 @@ cpuid(ExitInfo *ei)
 		if(cx == 0){
 			ax = 0;
 			bx = cp.bx & 0x2369;
+			if(rhave("tscadjust")) bx |= 1<<1;
 			cx = 0;
 			if((leaf1.cx & 1<<27) == 0)
 				bx &= ~0xdc230020;
@@ -316,7 +317,10 @@ cpuid(ExitInfo *ei)
 	case 0x80000004: goto literal; /* brand string */
 	case 0x80000005: goto zero; /* reserved */
 	case 0x80000006: goto literal; /* cache info */
-	case 0x80000007: goto zero; /* invariant tsc */
+	case 0x80000007: /* invariant TSC, when the host provides it */
+		ax = bx = cx = 0;
+		dx = cp.dx & 1<<8;
+		break;
 	case 0x80000008: goto literal; /* address bits */
 	literal:
 		ax = cp.ax;
@@ -344,6 +348,7 @@ rdwrmsr(ExitInfo *ei)
 	u32int cx;
 	u64int val;
 	int rd, rc;
+	char *reg;
 	
 	rd = ei->name[1] == 'r';
 	cx = rget(RCX);
@@ -353,6 +358,18 @@ rdwrmsr(ExitInfo *ei)
 		return;
 	if(rc == 0)
 	switch(cx){
+	case 0x10: /* IA32_TIME_STAMP_COUNTER */
+	case 0x3B: /* IA32_TSC_ADJUST */
+		reg = cx == 0x10 ? "tsc" : "tscadjust";
+		if(!rhave(reg)) goto unknown;
+		if(rd) val = rget(reg);
+		else if(cx == 0x10){
+			/* TSC keeps running: even writing the cached value has an effect. */
+			rcflush(0);
+			if(fprint(cpu->regsfd, "%s %#ullx\n", reg, val) < 0)
+				sysfatal("write tsc: %r");
+		}else rset(reg, val);
+		break;
 	case 0x277:
 		if(rd) val = rget("pat");
 		else rset("pat", val);
@@ -362,6 +379,7 @@ rdwrmsr(ExitInfo *ei)
 		if(rd) val = msr.miscen;
 		break;
 	default:
+	unknown:
 		if(rd){
 			vmdebug("read from unknown MSR %#ux ignored", cx);
 			val = 0;

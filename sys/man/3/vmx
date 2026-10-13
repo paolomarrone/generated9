@@ -99,6 +99,18 @@ Writes to the file (in the same format) write to the referenced registers (if po
 Multiple lines can be written at once but all lines written must be newline terminated.
 
 .PP
+The 64-bit registers
+.B tsc
+and
+.B tscadjust
+implement IA32_TIME_STAMP_COUNTER and IA32_TSC_ADJUST.
+The TSC advances at the host's rate, including while the virtual CPU is stopped.
+Writing either register changes the virtual CPU's TSC offset by the difference
+between the old and new values; writing TSC also adds that difference to TSC_ADJUST.
+These writes affect only this virtual CPU, and INIT preserves both registers.
+TSC_ADJUST starts at zero when the CPU is allocated.
+
+.PP
 Some registers (\fLCR0\fR and \fLCR4\fR) are split into three registers, suffixed \fLreal\fR, \fLfake\fR and \fLmask\fR.
 In this case, \fLreal\fR corresponds to the bits that affect actual CPU execution, \fLfake\fR corresponds to the bits read back by the guest and the bits set in \fLmask\fR are those "owned" by the host.
 The guest is free to modify the bits that it owns (in which case it always has the same value in both \fLreal\fR and \fLfake\fR), but attempting to change a host-owned bit from the status in \fLfake\fR causes a VM exit.

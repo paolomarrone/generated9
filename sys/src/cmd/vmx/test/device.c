@@ -49,6 +49,123 @@ used(void)
 	return strtoul(p, nil, 10);
 }
 
+static uvlong
+regread(int fd, char *name)
+{
+	char buf[4096], key[64], *p;
+	int n;
+
+	buf[0] = '\n';
+	n = pread(fd, buf+1, sizeof(buf)-2, 0);
+	if(n <= 0)
+		sysfatal("clock read: %r");
+	buf[n+1] = 0;
+	snprint(key, sizeof(key), "\n%s ", name);
+	p = strstr(buf, key);
+	if(p == nil)
+		sysfatal("missing %s register", name);
+	return strtoull(p+strlen(key), nil, 0);
+}
+
+static uvlong
+clockread(int fd, uvlong *adjust)
+{
+	*adjust = regread(fd, "tscadjust");
+	return regread(fd, "tsc");
+}
+
+static void
+rdtsctest(int ctl, int regs, int waitfd)
+{
+	char buf[128];
+	uvlong a, b, c;
+	int n;
+
+	a = regread(regs, "tsc");
+	if(fprint(ctl, "go pc=0;") < 0)
+		sysfatal("go: %r");
+	n = read(waitfd, buf, sizeof(buf)-1);
+	if(n <= 0)
+		sysfatal("wait: %r");
+	buf[n] = 0;
+	if(strncmp(buf, ".vmcall ", 8) != 0)
+		sysfatal("unexpected exit: %s", buf);
+	b = (u32int)regread(regs, "ax") | regread(regs, "dx")<<32;
+	c = regread(regs, "tsc");
+	assert(a <= b && b <= c);
+}
+
+static void
+clocktest(void)
+{
+	char path[2][64], name[64];
+	int ctl[2], regs[2], waitfd, seg, fd, i;
+	uvlong a, b, c, adjust, delta;
+	uchar *p;
+
+	snprint(name, sizeof(name), "#g/vmx-clock-%d", getpid());
+	seg = create(name, OREAD|ORCLOSE, DMDIR|0700);
+	if(seg < 0)
+		sysfatal("clock segment: %r");
+	fd = vmopen(name, "ctl", OWRITE);
+	if(fprint(fd, "va %#ux 4096 sticky", 0x10000000) < 0)
+		sysfatal("clock segment size: %r");
+	close(fd);
+	p = segattach(0, name+3, (void*)0x10000000, 4096);
+	if(p == (void*)-1)
+		sysfatal("clock segment attach: %r");
+	memmove(p, "\x0f\x31\x0f\x01\xc1", 5); /* RDTSC; VMCALL */
+	for(i = 0; i < 2; i++){
+		ctl[i] = clone(path[i], sizeof(path[i]));
+		regs[i] = vmopen(path[i], "regs", ORDWR);
+		clockread(regs[i], &adjust);
+		assert(adjust == 0);
+	}
+	waitfd = vmopen(path[0], "wait", OREAD);
+	fd = vmopen(path[0], "map", OWRITE);
+	if(fprint(fd, "rwx wb 0 4096 %s 0\n", name+3) < 0)
+		sysfatal("clock map: %r");
+	close(fd);
+	/* Large positive and negative adjustments must not reach another CPU. */
+	for(i = 0; i < 2; i++){
+		delta = i == 0 ? (1ULL<<60) + 0x12345678 : 0ULL - (1ULL<<60);
+		a = clockread(regs[1], &adjust);
+		if(fprint(regs[0], "tscadjust %#ullx\n", delta) < 0)
+			sysfatal("adjust: %r");
+		b = clockread(regs[0], &adjust) - delta;
+		assert(adjust == delta);
+		c = clockread(regs[1], &adjust);
+		assert(adjust == 0 && a <= b && b <= c);
+		rdtsctest(ctl[0], regs[0], waitfd);
+	}
+	/* Setting TSC must also update ADJUST; clearing it restores the clock. */
+	if(fprint(regs[0], "tsc 0\n") < 0)
+		sysfatal("set tsc: %r");
+	a = clockread(regs[0], &adjust);
+	assert(a < 1ULL<<40);
+	rdtsctest(ctl[0], regs[0], waitfd);
+	if(write(ctl[0], "init", 4) != 4)
+		sysfatal("init: %r");
+	delta = adjust;
+	b = clockread(regs[0], &adjust);
+	assert(b >= a && adjust == delta);
+	a = clockread(regs[1], &adjust);
+	if(fprint(regs[0], "tscadjust 0\n") < 0)
+		sysfatal("clear adjust: %r");
+	b = clockread(regs[0], &adjust);
+	assert(adjust == 0);
+	c = clockread(regs[1], &adjust);
+	assert(adjust == 0 && a <= b && b <= c);
+	for(i = 0; i < 2; i++){
+		close(regs[i]);
+		close(ctl[i]);
+	}
+	close(waitfd);
+	segdetach(p);
+	close(seg);
+	print("VMX-CLOCK-PASS: TSC writes, adjustments, isolation and INIT\n");
+}
+
 static void
 trial(char *mount, int round)
 {
@@ -152,6 +269,7 @@ main(void)
 	int fd, i;
 
 	rfork(RFNAMEG);
+	clocktest();
 	snprint(mount, sizeof(mount), "/tmp/vmx-test-%d", getpid());
 	fd = create(mount, OREAD, DMDIR|0700);
 	if(fd < 0)

@@ -39,9 +39,16 @@ host provides IA32_TSC_ADJUST, a VMCS offset cancels its per-CPU software
 adjustments. This preserves a common hardware clock despite the host's
 approximate boot-time synchronization. Hardware counters must be synchronized;
 without TSC_ADJUST, the host's adjusted counters must be synchronized instead.
-CPUID describes one thread per
-core and one package, and reports the TSC/APIC frequency ratio at MHz
-resolution when the host supplies a cycle frequency.
+The tsc and tscadjust registers implement guest writes to IA32_TSC and
+IA32_TSC_ADJUST using per-CPU VMCS offsets. They never write the host clock;
+INIT preserves them. The monitor advertises TSC_ADJUST only when the kernel
+provides these registers, and invariant TSC only when the host reports it.
+CPUID describes one thread per core and one package, and reports the TSC/APIC
+frequency ratio at MHz resolution when the host supplies a cycle frequency.
+With invariant TSC and TSC_ADJUST, Linux disables its TSC clocksource watchdog,
+avoiding comparisons against delayed PIT ticks. Its soft-lockup watchdog remains
+enabled; no clocksource or watchdog command-line overrides are needed. The outer
+QEMU CPU must expose invariant TSC too; boot/qemu uses host,migratable=off for KVM.
 
 Removing a virtual CPU's ctl, including closing it with ORCLOSE, now destroys
 it immediately. Guest memory is released when its last mapping is removed.
@@ -90,6 +97,9 @@ The single-CPU test exercises the original PIC path; it does not require TSC.
 That configuration still lacks PIT mode 4, needed for one-shot timer events.
 
 The runner also builds and runs test/6.device on the generated9 host. It checks
+TSC reads and writes, positive and negative adjustments, isolation between CPUs,
+and preservation across INIT. Guest RDTSC must agree with the register interface.
+The lifetime checks cover
 32 allocation/removal cycles with 64 MiB mappings, ORCLOSE, explicit quit and
 remove, failed opens, concurrent register reads, blocked waits, and stale open
 descriptors and bound directories after slot reuse. It verifies that guest
@@ -130,6 +140,10 @@ Volume 2, WRMSR entry: MSR operand widths.
 Volume 3: processor initialization, local APICs, VMX event injection, EPT and VPID.
 Volume 3B, section 19.17.3: IA32_TSC_ADJUST and per-CPU TSC writes.
 https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html
+
+Linux 6.18, arch/x86/kernel/tsc.c: check_system_tsc_reliable and
+calibrate_delay_is_known describe clock verification and delay calibration.
+https://github.com/torvalds/linux/blob/v6.18/arch/x86/kernel/tsc.c
 
 Intel MultiProcessor Specification, version 1.4: configuration tables and
 interrupt assignments. The implementation is new generated9 code; the

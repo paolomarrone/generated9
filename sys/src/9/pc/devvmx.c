@@ -275,6 +275,7 @@ struct Vmx {
 	char errstr[ERRMAX];
 	Ureg ureg;
 	uvlong eptp;
+	uvlong tscadjust;
 	uintptr cr2;
 	uintptr xcr0;
 	uintptr dr[8]; /* DR7 is also kept in VMCS */
@@ -517,6 +518,49 @@ xcr0write(Vmx *vmx, char *s)
 	return 0;
 }
 
+static uvlong
+guesttsc(void)
+{
+	uvlong t;
+
+	cycles(&t);
+	return t + vmcsread(VMCS_TSC_OFFSET);
+}
+
+static char *
+tscread(Vmx *, char *p, char *e)
+{
+	return seprint(p, e, "%#016ullx", guesttsc());
+}
+
+static int
+tscwrite(Vmx *vmx, char *s)
+{
+	uvlong delta;
+
+	delta = parseval(s) - guesttsc();
+	vmcswrite(VMCS_TSC_OFFSET, vmcsread(VMCS_TSC_OFFSET) + delta);
+	vmx->tscadjust += delta;
+	return 0;
+}
+
+static char *
+tscadjustread(Vmx *vmx, char *p, char *e)
+{
+	return seprint(p, e, "%#016ullx", vmx->tscadjust);
+}
+
+static int
+tscadjustwrite(Vmx *vmx, char *s)
+{
+	uvlong t;
+
+	t = parseval(s);
+	vmcswrite(VMCS_TSC_OFFSET, vmcsread(VMCS_TSC_OFFSET) + t - vmx->tscadjust);
+	vmx->tscadjust = t;
+	return 0;
+}
+
 static int
 readonly(Vmx *, char *)
 {
@@ -610,6 +654,8 @@ static GuestReg guestregs[] = {
 	{GUEST_CR4MASK, 0, "cr4mask", nil, cr4maskwrite},
 	{GUEST_IA32_PAT, 8, "pat"},
 	{GUEST_IA32_EFER, 8, "efer", nil, eferwrite},
+	{0, 8, "tsc", tscread, tscwrite},
+	{0, 8, "tscadjust", tscadjustread, tscadjustwrite},
 	{VMXVAR(dr[0]), 0, "dr0"},
 	{VMXVAR(dr[1]), 0, "dr1"},
 	{VMXVAR(dr[2]), 0, "dr2"},

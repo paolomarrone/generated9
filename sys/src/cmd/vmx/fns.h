@@ -17,6 +17,7 @@ u32int cpusignature(void);
 void cpustart(Vcpu *, int);
 void loadkernel(char *);
 uvlong rget(char *);
+int rhave(char *);
 void rpoke(char *, uvlong, int);
 #define rset(a,b) rpoke(a,b,0)
 void rsetsz(char *, uvlong, int);
