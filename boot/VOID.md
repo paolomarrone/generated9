@@ -57,8 +57,7 @@ clocksource overrides. ACPI is absent, so its missing-RSDP message is expected.
 Closing the monitor releases its virtual CPUs and guest memory. Two consecutive
 boots to Xfce were checked in the same 6 GB outer VM. After closing the first
 guest, allocated user memory dropped from about 2063 MiB to 8 MiB, and `#X`
-contained only `clone`. Keep at least four CPUs in the outer VM: oversubscribing
-them currently causes long stalls with the TSC clock enabled.
+contained only `clone`.
 
 The ISO is unmodified Void software with its original package licenses.
 It, the extracted boot files and local logs remain in the ignored temporary

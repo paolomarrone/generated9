@@ -50,7 +50,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("linux", type=pathlib.Path, help="Linux bzImage with SMP, MP tables and initramfs")
     parser.add_argument("--modules", help="installed Linux module version, if virtio is modular")
-    parser.add_argument("--cpus", type=int, nargs="+", default=[1, 2, 4])
+    parser.add_argument("--cpus", type=int, nargs="+", default=[1, 2, 4, 8])
     parser.add_argument("--timeout", type=int, default=900, help="seconds per guest")
     parser.add_argument("--host-cpus", type=int, default=4)
     parser.add_argument("--host-kernel", type=pathlib.Path, default=ROOT / "sys/src/9/pc64/9pc64")
@@ -149,7 +149,7 @@ def main():
                 f"cd /sys/src/cmd/vmx\n"
                 f"./6.out -P {count} -M 256M -d {guest}/{disk.name} "
                 f"-c ,{guest}/{logfile.name} -m {guest}/initramfs {guest}/linux "
-                f"'console=ttyS0 loglevel=3 rdinit=/init panic=-1 -- {count}' "
+                f"'console=ttyS0 loglevel=7 rdinit=/init panic=-1 -- {count}' "
                 f">{guest}/{monitor.name} >[2=1] &\n"
                 f"echo $apid >{guest}/pid\n"
             )

@@ -82,6 +82,17 @@ rdtsctest(int ctl, int regs, int waitfd)
 	int n;
 
 	a = regread(regs, "tsc");
+	if(fprint(ctl, "step pc=0;flags=0x10047;") < 0)
+		sysfatal("step: %r");
+	n = read(waitfd, buf, sizeof(buf)-1);
+	if(n <= 0)
+		sysfatal("step wait: %r");
+	buf[n] = 0;
+	if(strncmp(buf, "monitortrap ", 12) != 0)
+		sysfatal("unexpected step exit: %s", buf);
+	b = regread(regs, "pc");
+	c = regread(regs, "flags");
+	assert(b == 2 && c == 0x47);
 	if(fprint(ctl, "go pc=0;") < 0)
 		sysfatal("go: %r");
 	n = read(waitfd, buf, sizeof(buf)-1);
@@ -98,8 +109,8 @@ rdtsctest(int ctl, int regs, int waitfd)
 static void
 clocktest(void)
 {
-	char path[2][64], name[64];
-	int ctl[2], regs[2], waitfd, seg, fd, i;
+	char path[2][64], name[64], buf[4096];
+	int ctl[2], regs[2], waitfd, seg, fd, i, n, ncpu, *extra;
 	uvlong a, b, c, adjust, delta;
 	uchar *p;
 
@@ -114,7 +125,7 @@ clocktest(void)
 	p = segattach(0, name+3, (void*)0x10000000, 4096);
 	if(p == (void*)-1)
 		sysfatal("clock segment attach: %r");
-	memmove(p, "\x0f\x31\x0f\x01\xc1", 5); /* RDTSC; VMCALL */
+	memmove(p, "\xf3\x90\x0f\x31\x0f\x01\xc1", 7); /* PAUSE; RDTSC; VMCALL */
 	for(i = 0; i < 2; i++){
 		ctl[i] = clone(path[i], sizeof(path[i]));
 		regs[i] = vmopen(path[i], "regs", ORDWR);
@@ -126,6 +137,22 @@ clocktest(void)
 	if(fprint(fd, "rwx wb 0 4096 %s 0\n", name+3) < 0)
 		sysfatal("clock map: %r");
 	close(fd);
+	/* Force sharing a host CPU, where PAUSE must release a spinning guest. */
+	fd = open("/dev/sysstat", OREAD);
+	if(fd < 0)
+		sysfatal("sysstat: %r");
+	ncpu = 0;
+	while((n = read(fd, buf, sizeof(buf))) > 0)
+		for(i = 0; i < n; i++)
+			if(buf[i] == '\n') ncpu++;
+	close(fd);
+	if(n < 0 || ncpu == 0)
+		sysfatal("read sysstat: %r");
+	extra = malloc(ncpu * sizeof(int));
+	if(extra == nil)
+		sysfatal("extra CPUs: %r");
+	for(i = 0; i < ncpu; i++)
+		extra[i] = clone(buf, sizeof(buf));
 	/* Large positive and negative adjustments must not reach another CPU. */
 	for(i = 0; i < 2; i++){
 		delta = i == 0 ? (1ULL<<60) + 0x12345678 : 0ULL - (1ULL<<60);
@@ -161,9 +188,12 @@ clocktest(void)
 		close(ctl[i]);
 	}
 	close(waitfd);
+	for(i = 0; i < ncpu; i++)
+		close(extra[i]);
+	free(extra);
 	segdetach(p);
 	close(seg);
-	print("VMX-CLOCK-PASS: TSC writes, adjustments, isolation and INIT\n");
+	print("VMX-CLOCK-PASS: PAUSE stepping, TSC writes, adjustments, isolation and INIT\n");
 }
 
 static void

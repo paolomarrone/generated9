@@ -34,6 +34,11 @@ virtual CPUs. Invalidation and guest entry cannot be interrupted by another
 context switch. An IPI wakes the processor handling a queued VM command,
 instead of waiting for its next clock interrupt. This is necessary to keep
 guest timer handlers from consuming all execution time on an SMP host.
+When virtual CPUs share a host CPU, PAUSE exits yield to other processes so
+a guest spinning on a lock does not keep its holder from running. The kernel
+then executes PAUSE in hardware with a monitor trap, preserving instruction
+semantics and debugger single-step. This requires PAUSE exiting and monitor
+trap support. A CPU that is not shared does not incur these extra exits.
 All CPUs use the host TSC, including time spent outside the guest. If the
 host provides IA32_TSC_ADJUST, a VMCS offset cancels its per-CPU software
 adjustments. This preserves a common hardware clock despite the host's
@@ -78,10 +83,9 @@ From the checkout root, with a locally installed Linux kernel:
 	sys/src/cmd/vmx/test/run /boot/vmlinuz-VERSION --modules VERSION
 
 If virtio is built in, omit --modules. --cpus selects the test matrix
-(default: 1 2 4); --host-cpus selects the outer VM's CPU count. For example,
+(default: 1 2 4 8); --host-cpus selects the outer VM's CPU count. For example,
 --host-cpus 2 --cpus 4 exercises more virtual CPUs than host CPUs; with TSC
-enabled this currently encounters long stalls and Linux soft lockup reports.
-Use at least as many host CPUs as guest CPUs for now.
+enabled it also checks that scheduling delays do not cause Linux soft lockups.
 --timeout sets the limit in seconds per guest (default: 900).
 
 Each guest must report exactly the requested number of online CPUs. Threads
@@ -98,8 +102,9 @@ That configuration still lacks PIT mode 4, needed for one-shot timer events.
 
 The runner also builds and runs test/6.device on the generated9 host. It checks
 TSC reads and writes, positive and negative adjustments, isolation between CPUs,
-and preservation across INIT. Guest RDTSC must agree with the register interface.
-The lifetime checks cover
+and preservation across INIT. Guest instructions check that RDTSC agrees with
+the register interface and that stepping PAUSE preserves flags and clears RF,
+including when virtual CPUs share a host CPU. The lifetime checks cover
 32 allocation/removal cycles with 64 MiB mappings, ORCLOSE, explicit quit and
 remove, failed opens, concurrent register reads, blocked waits, and stale open
 descriptors and bound directories after slot reuse. It verifies that guest
@@ -125,7 +130,7 @@ when investigating a failure; recognizing multiple CPUs alone is not a pass.
 
 Validated on an amd64 generated9 host under Intel nested KVM:
 
-	Linux 6.18.56: 1, 2 and 4 CPUs on 4 host CPUs.
+	Linux 6.18.56: 1, 2, 4 and 8 CPUs on 4 host CPUs; 4 CPUs on 2 host CPUs.
 	generated9: boot to rc and the native process test, with 2 and 4 CPUs
 	            on 2 host CPUs.
 
@@ -139,6 +144,7 @@ Volume 2, section 2.2.1: REX prefixes and instruction encoding.
 Volume 2, WRMSR entry: MSR operand widths.
 Volume 3: processor initialization, local APICs, VMX event injection, EPT and VPID.
 Volume 3B, section 19.17.3: IA32_TSC_ADJUST and per-CPU TSC writes.
+Volume 3C: PAUSE exiting and monitor trap flag.
 https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html
 
 Linux 6.18, arch/x86/kernel/tsc.c: check_system_tsc_reliable and

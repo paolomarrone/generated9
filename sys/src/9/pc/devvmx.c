@@ -19,7 +19,6 @@ extern int invept(u32int, uvlong, uvlong);
 extern int invvpid(u32int, uvlong, uvlong);
 
 static int gotvmx;
-static vlong procb_ctls, pinb_ctls;
 
 enum {
 	VMX_BASIC_MSR = 0x480,
@@ -288,6 +287,7 @@ struct Vmx {
 		POSTEX = 8,
 		POSTIRQ = 16,
 		POSTNMI = 32,
+		PAUSING = 64,
 	} onentry;
 	
 	Rendez cmdwait;
@@ -1048,7 +1048,7 @@ vmxtrapmsr(Vmx *vmx, u32int msr, enum { TRAPRD = 1, TRAPWR = 2 } state)
 static void
 vmcsinit(Vmx *vmx)
 {
-	vlong msr;
+	vlong msr, procb_ctls, pinb_ctls;
 	u32int x;
 	ulong regs[4];
 	int s;
@@ -1085,6 +1085,8 @@ vmcsinit(Vmx *vmx)
 	x |= PROCB_EXITMOVDR | PROCB_EXITIO | PROCB_MSRBITMAP;
 	x |= PROCB_EXITCR8LD | PROCB_EXITCR8ST;
 	x |= PROCB_USECTLS2;
+	if((procb_ctls >> 32 & (PROCB_EXITPAUSE|PROCB_MONTRAP)) == (PROCB_EXITPAUSE|PROCB_MONTRAP))
+		x |= PROCB_EXITPAUSE;
 	x &= msr >> 32;
 	vmcswrite(PROCB_CTLS, x);
 	
@@ -1369,10 +1371,20 @@ processexit(Vmx *vmx)
 		case 7: /* IRQ window */
 		case 8: /* NMI window */
 			return;
+		case 37: /* monitor trap after replaying PAUSE */
+			if((vmx->onentry & (PAUSING|STEP)) == PAUSING){
+				vmx->onentry &= ~PAUSING;
+				return;
+			}
+			break;
+		case 40: /* PAUSE: let the holder of a guest lock run */
+			vmx->onentry |= PAUSING;
+			yield();
+			return;
 		}
 	vmx->state = VMXREADY;
 	vmx->got |= GOTEXIT;
-	vmx->onentry &= ~STEP;
+	vmx->onentry &= ~(STEP|PAUSING);
 }
 
 static int
@@ -1542,7 +1554,7 @@ cmdinit(VmCmd *cmd, va_list)
 	if(vmx->state != VMXREADY && vmx->state != VMXRUNNING)
 		error("VM not ready or running");
 	vmx->state = VMXREADY;
-	vmx->onentry &= ~(POSTEX|POSTIRQ|POSTNMI|STEP);
+	vmx->onentry &= ~(POSTEX|POSTIRQ|POSTNMI|STEP|PAUSING);
 	vmx->flushvpid = 1;
 	vmx->got = GOTINIT;
 	vmcswrite(GUEST_CANINTR, 0);
@@ -1927,7 +1939,10 @@ vmxproc(void *vmxp)
 		runcmd(vmx);
 		if(vmx->state == VMXRUNNING){
 			procbctls = defprocbctls;
-			if((vmx->onentry & STEP) != 0)
+			/* Retire PAUSE in hardware, preserving flags and interrupt shadows. */
+			if(vmxmach->vms == 1 || (vmx->onentry & PAUSING) != 0)
+				procbctls &= ~PROCB_EXITPAUSE;
+			if((vmx->onentry & (STEP|PAUSING)) != 0)
 				procbctls |= PROCB_MONTRAP;
 			injected = 0;
 			if((vmx->onentry & POSTEX) != 0){
