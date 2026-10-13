@@ -9,113 +9,15 @@
 #include <memdraw.h>
 #include <event.h>
 
+#include "gpu.h"
+
 enum {
 	Width = 400,
 	Height = 300,
-	Create = 1,
-	Bind = 2,
-	Viewport = 4,
-	Framebuffer = 5,
-	Vertices = 6,
-	Clearbuf = 7,
-	Draw = 8,
-	Bindshader = 31,
-	Blend = 1,
-	Rasterizer = 2,
-	Dsa = 3,
-	Shader = 4,
-	Elements = 5,
-	Surface = 8,
-	Bgra = 1,
-	Float4 = 31,
 };
 
-static u32int commands[2048];
-static int ncommand;
-static int ctl, cmd, slot;
+static Gpu gpu;
 static Image *picture;
-
-static u32int
-bits(float f)
-{
-	union { float f; u32int u; } v;
-
-	v.f = f;
-	return v.u;
-}
-
-static u32int*
-emit(int op, int object, int n)
-{
-	u32int *p;
-
-	if(ncommand+n+1 > nelem(commands))
-		sysfatal("command buffer full");
-	commands[ncommand++] = op | object<<8 | n<<16;
-	p = commands+ncommand;
-	memset(p, 0, n*4);
-	ncommand += n;
-	return p;
-}
-
-static void
-bindobject(int type, int id)
-{
-	emit(Bind, type, 1)[0] = id;
-}
-
-static void
-shader(int id, int type, char *text)
-{
-	u32int *p;
-	int n;
-
-	n = strlen(text)+1;
-	p = emit(Create, Shader, 5+(n+3)/4);
-	p[0] = id;
-	p[1] = type;
-	p[2] = n;
-	p[3] = 300;	/* maximum TGSI tokens, including declarations */
-	memmove(p+5, text, n);
-	p = emit(Bindshader, 0, 2);
-	p[0] = id;
-	p[1] = type;
-}
-
-static u32int
-newresource(char *desc)
-{
-	char buf[128];
-	u32int id;
-	char *f[3];
-	int n;
-
-	if(fprint(ctl, "resource %s", desc) < 0)
-		sysfatal("resource: %r");
-	n = pread(ctl, buf, sizeof(buf)-1, 0);
-	if(n <= 0)
-		sysfatal("read ctl: %r");
-	buf[n] = 0;
-	/* ctl reports the slot, context identifier, and last resource. */
-	if(tokenize(buf, f, nelem(f)) != 3)
-		sysfatal("bad gpu ctl");
-	slot = atoi(f[0]);
-	id = strtoul(f[2], nil, 10);
-	return id;
-}
-
-static int
-openresource(u32int id, int mode)
-{
-	char path[64];
-	int fd;
-
-	snprint(path, sizeof(path), "#∇/%d/%ud", slot, id);
-	fd = open(path, mode);
-	if(fd < 0)
-		sysfatal("open %s: %r", path);
-	return fd;
-}
 
 static uchar*
 render(void)
@@ -130,88 +32,80 @@ render(void)
 	uchar *pixels;
 	int fd;
 
-	ctl = open("#∇/clone", ORDWR);
-	if(ctl < 0)
-		sysfatal("open gpu: %r");
+	gpuinit(&gpu);
 	snprint(buf, sizeof(buf), "2 %d 10 %d %d 1 1 0 0 1 %d",
 		Bgra, Width, Height, Width*Height*4);
-	image = newresource(buf);
+	image = gpuresource(&gpu, buf);
 	snprint(buf, sizeof(buf), "0 64 16 %d 1 1 1 0 0 0 %d", sizeof(vertices), sizeof(vertices));
-	vertex = newresource(buf);
-	fd = openresource(vertex, OWRITE);
+	vertex = gpuresource(&gpu, buf);
+	fd = gpuopen(&gpu, vertex, OWRITE);
 	if(write(fd, vertices, sizeof(vertices)) != sizeof(vertices))
 		sysfatal("write vertices: %r");
 	close(fd);
-	if(fprint(ctl, "upload %ud 0 0 0 0 %d 1 1 0 0 0", vertex, sizeof(vertices)) < 0)
+	if(fprint(gpu.ctl, "upload %ud 0 0 0 0 %d 1 1 0 0 0", vertex, sizeof(vertices)) < 0)
 		sysfatal("upload vertices: %r");
-	snprint(buf, sizeof(buf), "#∇/%d/cmd", slot);
-	cmd = open(buf, OWRITE);
-	if(cmd < 0)
-		sysfatal("open commands: %r");
 
-	p = emit(Create, Surface, 5);
+	p = gpuemit(&gpu, Create, Surface, 5);
 	p[0] = 1;
 	p[1] = image;
 	p[2] = Bgra;
-	p = emit(Framebuffer, 0, 3);
+	p = gpuemit(&gpu, Framebuffer, 0, 3);
 	p[0] = 1;
 	p[2] = 1;
-	p = emit(Create, Elements, 9);
+	p = gpuemit(&gpu, Create, Elements, 9);
 	p[0] = 2;
 	p[4] = Float4;
 	p[5] = 16;
 	p[8] = Float4;
-	bindobject(Elements, 2);
-	p = emit(Vertices, 0, 3);
+	gpubind(&gpu, Elements, 2);
+	p = gpuemit(&gpu, Vertices, 0, 3);
 	p[0] = sizeof(vertices[0]);
 	p[2] = vertex;
-	shader(3, 0,
+	gpushader(&gpu, 3, 0,
 		"VERT\nDCL IN[0]\nDCL IN[1]\n"
 		"DCL OUT[0], POSITION\nDCL OUT[1], GENERIC[0]\n"
 		"MOV OUT[0], IN[0]\nMOV OUT[1], IN[1]\nEND\n");
-	shader(4, 1,
+	gpushader(&gpu, 4, 1,
 		"FRAG\nDCL IN[0], GENERIC[0], LINEAR\n"
 		"DCL OUT[0], COLOR\nMOV OUT[0], IN[0]\nEND\n");
-	p = emit(Create, Blend, 11);
+	p = gpuemit(&gpu, Create, Blend, 11);
 	p[0] = 5;
 	p[3] = 15U<<27;
-	bindobject(Blend, 5);
-	p = emit(Create, Dsa, 5);
+	gpubind(&gpu, Blend, 5);
+	p = gpuemit(&gpu, Create, Dsa, 5);
 	p[0] = 6;
-	bindobject(Dsa, 6);
-	p = emit(Create, Rasterizer, 9);
+	gpubind(&gpu, Dsa, 6);
+	p = gpuemit(&gpu, Create, Rasterizer, 9);
 	p[0] = 7;
 	p[1] = 2 | 1U<<29 | 1U<<30;
-	p[2] = p[5] = bits(1);
-	bindobject(Rasterizer, 7);
-	p = emit(Viewport, 0, 7);
-	p[1] = p[4] = bits(Width/2.);
-	p[2] = p[5] = bits(Height/2.);
-	p[3] = p[6] = bits(.5);
-	p = emit(Clearbuf, 0, 8);
+	p[2] = p[5] = gpufloat(1);
+	gpubind(&gpu, Rasterizer, 7);
+	p = gpuemit(&gpu, Viewport, 0, 7);
+	p[1] = p[4] = gpufloat(Width/2.);
+	p[2] = p[5] = gpufloat(Height/2.);
+	p[3] = p[6] = gpufloat(.5);
+	p = gpuemit(&gpu, Clearbuf, 0, 8);
 	p[0] = 4;
-	p[1] = bits(16./255);
-	p[2] = bits(24./255);
-	p[3] = bits(32./255);
-	p[4] = bits(1);
-	p = emit(Draw, 0, 12);
+	p[1] = gpufloat(16./255);
+	p[2] = gpufloat(24./255);
+	p[3] = gpufloat(32./255);
+	p[4] = gpufloat(1);
+	p = gpuemit(&gpu, Draw, 0, 12);
 	p[1] = 3;
 	p[2] = 4;
 	p[4] = 1;
 	p[10] = 2;
-	if(write(cmd, commands, ncommand*4) != ncommand*4)
-		sysfatal("submit: %r");
-	if(fprint(ctl, "download %ud 0 0 0 0 %d %d 1 0 0 0", image, Width, Height) < 0)
+	gpusubmit(&gpu);
+	if(fprint(gpu.ctl, "download %ud 0 0 0 0 %d %d 1 0 0 0", image, Width, Height) < 0)
 		sysfatal("download: %r");
 	pixels = malloc(Width*Height*4);
 	if(pixels == nil)
 		sysfatal("malloc: %r");
-	fd = openresource(image, OREAD);
+	fd = gpuopen(&gpu, image, OREAD);
 	if(readn(fd, pixels, Width*Height*4) != Width*Height*4)
 		sysfatal("read pixels: %r");
 	close(fd);
-	close(cmd);
-	close(ctl);
+	gpufini(&gpu);
 	return pixels;
 }
 

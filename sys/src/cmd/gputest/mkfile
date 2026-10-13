@@ -1,7 +1,8 @@
 </$objtype/mkfile
 
 TARG=gputest
-OFILES=gputest.$O
+OFILES=gputest.$O gpu.$O
+HFILES=gpu.h
 BIN=/$objtype/bin
 CLEANFILES=$O.device device.$O
 TESTDEP=$O.device
