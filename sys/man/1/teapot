@@ -35,6 +35,10 @@ approximately 60 frames per second; the GPU does not directly present the window
 .B -n
 exits after the specified number of window frames and reports average
 frame rate and time spent submitting, reading back and presenting frames.
+It also separates presentation into pixel loading, drawing and screen flushing,
+submitting buffered draw commands between stages to measure their execution.
+An asynchronous display driver can perform additional work after flushing
+returns; these timings do not measure scanout latency or that driver's CPU time.
 .B -b
 instead renders that many frames without a window or pacing, at 640 by 480.
 Setup and the first frame are excluded from timing.

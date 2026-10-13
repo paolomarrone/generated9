@@ -12,9 +12,10 @@ static u32int color, depth, indexbuf;
 static int width = 640, height = 480, imagefd, nvertex, nindex;
 static uchar *pixels;
 static Image *picture;
-static int resized, paused;
+static int resized, paused, measure;
 static double angle;
 static vlong submitns, readns, presentns;
+static vlong loadns, drawns, flushns;
 static char caption[128] = "Utah teapot  |  VirGL  |  space: pause  q: quit";
 
 extern void teapotmesh(float (**)[8], ushort**, int*, int*);
@@ -321,22 +322,38 @@ resize(void)
 static void
 present(void)
 {
-	vlong start;
+	vlong start, last, now;
 	Point at;
 	Rectangle r;
 
 	start = nsec();
 	if(loadimage(picture, picture->r, pixels, width*height*4) < 0)
 		sysfatal("present frame: %r");
+	last = start;
+	if(measure){
+		if(flushimage(display, 0) < 0)
+			sysfatal("flush pixels: %r");
+		last = nsec();
+		loadns += last-start;
+	}
 	at = addpt(screen->r.min, Pt((Dx(screen->r)-width)/2, Header));
 	drawop(screen, rectaddpt(picture->r, at), picture, nil, ZP, S);
 	r = screen->r;
 	r.max.y = r.min.y+Header;
 	draw(screen, r, display->black, nil, ZP);
 	string(screen, addpt(r.min, Pt(6, 4)), display->white, ZP, font, caption);
+	if(measure){
+		if(flushimage(display, 0) < 0)
+			sysfatal("flush drawing: %r");
+		now = nsec();
+		drawns += now-last;
+		last = now;
+	}
 	if(flushimage(display, 1) < 0)
 		sysfatal("flush frame: %r");
-	presentns += nsec()-start;
+	now = nsec();
+	flushns += now-last;
+	presentns += now-start;
 }
 
 static void
@@ -345,6 +362,9 @@ stats(int frames, vlong elapsed)
 	fprint(2, "%dx%d, %d triangles, %d frames: %.1f fps; submit %.2f ms, readback %.2f ms, present %.2f ms/frame\n",
 		width, height, nindex/3, frames, frames*1e9/elapsed,
 		submitns/1e6/frames, readns/1e6/frames, presentns/1e6/frames);
+	if(measure)
+		fprint(2, "load %.2f ms, draw %.2f ms, flush %.2f ms/frame\n",
+			loadns/1e6/frames, drawns/1e6/frames, flushns/1e6/frames);
 }
 
 void
@@ -390,6 +410,7 @@ main(int argc, char **argv)
 		if(out != nil)
 			save(out);
 	}else{
+		measure = limit != 0;
 		if(initdraw(nil, nil, "Utah teapot — VirGL") < 0)
 			sysfatal("initdraw: %r");
 		einit(Emouse|Ekeyboard);
@@ -401,6 +422,7 @@ main(int argc, char **argv)
 		angle = .6;
 		frames = since = 0;
 		submitns = readns = presentns = 0;
+		loadns = drawns = flushns = 0;
 		start = last = report = nsec();
 		for(;;){
 			e = event(&ev);
