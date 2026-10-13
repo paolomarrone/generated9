@@ -1,0 +1,103 @@
+.TH GPU 3
+.SH NAME
+gpu \- VirtIO GPU VirGL command transport
+.SH SYNOPSIS
+.nf
+.B bind '#∇' /mnt/gpu
+
+.BI /mnt/gpu/ clone
+.BI /mnt/gpu/ caps
+.BI /mnt/gpu/ n /ctl
+.BI /mnt/gpu/ n /cmd
+.BI /mnt/gpu/ n /resource
+.fi
+.SH DESCRIPTION
+The experimental
+.I gpu
+device provides off-screen VirGL rendering on the first VirtIO GPU PCI
+device. It requires the modern VirtIO interface and VirGL feature.
+It is included in the amd64 pc64 kernel.
+It does not change the display controller or the draw protocol.
+.PP
+Opening
+.B clone
+for reading and writing creates a context and returns its
+.B ctl
+file.
+Only the host owner may open context files.
+Reading
+.B ctl
+returns three decimal numbers: directory number, host context identifier,
+and last allocated resource identifier (initially zero).
+Context and resource identifiers are allocated by the kernel and are not reused.
+Closing the last open file in a context releases its resources and the context.
+.PP
+.B caps
+contains the binary little-endian VirGL capability set 1, version 1.
+Applications must consult its format and feature masks before using
+optional rendering features.
+.PP
+Each write to
+.B cmd
+submits one complete VirGL command stream of little-endian 32-bit words.
+It must be nonempty, a multiple of four bytes, and no larger than 256 KiB.
+The kernel supplies the context identifier and waits for a GPU fence
+before returning.
+Shader translation and VirGL command validation are performed by the host.
+.PP
+The following text commands are accepted by
+.BR ctl .
+Numbers may be decimal, octal, or hexadecimal.
+.TP
+.BI resource " target format bind width height depth array levels samples flags bytes"
+Create a VirGL resource, allocate zeroed guest backing memory, and attach
+it to the context.
+The fields correspond to VirtIO RESOURCE_CREATE_3D;
+.I levels
+is the highest mip level, so zero means one level.
+.I bytes
+is the size of its guest backing store.
+The new resource identifier appears in
+.BR ctl .
+A binary file with that decimal identifier appears in the context directory.
+Reads and writes of this file access guest backing memory only;
+they do not implicitly transfer data to or from the GPU.
+.TP
+.BI upload " id level x y z width height depth offset stride layerstride"
+Transfer a box from guest backing to the GPU resource.
+.I offset
+is a byte offset in the backing store.
+Zero strides request the host's tightly packed layout.
+.TP
+.BI download " id level x y z width height depth offset stride layerstride"
+Transfer a box from the GPU resource to guest backing.
+The application can then read the resource file.
+.TP
+.BI unref " id"
+Detach and release a resource.
+Existing descriptors for that resource become invalid, even if its table
+slot is later reused.
+.PP
+Control operations, command submission and backing access are serialized.
+All device requests are fenced.
+A command timeout resets and disables the device before releasing DMA memory;
+subsequent rendering requires rebooting the guest.
+.SH SOURCE
+.B /sys/src/9/pc/devgpu.c
+.SH SEE ALSO
+.IR draw (3)
+.SH BUGS
+This is an experimental privileged interface, not an OpenGL implementation.
+It supports one GPU, 32 contexts, 64 resources and 64 MiB of backing per context.
+There is one synchronous control queue; asynchronous submission, scanout,
+cursor queues, buffer sharing and device recovery are not implemented.
+.PP
+Resource targets are 0 through 8. Buffers are limited to 64 MiB;
+texture dimensions to 16384, array size to 2048, highest mip level to 14,
+and sample count to 64. The host may impose lower limits.
+Backing size and transfer layout must match the resource format.
+Guest backing limits do not bound the host GPU memory consumed by a resource.
+Only buffers and single-level BGRA images have been exercised so far.
+.PP
+QEMU does not propagate all VirGL renderer errors to the guest.
+A successful write confirms transport completion, not a valid rendering result.

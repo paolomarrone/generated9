@@ -1,5 +1,17 @@
 # Credits and source provenance
 
+## VirtIO GPU and VirGL
+
+The native GPU transport implements the [VirtIO 1.2 GPU protocol](https://docs.oasis-open.org/virtio/virtio/v1.2/virtio-v1.2.html).
+Its wire layouts also follow the BSD-licensed `virtio_gpu.h` by Dave Airlie
+and Gerd Hoffmann, Copyright Red Hat, Inc. 2013-2014, from Linux v6.12,
+revision `adc218676eef25575469234709c2d87185ca223a`. The original notice is
+preserved in [devgpu.c](sys/src/9/pc/devgpu.c). The transport reuses 9front's
+VirtIO register access and follows its existing PCI and split queue idioms.
+
+New generated9 driver code uses the root [LICENSE](LICENSE); the original
+notice continues to apply to adapted portions.
+
 ## Eigenmath
 
 `sys/src/cmd/eigenmath` imports [Eigenmath](https://github.com/georgeweigt/eigenmath),

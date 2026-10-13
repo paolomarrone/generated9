@@ -25,6 +25,7 @@ dev
 	draw		screen vga vgax vgasoft
 	mouse		mouse
 	vga		pci
+	gpu		pci virtio10pc
 
 	sd
 #	floppy		dma
