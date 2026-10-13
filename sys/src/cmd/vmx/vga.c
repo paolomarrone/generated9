@@ -29,7 +29,7 @@ static Rectangle picr;
 Channel *kbdch, *mousech;
 u8int mousegrab;
 extern u8int mouseactive;
-static uchar *sfb;
+static uchar *sfb;	/* packed snapshot, independent of the guest's scanline pitch */
 
 typedef struct VGA VGA;
 struct VGA {
@@ -528,38 +528,14 @@ drawtext(void)
 }
 
 static void
-drawfb(int redraw)
+drawfbrect(Rectangle upd)
 {
-	u32int *p, *q;
-	Rectangle upd;
 	int xb, y, hb;
 	u32int v;
 	uchar *cp;
 	u32int *buf, *bp;
 
-	p = (u32int *) fb;
-	q = (u32int *) sfb;
-	upd.min.y = upd.max.y = -1;
-	xb = 0;
-	y = 0;
-	hb = curhbytes;
-	while(p < (u32int*)(fb + curmode->sz)){
-		if(*p != *q || redraw){
-			if(upd.min.y < 0) upd.min.y = y;
-			upd.max.y = y + 1 + (xb + 4 > hb);
-			*q = *p;
-		}
-		p++;
-		q++;
-		xb += 4;
-		if(xb >= hb){
-			xb -= hb;
-			y++;
-		}
-	}
-	if(upd.min.y == upd.max.y) return;
-	upd.min.x = 0;
-	upd.max.x = curmode->w;
+	hb = curmode->hbytes;
 	if(vesamode && (curmode->chan >> 4 == CMap)){
 		buf = emalloc(curmode->w * 4 * (upd.max.y - upd.min.y));
 		bp = buf;
@@ -579,20 +555,37 @@ drawfb(int redraw)
 		free(buf);
 		draw(screen, rectaddpt(upd, picr.min), img, nil, upd.min);
 	}else if(curmode->chan != screen->chan || !rectinrect(picr, screen->r)){
-		if(curmode->hbytes != hb){
-			for(y = upd.min.y; y < upd.max.y; y++)
-				loadimage(img, Rect(0, y, curmode->w, y+1), sfb + y * hb, curmode->hbytes);
-		}else
-			loadimage(img, upd, sfb + upd.min.y * hb, (upd.max.y - upd.min.y) * hb);
+		loadimage(img, upd, sfb + upd.min.y * hb, (upd.max.y - upd.min.y) * hb);
 		draw(screen, rectaddpt(upd, picr.min), img, nil, upd.min);
-	}else{
-		if(curmode->hbytes != hb){
-			for(y = upd.min.y; y < upd.max.y; y++)
-				loadimage(screen, Rect(picr.min.x, picr.min.y + y, picr.max.x, picr.min.y + y + 1), sfb + y * hb, curmode->hbytes);
-		}else
-			loadimage(screen, rectaddpt(upd, picr.min), sfb + upd.min.y * hb, (upd.max.y - upd.min.y) * hb);
+	}else
+		loadimage(screen, rectaddpt(upd, picr.min), sfb + upd.min.y * hb, (upd.max.y - upd.min.y) * hb);
+}
+
+static void
+drawfb(int redraw)
+{
+	Rectangle upd;
+	uchar *p, *q;
+	int y, changed;
+
+	upd = Rect(0, 0, curmode->w, 0);
+	changed = 0;
+	for(y = 0; y <= curmode->h; y++){
+		p = fb + y * curhbytes;
+		q = sfb + y * curmode->hbytes;
+		if(y < curmode->h && (redraw || memcmp(p, q, curmode->hbytes) != 0)){
+			memmove(q, p, curmode->hbytes);
+			upd.max.y = y + 1;
+		}else{
+			if(upd.min.y < upd.max.y){
+				drawfbrect(upd);
+				changed = 1;
+			}
+			upd.min.y = upd.max.y = y + 1;
+		}
 	}
-	flushimage(display, 1);
+	if(changed)
+		flushimage(display, 1);
 }
 
 void
