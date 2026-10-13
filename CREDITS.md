@@ -17,6 +17,14 @@ The original [license](sys/src/cmd/gputest/LICENSE) and exact source paths in
 New generated9 driver, device tests and integration code use the root
 [LICENSE](LICENSE); the original notices continue to apply to adapted portions.
 
+The Utah teapot demo uses Martin Newell's model as distributed by
+[freeglut](https://github.com/freeglut/freeglut), revision
+`69ac8824f003dd813ceb14b11fb4efaa38cb4aa9`. The data and native patch evaluator
+retain the freeglut and Pawel W. Olszta permission notices in
+[teapot.h](sys/src/cmd/gputest/teapot.h) and [mesh.c](sys/src/cmd/gputest/mesh.c).
+The local [UPSTREAM](sys/src/cmd/gputest/UPSTREAM) records the exact source
+files and the data's provenance through Philip Schneider and Juhana Kouhia.
+
 ## Eigenmath
 
 `sys/src/cmd/eigenmath` imports [Eigenmath](https://github.com/georgeweigt/eigenmath),

@@ -178,7 +178,8 @@ see [VOID.md](VOID.md).
 
 ## Native GPU rendering
 
-For generated9's experimental VirtIO GPU driver and native VirGL triangle,
+For generated9's VirtIO GPU driver, native VirGL triangle and rotating
+Utah teapot with depth testing, lighting and frame timing,
 see [GPU.md](GPU.md).
 
 ## Shared filesystem

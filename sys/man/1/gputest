@@ -37,5 +37,6 @@ it does not provide an OpenGL API.
 .SH SOURCE
 .B /sys/src/cmd/gputest
 .SH SEE ALSO
+.IR teapot (1),
 .IR gpu (3),
 .IR image (6)

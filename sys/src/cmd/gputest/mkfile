@@ -1,17 +1,25 @@
 </$objtype/mkfile
 
-TARG=gputest
-OFILES=gputest.$O gpu.$O
+TARG=gputest teapot
+OFILES=gpu.$O
 HFILES=gpu.h
 BIN=/$objtype/bin
-CLEANFILES=$O.device device.$O
-TESTDEP=$O.device
 
-</sys/src/cmd/mkone
+default:V: all
 
-test:V: $O.out $TESTDEP
+</sys/src/cmd/mkmany
+
+test:V: $PROGS
 	$O.device
-	$O.out -t
+	$O.gputest -t
+	$O.teapot -t
+
+test: $O.device
+
+$O.teapot: teapot.$O mesh.$O gpu.$O
+	$LD $LDFLAGS -o $target $prereq
+
+mesh.$O: teapot.h
 
 $O.device: device.$O
 	$LD $LDFLAGS -o $target $prereq

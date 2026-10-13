@@ -30,3 +30,23 @@ Its Red Hat copyright, Dave Airlie and Gerd Hoffmann attribution, and BSD
 permission notice are preserved in sys/src/9/pc/devgpu.c.
 The driver reuses 9front's existing virtio10pc register access and follows
 the PCI capability and split queue conventions of sdvirtio10.c.
+
+Utah teapot
+
+Source: https://github.com/freeglut/freeglut
+Revision: 69ac8824f003dd813ceb14b11fb4efaa38cb4aa9
+Files: src/fg_teapot_data.h and src/fg_teapot.c
+
+teapot.h contains the ten input patches and 129 control points, with
+native C types and local names. The remaining teaset data is omitted.
+Martin Newell created the teapot; the source credits Philip Schneider and
+Juhana Kouhia for the archived data. Freeglut reduces symmetric patches
+and adds the bottom. Its original permission notice is retained.
+mesh.c adapts the Bernstein patch evaluation, normals and symmetry to
+an indexed native mesh, with the original Pawel W. Olszta MIT notice.
+The shaders, animation and native window integration use the root LICENSE.
+No GLUT or OpenGL client library is linked into the guest.
+
+VirGL v1 capabilities were checked against src/vrend_renderer.c at the
+virglrenderer revision above: depth formats are advertised in sampler,
+and vertexbuffer lists optional formats, not baseline float vertices.

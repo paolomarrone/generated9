@@ -87,7 +87,8 @@ subsequent rendering requires rebooting the guest.
 cd /sys/src/cmd/gputest
 mk
 mk test
-6.out
+6.gputest
+6.teapot
 .EE
 .SH SOURCE
 .B /sys/src/9/pc/devgpu.c
@@ -95,6 +96,7 @@ mk test
 .B /sys/src/cmd/gputest
 .SH SEE ALSO
 .IR gputest (1),
+.IR teapot (1),
 .IR draw (3)
 .SH BUGS
 This is an experimental privileged interface, not an OpenGL implementation.

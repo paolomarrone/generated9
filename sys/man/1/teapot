@@ -1,0 +1,65 @@
+.TH TEAPOT 1
+.SH NAME
+teapot \- animate the Utah teapot with VirGL
+.SH SYNOPSIS
+.B teapot
+[
+.B -t
+]
+[
+.B -b
+.I frames
+|
+.B -n
+.I frames
+]
+[
+.B -o
+.I image
+]
+.SH DESCRIPTION
+.I Teapot
+renders Martin Newell's Utah teapot in a window using
+.IR gpu (3).
+It uses indexed triangles, smooth normals, perspective projection,
+depth testing and per-pixel diffuse and specular lighting.
+The mesh and shaders remain on the GPU; each frame updates only the
+transformation matrices before drawing and reading back the image for libdraw.
+.PP
+The teapot rotates with elapsed time. Space pauses or resumes rotation;
+.B q
+or delete exits. Resizing the window recreates its colour and depth targets.
+The caption shows the measured frame rate. Window animation is paced at
+approximately 60 frames per second; the GPU does not directly present the window.
+.PP
+.B -n
+exits after the specified number of window frames and reports average
+frame rate and time spent submitting, reading back and presenting frames.
+.B -b
+instead renders that many frames without a window or pacing, at 640 by 480.
+Setup and the first frame are excluded from timing.
+.PP
+.B -o
+writes the last frame to
+.I image
+in Plan 9 image format, without opening a window.
+It renders one frame unless combined with
+.B -b
+or
+.BR -t .
+.PP
+.B -t
+checks coverage and lighting, reverses triangle order to test depth
+occlusion, verifies rotation changes the image, and recreates the targets.
+It requires no window.
+.SH SOURCE
+.B /sys/src/cmd/gputest
+.SH SEE ALSO
+.IR gputest (1),
+.IR gpu (3),
+.IR image (6)
+.SH BUGS
+Requires the host owner and a VirtIO GPU with VirGL.
+The native rendering interface remains experimental.
+Image transfer and window composition use copies through guest memory.
+Render targets are limited to 2048 by 2048 pixels.
