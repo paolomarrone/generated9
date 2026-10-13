@@ -34,6 +34,19 @@ Scripts can import the built-in "std" and "os" modules for files, processes,
 environment variables, pipes and timers. os.platform is "plan9". Use /bin/rc
 or /bin/ape/sh when a script needs an explicit shell; /bin/sh is not assumed.
 
+Ray tracer:
+
+    cd /sys/src/cmd/quickjs
+    qjs examples/raytrace.js > /tmp/spheres.ppm
+    page /tmp/spheres.ppm
+
+Run page inside rio. The script renders three spheres over a checkerboard,
+with shadows, reflections and four samples per pixel. It writes a binary PPM
+to standard output, using only the built-in std module. The default size is
+480 by 300; supply width and height to change it, for example:
+
+    qjs examples/raytrace.js 800 500 > /tmp/spheres.ppm
+
 qjsc -c produces bytecode in C; qjsc -e adds a main function. The latter can
 be compiled with the same pcc flags and linked with the objects in OFILES in
 mkfile, as exercised by mk test. Automatic executable generation by qjsc is

@@ -21,6 +21,7 @@ Local changes:
   descriptor limit. Workers, atomics and shared-library loading are disabled.
 - Plan 9 terminal/stat/time adaptations in quickjs-libc.c; regression tests and
   build notes are local additions.
+- examples/raytrace.js is a local, standalone PPM ray tracer.
 
 Anand Tamariya's existing Plan 9 port was consulted:
 https://gitlab.com/atamariya/qjs/-/tree/plan9
