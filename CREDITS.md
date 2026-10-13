@@ -56,6 +56,17 @@ The adaptation uses the same `BTRUE` flag, with amd64-specific comparison and
 branch selection. The original code remains under the upstream licenses above;
 new generated9 additions use the [root license](LICENSE).
 
+## vmx
+
+The multicore work extends 9front's existing vmx monitor and kernel driver,
+introduced by aiju in commits
+[`389ba6bdd9885f7570d8f87ea14b3eba48c000f6`](https://github.com/9front/9front/commit/389ba6bdd9885f7570d8f87ea14b3eba48c000f6)
+and [`789311ad540ba30820e51768f7bf029d32939bb6`](https://github.com/9front/9front/commit/789311ad540ba30820e51768f7bf029d32939bb6).
+Their authorship, subsequent upstream history and licenses are preserved.
+The new multiprocessor support, APIC emulation and tests use the
+[root license](LICENSE). Architecture references and validation are recorded
+in [sys/src/cmd/vmx/README](sys/src/cmd/vmx/README).
+
 ## Russ Cox's diskless boot workflow
 
 `boot/qemu` adapts the workflow from

@@ -1,5 +1,6 @@
 #include <u.h>
 #include <libc.h>
+#include <tos.h>
 #include "dat.h"
 #include "fns.h"
 #include "x86.h"
@@ -181,6 +182,12 @@ static int xsavesz[] = {
 	[7] = 512+64+256,
 };
 
+u32int
+cpusignature(void)
+{
+	return leaf1.ax;
+}
+
 static void
 cpuid(ExitInfo *ei)
 {
@@ -193,7 +200,7 @@ cpuid(ExitInfo *ei)
 	cp = getcpuid(ax, cx);
 	switch(ax){
 	case 0x00: /* highest register & GenuineIntel */
-		ax = MIN(cpuidmax, 0x18);
+		ax = MIN(MAX(cpuidmax, ncpu > 1 ? 0x15 : 0), 0x18);
 		bx = cp.bx;
 		dx = cp.dx;
 		cx = cp.cx;
@@ -201,9 +208,11 @@ cpuid(ExitInfo *ei)
 	case 0x01: /* features */
 		ax = cp.ax;
 		bx = cp.bx & 0xffff;
+		if(ncpu > 1) bx |= ncpu<<16 | cpu->id<<24;
 		/* some features removed, hypervisor added */
 		cx = cp.cx & 0x76de3217 | 0x80000000UL;
 		dx = cp.dx & 0x0f8aa579;
+		if(ncpu > 1) dx |= 1<<9 | 1<<28;
 		if(leaf1.cx & 1<<27){
 			if(rget("cr4real") & Cr4Osxsave)
 				cx |= 1<<27;
@@ -213,7 +222,11 @@ cpuid(ExitInfo *ei)
 		break;
 	case 0x02: goto literal; /* cache stuff */
 	case 0x03: goto zero; /* processor serial number */
-	case 0x04: goto literal; /* cache stuff */
+	case 0x04:
+		ax = cp.ax & ~0xffffc000U;
+		if((ax & 31) != 0 && ncpu > 1) ax |= (ncpu-1)<<26;
+		bx = cp.bx; cx = cp.cx; dx = cp.dx;
+		break;
 	case 0x05: goto zero; /* monitor/mwait */
 	case 0x06: goto zero; /* thermal management */
 	case 0x07: /* more features */
@@ -230,7 +243,20 @@ cpuid(ExitInfo *ei)
 	case 0x08: goto zero;
 	case 0x09: goto literal; /* direct cache access */
 	case 0x0a: goto zero; /* performance counters */
-	case 0x0b: goto zero; /* extended topology */
+	case 0x0b:
+	case 0x1f:
+		if(ncpu == 1) goto zero;
+		dx = cpu->id;
+		if(cx == 0){
+			ax = 0; bx = 1; cx = 1<<8;
+		}else if(cx == 1){
+			for(ax = 0; (1U<<ax) < ncpu; ax++)
+				;
+			bx = ncpu; cx = 2<<8 | 1;
+		}else{
+			ax = bx = 0; cx &= 255;
+		}
+		break;
 	case 0x0c: goto zero;
 	case 0x0d: /* extended state */
 		if((leaf1.cx & 1<<27) == 0)
@@ -255,7 +281,13 @@ cpuid(ExitInfo *ei)
 	case 0x10: goto zero; /* RDT */
 	case 0x12: goto zero; /* SGX */
 	case 0x14: goto zero; /* PT */
-	case 0x15: goto zero; /* TSC */
+	case 0x15: /* TSC and local APIC share the virtual crystal clock. */
+		if(ncpu == 1 || _tos->cyclefreq == 0) goto zero;
+		/* MHz resolution keeps the ratio small, as on physical CPUs. */
+		ax = Apichz / 1000000;
+		bx = (_tos->cyclefreq + 500000) / 1000000;
+		cx = Apichz;
+		break;
 	case 0x16: goto zero; /* cpu clock */
 	case 0x17: goto zero; /* SoC */
 	case 0x18: goto literal; /* pages, tlb */
@@ -311,11 +343,15 @@ rdwrmsr(ExitInfo *ei)
 {
 	u32int cx;
 	u64int val;
-	int rd;
+	int rd, rc;
 	
 	rd = ei->name[1] == 'r';
 	cx = rget(RCX);
 	val = rget(RDX) << 32 | (u32int)rget(RAX);
+	rc = apicmsr(rd, cx, &val);
+	if(rc < 0)
+		return;
+	if(rc == 0)
 	switch(cx){
 	case 0x277:
 		if(rd) val = rget("pat");
@@ -387,6 +423,21 @@ movcr(ExitInfo *ei)
 			postexc("#ud", NOERRC);
 		}
 		break;
+	case 8:
+		if(ncpu == 1){
+			postexc("#gp", 0);
+			break;
+		}
+		if((q & 0x30) == 0x10)
+			rset(x86reg[q >> 8 & 15], cpu->apic.reg[8] >> 4);
+		else if((q & 0x30) == 0 && rget(x86reg[q >> 8 & 15]) < 16)
+			apictpr(rget(x86reg[q >> 8 & 15]) << 4);
+		else{
+			postexc("#gp", 0);
+			break;
+		}
+		skipinstr(ei);
+		break;
 	case 4:
 		switch(q >> 4 & 3){
 		case 0:
@@ -420,15 +471,21 @@ dbgexc(ExitInfo *ei)
 static void
 hlt(ExitInfo *ei)
 {
-	if(irqactive < 0)
-		state = VMHALT;
+	if(cpu->nmi == 0 && (cpu->irqactive < 0 || (rget(RFLAGS) & 1<<9) == 0))
+		cpu->state = VMHALT;
 	skipinstr(ei);
 }
 
 static void
 irqackhand(ExitInfo *ei)
 {
-	irqack(ei->qual);
+	apicack(cpu, ei->qual);
+}
+
+static void
+nmiackhand(ExitInfo *)
+{
+	apicnmiack(cpu);
 }
 
 static void
@@ -462,6 +519,7 @@ static ExitType etypes[] = {
 	{".hlt", hlt},
 	{"eptfault", eptfault},
 	{"*ack", irqackhand},
+	{"*nmi", nmiackhand},
 	{".rdmsr", rdwrmsr},
 	{".wrmsr", rdwrmsr},
 	{".movdr", movdr},
@@ -479,7 +537,6 @@ processexit(char *msg)
 	ExitType *et;
 	int i;
 	ExitInfo ei;
-	extern int getexit;
 
 	strcpy(msgc, msg);
 	nf = tokenize(msgc, f, nelem(f));
@@ -504,7 +561,6 @@ processexit(char *msg)
 		else if(strcmp(f[i], "va") == 0)
 			ei.va = strtoull(f[i+1], nil, 0);
 	}
-	if(*f[0] == '*') getexit++;
 	for(et = etypes; et < etypes + nelem(etypes); et++)
 		if(strcmp(et->name, f[0]) == 0){
 			et->f(&ei);
@@ -521,7 +577,7 @@ processexit(char *msg)
 	}
 	if(persist){
 		vmerror("unknown exit: %s", msg);
-		state = VMDEAD;
+		cpu->state = VMDEAD;
 	}else
 		sysfatal("unknown exit: %s", msg);
 }

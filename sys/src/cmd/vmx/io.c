@@ -149,7 +149,6 @@ struct Pic {
 	u8int prio;
 	u8int base;
 } pic[2];
-int irqactive = -1;
 
 static u8int
 picprio(u8int v, u8int p, u8int *n)
@@ -199,17 +198,7 @@ picupdate(Pic *p)
 			n |= pic[1].base;
 		}else
 			n |= p->base;
-		if(m != 0 && irqactive != n){
-			if(ctl("irq %d", n) < 0)
-				sysfatal("ctl: %r");
-			if(state == VMHALT)
-				state = VMRUNNING;
-			irqactive = n;
-		}else if(m == 0 && irqactive >= 0){
-			if(ctl("irq") < 0)
-				sysfatal("ctl: %r");
-			irqactive = -1;
-		}
+		apicpic(m != 0 ? n : -1);
 	}
 }
 
@@ -236,6 +225,14 @@ irqline(int n, int s)
 		p->irr |= p->lines & ~ol & m;
 	if(s == IRQLLOHI && (p->elcr & m) == 0)
 		p->irr |= m;
+	if(p == &pic[1] || n != 2){
+		if(s == IRQLLOHI){
+			ioapicline((p - pic)*8 + n, 0);
+			ioapicline((p - pic)*8 + n, 1);
+			ioapicline((p - pic)*8 + n, 0);
+		}else
+			ioapicline((p - pic)*8 + n, (p->lines & m) != 0);
+	}
 	picupdate(p);
 }
 
@@ -245,7 +242,6 @@ irqack(int n)
 	Pic *p;
 	extern int nextexit;
 	
-	irqactive = -1;
 	if((n & ~7) == pic[0].base)
 		p = &pic[0];
 	else if((n & ~7) == pic[1].base)
@@ -282,11 +278,7 @@ picio(int isin, u16int port, u32int val, int sz, void *)
 	case 0x20:
 	case 0xa0:
 		if((val & 1<<4) != 0){ /* ICW1 */
-			if(irqactive >= 0){
-				if(ctl("irq") < 0)
-					sysfatal("ctl: %r");
-				irqactive = -1;
-			}
+			apicpic(-1);
 			p->irr = 0;
 			p->isr = 0;
 			p->imr = 0;

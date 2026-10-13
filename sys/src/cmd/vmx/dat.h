@@ -3,15 +3,49 @@ typedef struct PCICap PCICap;
 typedef struct PCIBar PCIBar;
 typedef struct Region Region;
 
-extern int irqactive;
-
 enum {
 	VMRUNNING,
 	VMHALT,
 	VMDEAD,
+	VMINIT,
+	Nreg = 256,
+	Maxcpu = 64,
 };
-extern int state;
 extern int debug;
+
+typedef struct Vcpu Vcpu;
+typedef struct Lapic Lapic;
+struct Lapic {
+	u32int reg[64];
+	uvlong base;
+	uvlong epoch;
+	u32int count;
+};
+struct Vcpu {
+	int id;
+	int ctlfd, regsfd, mapfd, waitfd;
+	int state;
+	int getexit;	/* go sent; no stopping exit received yet */
+	int resetting, startup;
+	int irqactive;
+	int irqpic;
+	int nmi;
+	Lapic apic;
+	char *rcname[Nreg];
+	uvlong rcval[Nreg];
+	uvlong rcvalid[Nreg/64], rcdirty[Nreg/64];
+	char rbuf[4096];
+};
+
+/* Only the monitor's event loop selects cpu or accesses its register cache. */
+extern Vcpu *cpus, *cpu;
+extern int ncpu;
+
+enum {
+	Lapicbase = 0xfee00000,
+	Ioapicbase = 0xfec00000,
+	Apichz = 100000000,
+};
 
 enum {
 	BY2PG = 4096

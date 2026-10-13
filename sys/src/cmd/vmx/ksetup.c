@@ -945,3 +945,74 @@ loadkernel(char *fn)
 done:
 	close(fd);
 }
+
+static void
+checksum(uchar *p, int n, int off)
+{
+	int i;
+	uchar sum;
+
+	p[off] = 0;
+	sum = 0;
+	for(i = 0; i < n; i++)
+		sum += p[i];
+	p[off] = -sum;
+}
+
+/* Intel MP 1.4 tables in the reserved BIOS area. */
+void
+mptables(void)
+{
+	uchar *fp, *h, *p;
+	int i, count, pciirqs;
+	PCIDev *d;
+	extern PCIDev *pcidevs;
+
+	if(ncpu == 1)
+		return;
+	fp = gptr(0xf0000, 4096);
+	if(fp == nil)
+		sysfatal("no space for MP tables");
+	memset(fp, 0, 4096);
+	h = fp + 16;
+	p = h + 44;
+	count = 0;
+	for(i = 0; i < ncpu; i++){
+		p[0] = 0; p[1] = i; p[2] = 0x14; p[3] = 1 | (i == 0 ? 2 : 0);
+		PUT32(p, 4, cpusignature());
+		PUT32(p, 8, 1<<9 | 1);
+		p += 20; count++;
+	}
+	/* PCI bus 0 and ISA bus 1. */
+	p[0] = 1; p[1] = 0; memmove(p+2, "PCI   ", 6); p += 8; count++;
+	p[0] = 1; p[1] = 1; memmove(p+2, "ISA   ", 6); p += 8; count++;
+	p[0] = 2; p[1] = ncpu; p[2] = 0x11; p[3] = 1;
+	PUT32(p, 4, Ioapicbase); p += 8; count++;
+	pciirqs = 0;
+	for(d = pcidevs; d != nil; d = d->next)
+		if(d->irqno < 16)
+			pciirqs |= 1<<d->irqno;
+	for(i = 0; i < 16; i++){
+		if(i == 2 || (pciirqs & 1<<i) != 0) continue;
+		p[0] = 3; p[4] = 1; p[5] = i; p[6] = ncpu; p[7] = i;
+		p += 8; count++;
+	}
+	for(d = pcidevs; d != nil; d = d->next){
+		if(d->irqno >= 16) continue;
+		p[0] = 3; PUT16(p, 2, 15); /* active low, level triggered */
+		p[4] = 0; p[5] = (d->bdf >> 11 & 31)*4; /* INTA */
+		p[6] = ncpu; p[7] = d->irqno;
+		p += 8; count++;
+	}
+	p[0] = 4; p[1] = 3; p[4] = 1; p[6] = 0; p[7] = 0;
+	p += 8; count++;
+	p[0] = 4; p[1] = 1; p[4] = 1; p[6] = 255; p[7] = 1;
+	p += 8; count++;
+	memmove(h, "PCMP", 4); PUT16(h, 4, p-h); h[6] = 4;
+	memmove(h+8, "9front  ", 8);
+	memmove(h+16, "vmx         ", 12);
+	PUT16(h, 34, count); PUT32(h, 36, Lapicbase);
+	checksum(h, p-h, 7);
+	memmove(fp, "_MP_", 4); PUT32(fp, 4, 0xf0010); fp[8] = 1; fp[9] = 4;
+	checksum(fp, 16, 10);
+}

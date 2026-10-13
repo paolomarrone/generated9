@@ -7,6 +7,10 @@ vmx \- virtual PC
 .B -D
 ]
 [
+.B -P
+.I cpus
+]
+[
 .B -M
 .I mem
 ]
@@ -43,6 +47,21 @@ kernel
 uses Intel VT-x through
 .IR vmx (3)
 to simulate a virtual PC, running the specified kernel (see below for supported formats).
+.PP
+By default the virtual PC has one CPU.
+The
+.B -P
+option selects between 1 and 64 virtual CPUs.
+With more than one CPU,
+.I vmx
+provides local xAPICs, an I/O APIC and Intel MP 1.4 tables.
+The CPUs execute concurrently and share guest memory and devices.
+The host kernel must support the
+.B init
+and
+.B nmi
+control messages described in
+.IR vmx (3).
 .PP
 By default the virtual PC has 64 MB of memory.
 The amount of memory can be changed with the
@@ -146,7 +165,12 @@ The first boot module is passed as the \fIinitrd\fR; any further boot modules ar
 .I Vmx
 can and will crash your kernel.
 .PP
-Currently only one core is supported.
+Multiprocessor guests must support Intel MP tables; ACPI and x2APIC are not provided.
+The local APIC and I/O APIC addresses are fixed at
+.B 0xfee00000
+and
+.BR 0xfec00000 .
+The debugging interface refers to the bootstrap CPU.
 .PP
 The Linux \fLvga=\fR option is not supported, as well as many of the OpenBSD boot variables.
 .SH HISTORY

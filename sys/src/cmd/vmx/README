@@ -1,0 +1,109 @@
+Multiprocessor guests
+
+Build the host kernel as well as the monitor:
+
+	cd /sys/src/9/pc64
+	mk
+	cd /sys/src/cmd/vmx
+	mk install
+
+Boot the new kernel before using vmx -P. In the checkout's QEMU environment:
+
+	./boot/qemu -m 4G -smp 4 -kernel sys/src/9/pc64/9pc64
+
+Inside generated9, for example:
+
+	vmx -P 4 -M 512M -c /dev/cons -m initramfs bzImage 'console=ttyS0'
+
+Without -P, the existing single-CPU/PIC configuration remains the default.
+With -P 2 or more, each virtual CPU has its own #X instance, registers and
+local APIC. All CPUs map the same memory segment. Kernel processes execute
+the CPUs concurrently; one monitor event loop serializes exits and device
+emulation. Device workers send notifications to that loop. Only the loop
+may select the current CPU or use the register cache.
+
+The monitor implements xAPIC physical and logical destinations, fixed and
+lowest-priority interrupts, INIT/SIPI, NMIs, local timers, and an I/O APIC
+with 24 pins. Intel MP 1.4 tables describe the CPUs and interrupt routes.
+Guest CPU count is limited to 64. There is no ACPI, x2APIC, SMI delivery or
+APIC address relocation. The 9P debugger continues to select CPU 0.
+
+The host kernel adds INIT and NMI control messages, chooses a supported
+EPT page-table memory type, and invalidates the shared VPID after switching
+virtual CPUs. Invalidation and guest entry cannot be interrupted by another
+context switch. An IPI wakes the processor handling a queued VM command,
+instead of waiting for its next clock interrupt. This is necessary to keep
+guest timer handlers from consuming all execution time on an SMP host.
+All CPUs use the host TSC, including time spent outside the guest.
+Synchronized host TSCs are required. CPUID describes one thread per
+core and one package, and reports the TSC/APIC frequency ratio at MHz
+resolution when the host supplies a cycle frequency.
+
+Tests
+
+Inside generated9, mk test checks instruction decoding against real APIC
+MMIO registers, MSR operand widths, priority/EOI behavior, and timer reloads
+with a controlled clock. It runs without VMX hardware. The cases cover 16-
+and 32-bit addressing, and on amd64 also REX prefix ordering, RIP-relative,
+address-size and segment overrides.
+
+test/run is a Linux-host integration test. It boots generated9 with nested
+Intel VMX, builds the native monitor, and runs Linux inside vmx. It requires
+the rebuilt generated9 kernel, KVM with nested VMX enabled, a static Linux C
+toolchain, and Python 3. A Linux bzImage must have SMP, Intel MP table parsing,
+initramfs, devtmpfs, CPU hotplug, Magic SysRq and a serial console enabled.
+Virtio PCI and block support must be built in or supplied as matching host
+modules. Zstd-compressed modules require Python 3.14.
+
+From the checkout root, with a locally installed Linux kernel:
+
+	sys/src/cmd/vmx/test/run /boot/vmlinuz-VERSION --modules VERSION
+
+If virtio is built in, omit --modules. --cpus selects the test matrix
+(default: 1 2 4); --host-cpus selects the outer VM's CPU count. For example,
+--host-cpus 2 --cpus 4 exercises more virtual CPUs than host CPUs.
+--timeout sets the limit in seconds per guest (default: 900).
+
+Each guest must report exactly the requested number of online CPUs. Threads
+are pinned to separate CPUs and check shared atomic operations, floating
+point state, timers, mapping protection changes, isolated forked address
+spaces, and concurrent direct virtio disk I/O. The workload is repeated
+after two offline/online cycles of each secondary CPU. A SysRq NMI broadcast
+and per-CPU interrupt counters check NMI delivery and local APIC timers.
+The single-CPU test exercises the original PIC path.
+
+In an amd64 generated9 guest, a native process test is also available:
+
+	cd /sys/src/cmd/vmx
+	mk test/6.plan9
+	test/6.plan9 2
+
+The argument is the expected number of CPUs. The test counts /dev/sysstat
+entries, pins one process to each CPU, and checks shared atomic increments,
+floating-point state across yields, and the monotonic clock.
+
+The Linux test creates its own disposable disks. Logs and generated images remain
+under usr/glenda/tmp/vmx-smp-* and are not source files. It does not download
+or vendor Linux or its modules. Check the complete guest and monitor logs
+when investigating a failure; recognizing multiple CPUs alone is not a pass.
+
+Validated on an amd64 generated9 host under Intel nested KVM:
+
+	Linux 6.18.56: 1, 2 and 4 CPUs; also 4 guest CPUs on 2 host CPUs.
+	generated9: boot to rc and the native process test, with 2 and 4 CPUs
+	            on 2 host CPUs.
+
+The limit of 64 CPUs is not a claim of testing all sizes. The 386 sources
+compile with 8c; runtime tests above used amd64.
+
+Architecture references
+
+Intel 64 and IA-32 Architectures Software Developer's Manual:
+Volume 2, section 2.2.1: REX prefixes and instruction encoding.
+Volume 2, WRMSR entry: MSR operand widths.
+Volume 3: processor initialization, local APICs, VMX event injection, EPT and VPID.
+https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html
+
+Intel MultiProcessor Specification, version 1.4: configuration tables and
+interrupt assignments. The implementation is new generated9 code; the
+existing vmx code retains its upstream authorship and license.

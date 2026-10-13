@@ -8,8 +8,6 @@
 #include "dat.h"
 #include "fns.h"
 
-extern int regsfd;
-
 static char Egreg[] = "the front fell off";
 static File *memfile, *regsfile, *kregsfile, *xregsfile;
 static uchar ureg[1024];
@@ -26,7 +24,7 @@ makeureg(void)
 	mach = sizeof(uintptr) == 8 ? &mamd64 : &mi386;
 	memset(ureg, 0, mach->regsize);
 
-	rc = pread(regsfd, rbuf, sizeof(rbuf)-1, 0);
+	rc = pread(cpus[0].regsfd, rbuf, sizeof(rbuf)-1, 0);
 	if(rc < 0)
 		return -1;
 	rbuf[rc] = 0;
@@ -90,7 +88,7 @@ srvread(Req *r)
 		return;
 	}
 	if(r->fid->file == xregsfile){
-		rc = pread(regsfd, r->ofcall.data, r->ifcall.count, r->ifcall.offset);
+		rc = pread(cpus[0].regsfd, r->ofcall.data, r->ifcall.count, r->ifcall.offset);
 		if(rc < 0)
 			responderror(r);
 		else{

@@ -4,15 +4,22 @@
 #include <draw.h>
 #include "dat.h"
 #include "fns.h"
+#include "x86.h"
 
 char *segname;
 int segrclose;
 Region *mmap;
-int ctlfd, regsfd, mapfd, waitfd;
+Vcpu *cpus, *cpu;
+int ncpu = 1;
 Channel *waitch, *sleepch, *notifch;
 enum { MSEC = 1000*1000, MinSleep = MSEC, SleeperPoll = 2000*MSEC } ;
-int getexit, state, debug;
+int debug;
 typedef struct VmxNotif VmxNotif;
+typedef struct VmxExit VmxExit;
+struct VmxExit {
+	Vcpu *cpu;
+	char msg[512];
+};
 struct VmxNotif {
 	void (*f)(void *);
 	void *arg;
@@ -52,39 +59,61 @@ int
 ctl(char *fmt, ...)
 {
 	va_list va;
-	int rc;
+	char *s;
+	int rc, n;
 	
 	va_start(va, fmt);
-	rc = vfprint(ctlfd, fmt, va);
+	s = vsmprint(fmt, va);
 	va_end(va);
+	if(s == nil)
+		sysfatal("ctl: out of memory");
+	n = strlen(s);
+	rc = write(cpu->ctlfd, s, n);
+	free(s);
+	if(rc >= 0 && rc != n){
+		werrstr("short control write");
+		return -1;
+	}
 	return rc;
 }
 
 void
 modregion(Region *r)
 {
-	if(r->segname == nil){
-		if(fprint(mapfd, "--- wb %#ullx %#ullx\n", (uvlong)r->start, (uvlong)r->end) < 0)
-			vmerror("updating memory map: %r");
-	}else
-		if(fprint(mapfd, "%c%c%c wb %#ullx %#ullx %s %#ullx\n",
+	Vcpu *c;
+	char *s;
+	int n;
+
+	if(r->segname == nil)
+		s = smprint("--- wb %#ullx %#ullx\n", (uvlong)r->start, (uvlong)r->end);
+	else
+		s = smprint("%c%c%c wb %#ullx %#ullx %s %#ullx\n",
 			(r->type & REGR) != 0 ? 'r' : '-',
 			(r->type & REGW) != 0 ? 'w' : '-',
 			(r->type & REGX) != 0 ? 'x' : '-',
-			(uvlong)r->start, (uvlong)r->end, r->segname, (uvlong)r->segoff) < 0)
-			vmerror("updating memory map: %r");
+			(uvlong)r->start, (uvlong)r->end, r->segname, (uvlong)r->segoff);
+	if(s == nil)
+		sysfatal("modregion: out of memory");
+	n = strlen(s);
+	for(c = cpus; c < cpus + ncpu; c++)
+		if(write(c->mapfd, s, n) != n)
+			sysfatal("cpu%d: updating memory map: %r", c->id);
+	free(s);
 }
 
 static void
-vmxsetup(void)
+vmxsetup(Vcpu *c)
 {
-	static char buf[128];
-	static char name[128];
+	char buf[128];
+	char name[128];
 	int rc;
+
+	c->state = c->id == 0 ? VMRUNNING : VMINIT;
+	c->irqactive = -1;
 	
-	ctlfd = open("#X/clone", ORDWR|ORCLOSE);
-	if(ctlfd < 0) sysfatal("open: %r");
-	rc = read(ctlfd, name, sizeof(name) - 1);
+	c->ctlfd = open("#X/clone", ORDWR|ORCLOSE);
+	if(c->ctlfd < 0) sysfatal("open: %r");
+	rc = read(c->ctlfd, name, sizeof(name) - 1);
 	if(rc < 0) sysfatal("read: %r");
 	name[rc] = 0;
 	if(segname == nil){
@@ -93,30 +122,25 @@ vmxsetup(void)
 	}
 	
 	snprint(buf, sizeof(buf), "#X/%s/regs", name);
-	regsfd = open(buf, ORDWR);
-	if(regsfd < 0) sysfatal("open: %r");
+	c->regsfd = open(buf, ORDWR);
+	if(c->regsfd < 0) sysfatal("open: %r");
 	
 	snprint(buf, sizeof(buf), "#X/%s/map", name);
-	mapfd = open(buf, OWRITE|OTRUNC);
-	if(mapfd < 0) sysfatal("open: %r");
+	c->mapfd = open(buf, OWRITE|OTRUNC);
+	if(c->mapfd < 0) sysfatal("open: %r");
 	
 	snprint(buf, sizeof(buf), "#X/%s/wait", name);
-	waitfd = open(buf, OREAD);
-	if(waitfd < 0) sysfatal("open: %r");
+	c->waitfd = open(buf, OREAD);
+	if(c->waitfd < 0) sysfatal("open: %r");
 }
-
-enum { RCENT = 256 };
-static char *rcname[RCENT];
-static uvlong rcval[RCENT];
-static uvlong rcvalid[(RCENT+63)/64], rcdirty[(RCENT+63)/64];
 
 static int
 rclookup(char *n)
 {
 	int i;
 	
-	for(i = 0; i < RCENT; i++)
-		if(rcname[i] != nil && strcmp(n, rcname[i]) == 0)
+	for(i = 0; i < Nreg; i++)
+		if(cpu->rcname[i] != nil && strcmp(n, cpu->rcname[i]) == 0)
 			return i;
 	return -1;
 }
@@ -124,24 +148,24 @@ rclookup(char *n)
 char *
 rcflush(int togo)
 {
-	int i, j;
 	static char buf[4096];
+	int i, j;
 	char *p, *e;
 	uvlong v;
 	
 	p = buf;
 	e = buf + sizeof(buf);
 	*p = 0;
-	for(i = 0; i < (RCENT+63)/64; i++){
-		if(v = rcdirty[i], v != 0){
+	for(i = 0; i < (Nreg+63)/64; i++){
+		if(v = cpu->rcdirty[i], v != 0){
 			for(j = 0; j < 64; j++)
 				if((v>>j & 1) != 0)
-					p = seprint(p, e, "%s%c%#ullx%c", rcname[i*64+j], togo?'=':' ', rcval[i*64+j], togo?';':'\n');
-			rcdirty[i] = 0;
+					p = seprint(p, e, "%s%c%#ullx%c", cpu->rcname[i*64+j], togo?'=':' ', cpu->rcval[i*64+j], togo?';':'\n');
+			cpu->rcdirty[i] = 0;
 		}
-		rcvalid[i] = 0;
+		cpu->rcvalid[i] = 0;
 	}
-	if(!togo && p != buf && write(regsfd, buf, p - buf) < p - buf)
+	if(!togo && p != buf && write(cpu->regsfd, buf, p - buf) < p - buf)
 		sysfatal("rcflush: write: %r");
 	return p != buf ? buf : nil;
 }
@@ -149,30 +173,30 @@ rcflush(int togo)
 static void
 rcload(void)
 {
-	static char buf[4096];
+	char *buf = cpu->rbuf;
 	char *p, *q, *f[2];
 	int nf;
 	int i, rc;
 
 	rcflush(0);
-	rc = pread(regsfd, buf, sizeof(buf) - 1, 0);
+	rc = pread(cpu->regsfd, buf, sizeof(cpu->rbuf) - 1, 0);
 	if(rc < 0) sysfatal("rcload: pread: %r");
 	buf[rc] = 0;
 	p = buf;
-	for(i = 0; i < nelem(rcname); i++){
+	for(i = 0; i < nelem(cpu->rcname); i++){
 		q = strchr(p, '\n');
 		if(q == nil) break;
 		*q = 0;
 		nf = tokenize(p, f, nelem(f));
 		p = q + 1;
 		if(nf < 2) break;
-		rcname[i] = f[0];
-		rcval[i] = strtoull(f[1], nil, 0);
-		rcvalid[i>>6] |= 1ULL<<(i&63);
+		cpu->rcname[i] = f[0];
+		cpu->rcval[i] = strtoull(f[1], nil, 0);
+		cpu->rcvalid[i>>6] |= 1ULL<<(i&63);
 	}
-	for(; i < nelem(rcname); i++){
-		rcname[i] = nil;
-		rcvalid[i>>6] &= ~(1ULL<<(i&63));
+	for(; i < nelem(cpu->rcname); i++){
+		cpu->rcname[i] = nil;
+		cpu->rcvalid[i>>6] &= ~(1ULL<<(i&63));
 	}
 }
 
@@ -182,12 +206,12 @@ rget(char *reg)
 	int i;
 
 	i = rclookup(reg);
-	if(i < 0 || (rcvalid[i>>6]>>i&1) == 0){
+	if(i < 0 || (cpu->rcvalid[i>>6]>>(i&63)&1) == 0){
 		rcload();
 		i = rclookup(reg);
 		if(i < 0) sysfatal("unknown register %s", reg);
 	}
-	return rcval[i];
+	return cpu->rcval[i];
 }
 
 void
@@ -197,20 +221,20 @@ rpoke(char *reg, uvlong val, int clean)
 
 	i = rclookup(reg);
 	if(i >= 0){
-		if((rcvalid[i>>6]>>(i&63)&1) != 0 && rcval[i] == val) return;
+		if((cpu->rcvalid[i>>6]>>(i&63)&1) != 0 && cpu->rcval[i] == val) return;
 		goto goti;
 	}
-	for(i = 0; i < nelem(rcname); i++)
-		if(rcname[i] == nil){
-			rcname[i] = reg;
+	for(i = 0; i < nelem(cpu->rcname); i++)
+		if(cpu->rcname[i] == nil){
+			cpu->rcname[i] = reg;
 			break;
 		}
-	assert(i < nelem(rcname));
+	assert(i < nelem(cpu->rcname));
 goti:
-	rcval[i] = val;
-	rcvalid[i>>6] |= 1ULL<<(i&63);
+	cpu->rcval[i] = val;
+	cpu->rcvalid[i>>6] |= 1ULL<<(i&63);
 	if(!clean)
-		rcdirty[i>>6] |= 1ULL<<(i&63);
+		cpu->rcdirty[i>>6] |= 1ULL<<(i&63);
 }
 
 uvlong
@@ -282,7 +306,7 @@ gptr(u64int addr, u64int len)
 	if(addr + len < addr)
 		return nil;
 	for(r = mmap; r != nil; r = r->next)
-		if(addr >= r->start && addr < r->end){
+		if(r->v != nil && addr >= r->start && addr < r->end){
 			if(addr + len > r->end)
 				return nil;
 			return (uchar *) r->v + (addr - r->start);
@@ -392,25 +416,89 @@ launch(void)
 	s = rcflush(1);
 	if(ctl("go %s", s == nil ? "" : s) < 0)
 		sysfatal("go %s: %r", s == nil ? "" : s);
-	getexit++;
+	cpu->getexit = 1;
+}
+
+void
+cpustart(Vcpu *c, int vector)
+{
+	Vcpu *old;
+	int i;
+	static char *seg[] = {"cs", "ds", "es", "fs", "gs", "ss"};
+	char name[32];
+
+	if(vector < 0){
+		apicreset(c);
+		c->state = VMINIT;
+		c->startup = -1;
+		if(!c->resetting){
+			c->resetting = 1;
+			if(fprint(c->ctlfd, "init") < 0)
+				sysfatal("cpu%d: init: %r", c->id);
+		}
+		return;
+	}
+	if(c->resetting){
+		/* Drain old exits through *init before applying the first SIPI. */
+		if(c->startup < 0)
+			c->startup = vector;
+		return;
+	}
+	old = cpu;
+	cpu = c;
+	memset(c->rcvalid, 0, sizeof(c->rcvalid));
+	memset(c->rcdirty, 0, sizeof(c->rcdirty));
+	rcload();
+	for(i = 0; i < (sizeof(uintptr) == 8 ? 16 : 8); i++)
+		rset(x86reg[i], 0);
+	rset(RDX, cpusignature());
+	rset("cr0real", (rget("cr0real") & 0x60000000) | 0x10);
+	rset("cr0fake", (rget("cr0fake") & 0x60000000) | 0x10);
+	rset("cr0mask", 0);
+	rset("cr3", 0);
+	rset("cr4real", 0);
+	rset("cr4fake", 0);
+	rset("cr4mask", 0);
+	rset("efer", 0);
+	rset("flags", 2);
+	for(i = 0; i < nelem(seg); i++){
+		rset(seg[i], 0);
+		snprint(name, sizeof(name), "%sbase", seg[i]); rset(name, 0);
+		snprint(name, sizeof(name), "%slimit", seg[i]); rset(name, 0xffff);
+		snprint(name, sizeof(name), "%sperm", seg[i]); rset(name, 0x93);
+	}
+	rset("cs", vector << 8);
+	rset("csbase", vector << 12);
+	rset("csperm", 0x9b);
+	rset("pc", 0);
+	rset("gdtrbase", 0); rset("gdtrlimit", 0xffff);
+	rset("idtrbase", 0); rset("idtrlimit", 0xffff);
+	rset("ldtr", 0); rset("ldtrbase", 0); rset("ldtrlimit", 0xffff); rset("ldtrperm", 0x82);
+	rset("tr", 0); rset("trbase", 0); rset("trlimit", 0xffff); rset("trperm", 0x8b);
+	rset("dr6", 0xffff0ff0); rset("dr7", 0x400);
+	c->state = VMRUNNING;
+	cpu = old;
 }
 
 static void
-waitproc(void *)
+waitproc(void *v)
 {
-	static char buf[512];
+	Vcpu *c;
+	VmxExit e;
 	char *p;
 	int rc;
 
-	threadsetname("waitexit");
+	c = v;
+	e.cpu = c;
+	threadsetname("waitexit%d", c->id);
 	for(;;){
-		rc = read(waitfd, buf, sizeof(buf) - 1);
-		if(rc < 0)
-			sysfatal("read: %r");
-		buf[rc] = 0;
-		p = strchr(buf, '\n');
+		rc = read(c->waitfd, e.msg, sizeof(e.msg) - 1);
+		if(rc <= 0)
+			sysfatal("cpu%d: wait: %r", c->id);
+		e.msg[rc] = 0;
+		p = strchr(e.msg, '\n');
 		if(p != nil) *p = 0;
-		sendp(waitch, strdup(buf));
+		send(waitch, &e);
 	}
 }
 
@@ -450,12 +538,14 @@ sleeperproc(void *)
 static void
 runloop(void)
 {
-	char *waitmsg;
+	VmxExit e;
+	int i;
 	ulong ul;
 	VmxNotif notif;
 
 	lock(&timerlock);
-	proccreate(waitproc, nil, 4096);
+	for(i = 0; i < ncpu; i++)
+		proccreate(waitproc, &cpus[i], 4096);
 	proccreate(sleeperproc, nil, 4096);
 	launch();
 	for(;;){
@@ -465,27 +555,46 @@ runloop(void)
 			NOTIF,
 		};
 		Alt a[] = {
-			[WAIT] {waitch, &waitmsg, CHANRCV},
+			[WAIT] {waitch, &e, CHANRCV},
 			[SLEEP] {sleepch, &ul, CHANRCV},
 			[NOTIF] {notifch, &notif, CHANRCV},
 			{nil, nil, CHANEND}
 		};
 		switch(alt(a)){
 		case WAIT:
-			getexit--;
-			processexit(waitmsg);
-			free(waitmsg);
+			cpu = e.cpu;
+			if(cpu->resetting){
+				if(strcmp(e.msg, "*init 0") == 0){
+					cpu->resetting = 0;
+					cpu->getexit = 0;
+					cpu->irqactive = -1;
+					if(cpu->startup >= 0)
+						cpustart(cpu, cpu->startup);
+				}
+			}else{
+				/* Notifications do not stop the virtual CPU. */
+				if(e.msg[0] != '*')
+					cpu->getexit = 0;
+				processexit(e.msg);
+			}
 			break;
 		case SLEEP:
+			cpu = cpus;
 			pitadvance();
 			rtcadvance();
+			apicadvance();
 			break;
 		case NOTIF:
+			cpu = cpus;
 			notif.f(notif.arg);
 			break;
 		}
-		if(getexit == 0 && state == VMRUNNING)
-			launch();
+		for(cpu = cpus; cpu < cpus + ncpu; cpu++){
+			apicupdate(cpu);
+			if(cpu->getexit == 0 && cpu->state == VMRUNNING)
+				launch();
+		}
+		cpu = cpus;
 	}
 }
 
@@ -571,7 +680,7 @@ usage(void)
 	blanks = strdup(argv0);
 	for(p = blanks; *p != 0; p++)
 		*p = ' ';
-	fprint(2, "usage: %s [ -M mem ] [ -c com1rd[,com1wr] ] [ -C com2rd[,com2r] ] [ -n nic ]\n", argv0);
+	fprint(2, "usage: %s [ -P cpus ] [ -M mem ] [ -c com1rd[,com1wr] ] [ -C com2rd[,com2r] ] [ -n nic ]\n", argv0);
 	fprint(2, "       %s [ -d blockfile ] [ -m module ] [ -v|-w vga ] [ -9 srv ] kernel [ args ... ]\n", blanks);
 	threadexitsall("usage");
 }
@@ -590,11 +699,13 @@ threadmain(int argc, char **argv)
 	extern uintptr fbsz, fbaddr;
 	int newwin = 0;
 	int i;
+	char *s, *end;
+	uvlong count;
 
 	quotefmtinstall();
 	mainid = threadid();
 	cpuidinit();
-	waitch = chancreate(sizeof(char *), 32);
+	waitch = chancreate(sizeof(VmxExit), 32);
 	sleepch = chancreate(sizeof(ulong), 32);
 	notifch = chancreate(sizeof(VmxNotif), 16);
 
@@ -635,6 +746,13 @@ threadmain(int argc, char **argv)
 	case 'D':
 		debug++;
 		break;
+	case 'P':
+		s = EARGF(usage());
+		count = strtoull(s, &end, 10);
+		if(*s < '0' || *s > '9' || *end != 0 || count < 1 || count > Maxcpu)
+			sysfatal("number of CPUs must be between 1 and %d", Maxcpu);
+		ncpu = count;
+		break;
 	case 'M':
 		gmemsz = siparse(EARGF(usage()));
 		if(gmemsz != (uintptr) gmemsz) sysfatal("too much memory for address space");
@@ -672,7 +790,13 @@ threadmain(int argc, char **argv)
 		if(fbaddr != (u32int) fbaddr || (u32int)(fbaddr+fbsz) < fbaddr) sysfatal("framebuffer must be within first 4 GB");
 		mkregion(fbaddr, fbaddr+fbsz, REGALLOC|REGRWX);
 	}
-	vmxsetup();
+	cpus = emalloc(ncpu * sizeof(Vcpu));
+	for(i = 0; i < ncpu; i++){
+		cpus[i].id = i;
+		vmxsetup(&cpus[i]);
+	}
+	cpu = cpus;
+	apicinit();
 	mksegment(segname);
 	loadkernel(argv[0]);
 	pciinit();
@@ -683,6 +807,7 @@ threadmain(int argc, char **argv)
 			sysfatal("%s: %r", edevt[i]);
 
 	pcibusmap();
+	mptables();
 	
 	if(srvname != nil) init9p(srvname);
 	if(kconfig != nil) kconfig();

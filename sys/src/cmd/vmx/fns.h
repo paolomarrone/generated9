@@ -1,6 +1,20 @@
 #define MIN(a,b) ((a)<(b)?(a):(b))
 #define MAX(a,b) ((a)>(b)?(a):(b))
 void *emalloc(ulong);
+Region *mkregion(u64int, u64int, int);
+void apicinit(void);
+void apicreset(Vcpu *);
+void apicadvance(void);
+void apicupdate(Vcpu *);
+void apicack(Vcpu *, int);
+void apicnmiack(Vcpu *);
+void apicpic(int);
+void ioapicline(int, int);
+int apicmsr(int, u32int, u64int *);
+void apictpr(u32int);
+void mptables(void);
+u32int cpusignature(void);
+void cpustart(Vcpu *, int);
 void loadkernel(char *);
 uvlong rget(char *);
 void rpoke(char *, uvlong, int);

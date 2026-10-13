@@ -2,13 +2,14 @@
 
 BIN=/$objtype/bin
 TARG=vmx
-CLEANFILES=$O.vmxgdb
-HFILES=dat.h fns.h
-OFILES=\
-	vmx.$O \
+CLEANFILES=$O.vmxgdb test/$O.out test/$O.plan9 test/*.$O
+HFILES=dat.h fns.h x86.h
+TESTDEP=test/$O.out
+VMOFILES=\
 	ksetup.$O \
 	exith.$O \
 	io.$O \
+	apic.$O \
 	ide.$O \
 	vga.$O \
 	pci.$O \
@@ -16,7 +17,8 @@ OFILES=\
 	vesa.$O \
 	9p.$O \
 	x86.$O \
-	nanosec.$O \
+
+OFILES=vmx.$O nanosec.$O $VMOFILES
 
 </sys/src/cmd/mkone
 
@@ -31,3 +33,18 @@ $BIN/vmxgdb: $O.vmxgdb
 
 $O.vmxgdb: vmxgdb.$O
 	$LD $LDFLAGS -o $target $prereq
+
+test:V: $O.out $TESTDEP
+	test/$O.out
+
+test/$O.out: test/unit.$O $VMOFILES
+	$LD $LDFLAGS -o $target $prereq
+
+test/unit.$O: test/unit.c vmx.c $HFILES
+	$CC $CFLAGS -o $target test/unit.c
+
+test/$O.plan9: test/plan9.$O
+	$LD $LDFLAGS -o $target $prereq
+
+test/plan9.$O: test/plan9.c
+	$CC $CFLAGS -o $target test/plan9.c
