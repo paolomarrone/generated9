@@ -9,7 +9,7 @@
 #include <memdraw.h>
 #include <event.h>
 
-#include "gpu.h"
+#include <gpu.h>
 
 enum {
 	Width = 400,
@@ -32,9 +32,9 @@ render(void)
 	uchar *pixels;
 	int fd;
 
-	gpuinit(&gpu);
+	gpuinit(&gpu, nil);
 	snprint(buf, sizeof(buf), "2 %d 10 %d %d 1 1 0 0 1 %d",
-		Bgra, Width, Height, Width*Height*4);
+		GpuBgra, Width, Height, Width*Height*4);
 	image = gpuresource(&gpu, buf);
 	snprint(buf, sizeof(buf), "0 64 16 %d 1 1 1 0 0 0 %d", sizeof(vertices), sizeof(vertices));
 	vertex = gpuresource(&gpu, buf);
@@ -45,20 +45,20 @@ render(void)
 	if(fprint(gpu.ctl, "upload %ud 0 0 0 0 %d 1 1 0 0 0", vertex, sizeof(vertices)) < 0)
 		sysfatal("upload vertices: %r");
 
-	p = gpuemit(&gpu, Create, Surface, 5);
+	p = gpuemit(&gpu, GpuCreate, GpuSurface, 5);
 	p[0] = 1;
 	p[1] = image;
-	p[2] = Bgra;
-	p = gpuemit(&gpu, Framebuffer, 0, 3);
+	p[2] = GpuBgra;
+	p = gpuemit(&gpu, GpuFramebuffer, 0, 3);
 	p[0] = 1;
 	p[2] = 1;
-	p = gpuemit(&gpu, Create, Elements, 9);
+	p = gpuemit(&gpu, GpuCreate, GpuElements, 9);
 	p[0] = 2;
-	p[4] = Float4;
+	p[4] = GpuFloat4;
 	p[5] = 16;
-	p[8] = Float4;
-	gpubind(&gpu, Elements, 2);
-	p = gpuemit(&gpu, Vertices, 0, 3);
+	p[8] = GpuFloat4;
+	gpubind(&gpu, GpuElements, 2);
+	p = gpuemit(&gpu, GpuVertices, 0, 3);
 	p[0] = sizeof(vertices[0]);
 	p[2] = vertex;
 	gpushader(&gpu, 3, 0,
@@ -68,29 +68,29 @@ render(void)
 	gpushader(&gpu, 4, 1,
 		"FRAG\nDCL IN[0], GENERIC[0], LINEAR\n"
 		"DCL OUT[0], COLOR\nMOV OUT[0], IN[0]\nEND\n");
-	p = gpuemit(&gpu, Create, Blend, 11);
+	p = gpuemit(&gpu, GpuCreate, GpuBlend, 11);
 	p[0] = 5;
 	p[3] = 15U<<27;
-	gpubind(&gpu, Blend, 5);
-	p = gpuemit(&gpu, Create, Dsa, 5);
+	gpubind(&gpu, GpuBlend, 5);
+	p = gpuemit(&gpu, GpuCreate, GpuDsa, 5);
 	p[0] = 6;
-	gpubind(&gpu, Dsa, 6);
-	p = gpuemit(&gpu, Create, Rasterizer, 9);
+	gpubind(&gpu, GpuDsa, 6);
+	p = gpuemit(&gpu, GpuCreate, GpuRasterizer, 9);
 	p[0] = 7;
 	p[1] = 2 | 1U<<29 | 1U<<30;
 	p[2] = p[5] = gpufloat(1);
-	gpubind(&gpu, Rasterizer, 7);
-	p = gpuemit(&gpu, Viewport, 0, 7);
+	gpubind(&gpu, GpuRasterizer, 7);
+	p = gpuemit(&gpu, GpuViewport, 0, 7);
 	p[1] = p[4] = gpufloat(Width/2.);
 	p[2] = p[5] = gpufloat(Height/2.);
 	p[3] = p[6] = gpufloat(.5);
-	p = gpuemit(&gpu, Clearbuf, 0, 8);
+	p = gpuemit(&gpu, GpuClearbuf, 0, 8);
 	p[0] = 4;
 	p[1] = gpufloat(16./255);
 	p[2] = gpufloat(24./255);
 	p[3] = gpufloat(32./255);
 	p[4] = gpufloat(1);
-	p = gpuemit(&gpu, Draw, 0, 12);
+	p = gpuemit(&gpu, GpuDraw, 0, 12);
 	p[1] = 3;
 	p[2] = 4;
 	p[4] = 1;

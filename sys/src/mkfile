@@ -18,6 +18,7 @@ LIBS=\
 	libfis\
 	libframe\
 	libgeometry\
+	libgpu\
 	libhtml\
 	libhttpd\
 	libip\

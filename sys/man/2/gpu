@@ -1,0 +1,86 @@
+.TH GPU 2
+.SH NAME
+gpuinit, gpufini, gpuresource, gpuopen, gpuemit, gpusubmit, gpubind, gpushader, gpufloat \- VirGL file client
+.SH SYNOPSIS
+.B #include <u.h>
+.br
+.B #include <libc.h>
+.br
+.B #include <gpu.h>
+.PP
+.B void gpuinit(Gpu *g, char *device)
+.PP
+.B void gpufini(Gpu *g)
+.PP
+.B u32int gpuresource(Gpu *g, char *description)
+.PP
+.B int gpuopen(Gpu *g, u32int id, int mode)
+.PP
+.B u32int *gpuemit(Gpu *g, int op, int object, int words)
+.PP
+.B void gpusubmit(Gpu *g)
+.PP
+.B void gpubind(Gpu *g, int type, int id)
+.PP
+.B void gpushader(Gpu *g, int id, int type, char *text)
+.PP
+.B u32int gpufloat(float f)
+.SH DESCRIPTION
+These functions encode the VirGL commands used by generated9's native
+rendering clients. They expose the wire protocol rather than a graphics API.
+.PP
+.I Gpuinit
+initializes caller-owned storage, opens
+.IB device /clone
+and the resulting context's command file.
+Nil selects
+.BR #∇ .
+The device path is copied.
+The resulting control descriptor and context slot are available as
+.B g->ctl
+and
+.BR g->slot .
+.I Gpufini
+closes the command and control files and frees the copied path.
+The caller must close resource descriptors separately.
+Closing all context files releases its host resources.
+.PP
+.I Gpuresource
+sends a
+.B resource
+control command with the supplied description and returns the allocated ID.
+.I Gpuopen
+opens that resource with the given mode; the caller owns the descriptor.
+Resource uploads, downloads and removal use control commands documented in
+.IR gpu (3).
+.PP
+.I Gpuemit
+appends a command header and the requested number of zeroed payload words
+to the context's 2048-word command buffer, returning the payload pointer.
+It does not submit automatically; commands must fit in the remaining space.
+.I Gpusubmit
+writes the accumulated commands and waits for device completion.
+The buffer is then reusable.
+.PP
+.I Gpubind
+appends an object binding.
+.I Gpushader
+appends creation and binding of a shader from NUL-terminated TGSI text,
+with a limit of 512 translated TGSI tokens.
+Type zero selects a vertex shader and one selects a fragment shader.
+The host compiles the shader; no guest shader compiler is used.
+.I Gpufloat
+returns a float's 32-bit wire representation.
+.SH SOURCE
+.B /sys/src/libgpu
+.SH SEE ALSO
+.IR gputest (1),
+.IR gpu (3)
+.SH DIAGNOSTICS
+Errors are fatal. The client is synchronous and not thread-safe.
+.SH BUGS
+The interface is experimental and exposes a subset of VirGL v1 encoding.
+It assumes little-endian 32-bit words and IEEE floating-point values and
+has been tested on amd64. It does not validate the semantics of command
+payloads. Device permissions, bounds and host limitations are described in
+.IR gpu (3).

@@ -1,0 +1,7 @@
+</$objtype/mkfile
+
+LIB=/$objtype/lib/libgpu.a
+OFILES=gpu.$O
+HFILES=/sys/include/gpu.h
+
+</sys/src/cmd/mksyslib

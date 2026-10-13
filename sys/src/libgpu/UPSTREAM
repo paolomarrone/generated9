@@ -1,0 +1,20 @@
+VirGL file client
+
+Source: https://gitlab.freedesktop.org/virgl/virglrenderer
+Revision: 4d8bd3c9954a9599e0de70a2e432c761da80398d
+Retrieved from the Chromium mirror:
+https://chromium.googlesource.com/chromiumos/third_party/virglrenderer/+/4d8bd3c9954a9599e0de70a2e432c761da80398d/
+
+References used:
+  src/virgl_protocol.h
+  src/virgl_hw.h
+  src/gallium/include/pipe/p_defines.h
+  tests/test_virgl_cmd.c (virgl_test_render_simple)
+  tests/testvirgl_encode.c
+
+gpu.c was extracted from the native gputest command encoder. It adapts
+VirGL encoding to native Plan 9 C and gpu(3), with a caller-selected device
+directory so the same file interface can be bound elsewhere in a namespace.
+The Red Hat copyright and MIT permission notice are preserved in LICENSE. No renderer, Mesa, TGSI compiler or Linux
+driver is linked into the guest. TGSI text is compiled by host VirGL.
+The device tests and generated9 integration use the root LICENSE.

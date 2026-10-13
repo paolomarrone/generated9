@@ -4,7 +4,7 @@ The amd64 kernel has an experimental native VirtIO GPU driver. `gputest`
 renders a triangle through VirGL, reads its pixels back, checks the result,
 and displays it with libdraw. `teapot` animates the Utah teapot with smooth
 normals, perspective, a depth buffer and per-pixel lighting. Both run
-directly in generated9, using the same small VirGL encoder.
+directly in generated9, using the same small VirGL encoder in `libgpu`.
 
 The host needs QEMU with `virtio-gpu-gl-pci`, virglrenderer, an OpenGL-capable
 display backend, and access to a DRM render node. The guest needs no Mesa,
@@ -18,6 +18,8 @@ Build inside the usual development VM:
 ```rc
 cd /sys/src/9/pc64
 mk
+cd /sys/src/libgpu
+mk install
 cd /sys/src/cmd/gputest
 mk install
 ```

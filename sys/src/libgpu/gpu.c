@@ -1,7 +1,7 @@
 /* VirGL encoding adapted from virglrenderer; see LICENSE and UPSTREAM. */
 #include <u.h>
 #include <libc.h>
-#include "gpu.h"
+#include <gpu.h>
 
 static u32int
 info(Gpu *g)
@@ -20,17 +20,27 @@ info(Gpu *g)
 }
 
 void
-gpuinit(Gpu *g)
+gpuinit(Gpu *g, char *root)
 {
-	char path[64];
+	char *path;
 
 	memset(g, 0, sizeof(*g));
-	g->ctl = open("#∇/clone", ORDWR);
+	g->root = strdup(root == nil ? "#∇" : root);
+	if(g->root == nil)
+		sysfatal("gpu path: %r");
+	path = smprint("%s/clone", g->root);
+	if(path == nil)
+		sysfatal("gpu path: %r");
+	g->ctl = open(path, ORDWR);
+	free(path);
 	if(g->ctl < 0)
 		sysfatal("open gpu: %r");
 	info(g);
-	snprint(path, sizeof(path), "#∇/%d/cmd", g->slot);
+	path = smprint("%s/%d/cmd", g->root, g->slot);
+	if(path == nil)
+		sysfatal("gpu path: %r");
 	g->cmd = open(path, OWRITE);
+	free(path);
 	if(g->cmd < 0)
 		sysfatal("open gpu commands: %r");
 }
@@ -41,6 +51,8 @@ gpufini(Gpu *g)
 	close(g->cmd);
 	close(g->ctl);
 	g->cmd = g->ctl = -1;
+	free(g->root);
+	g->root = nil;
 }
 
 u32int
@@ -54,13 +66,16 @@ gpuresource(Gpu *g, char *desc)
 int
 gpuopen(Gpu *g, u32int id, int mode)
 {
-	char path[64];
+	char *path;
 	int fd;
 
-	snprint(path, sizeof(path), "#∇/%d/%ud", g->slot, id);
+	path = smprint("%s/%d/%ud", g->root, g->slot, id);
+	if(path == nil)
+		sysfatal("gpu path: %r");
 	fd = open(path, mode);
 	if(fd < 0)
 		sysfatal("open %s: %r", path);
+	free(path);
 	return fd;
 }
 
@@ -100,7 +115,7 @@ gpusubmit(Gpu *g)
 void
 gpubind(Gpu *g, int type, int id)
 {
-	gpuemit(g, Bind, type, 1)[0] = id;
+	gpuemit(g, GpuBind, type, 1)[0] = id;
 }
 
 void
@@ -110,13 +125,13 @@ gpushader(Gpu *g, int id, int type, char *text)
 	int n;
 
 	n = strlen(text)+1;
-	p = gpuemit(g, Create, Shader, 5+(n+3)/4);
+	p = gpuemit(g, GpuCreate, GpuShader, 5+(n+3)/4);
 	p[0] = id;
 	p[1] = type;
 	p[2] = n;
 	p[3] = 512;	/* maximum TGSI tokens, including declarations */
 	memmove(p+5, text, n);
-	p = gpuemit(g, Bindshader, 0, 2);
+	p = gpuemit(g, GpuBindshader, 0, 2);
 	p[0] = id;
 	p[1] = type;
 }

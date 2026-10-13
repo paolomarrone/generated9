@@ -109,6 +109,8 @@ Display errors are reported on the kernel console and stop updates until
 the controller is selected again. Device failure still requires rebooting.
 .SH EXAMPLE
 .EX
+cd /sys/src/libgpu
+mk install
 cd /sys/src/cmd/gputest
 mk
 mk test
@@ -127,6 +129,7 @@ echo type virtio > /dev/vgactl
 .br
 .B /sys/src/cmd/gputest
 .SH SEE ALSO
+.IR gpu (2),
 .IR gputest (1),
 .IR teapot (1),
 .IR vga (3),

@@ -1,8 +1,9 @@
 </$objtype/mkfile
 
 TARG=gputest teapot
-OFILES=gpu.$O
-HFILES=gpu.h
+LIB=/$objtype/lib/libgpu.a
+OFILES=
+HFILES=/sys/include/gpu.h
 BIN=/$objtype/bin
 
 default:V: all
@@ -16,7 +17,7 @@ test:V: $PROGS
 
 test: $O.device
 
-$O.teapot: teapot.$O mesh.$O gpu.$O
+$O.teapot: teapot.$O mesh.$O $LIB
 	$LD $LDFLAGS -o $target $prereq
 
 mesh.$O: teapot.h

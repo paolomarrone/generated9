@@ -3,7 +3,7 @@
 #include <draw.h>
 #include <memdraw.h>
 #include <event.h>
-#include "gpu.h"
+#include <gpu.h>
 
 enum { Header = 24 };
 
@@ -76,45 +76,45 @@ setup(ushort **indices)
 	u32int *p, vertex, caps[65];
 	int fd;
 
-	gpuinit(&gpu);
+	gpuinit(&gpu, nil);
 	fd = open("#∇/caps", OREAD);
 	if(fd < 0 || readn(fd, caps, sizeof(caps)) != sizeof(caps))
 		sysfatal("read gpu capabilities: %r");
 	close(fd);
 	/* VirGL v1 advertises depth formats in sampler; float4 vertices are baseline. */
-	if((caps[17] & 1<<Bgra) == 0 || (caps[1] & 1<<Z32) == 0)
+	if((caps[17] & 1<<GpuBgra) == 0 || (caps[1] & 1<<GpuZ32) == 0)
 		sysfatal("gpu lacks BGRA rendering or Z32 depth");
 	teapotmesh(&vertices, indices, &nvertex, &nindex);
 	vertex = buffer(vertices, nvertex*sizeof(*vertices), 16);
 	indexbuf = buffer(*indices, nindex*sizeof(**indices), 32);
 	free(vertices);
-	p = gpuemit(&gpu, Create, Elements, 9);
+	p = gpuemit(&gpu, GpuCreate, GpuElements, 9);
 	p[0] = 3;
-	p[4] = Float4;
+	p[4] = GpuFloat4;
 	p[5] = 16;
-	p[8] = Float4;
-	gpubind(&gpu, Elements, 3);
-	p = gpuemit(&gpu, Vertices, 0, 3);
+	p[8] = GpuFloat4;
+	gpubind(&gpu, GpuElements, 3);
+	p = gpuemit(&gpu, GpuVertices, 0, 3);
 	p[0] = 32;
 	p[2] = vertex;
-	p = gpuemit(&gpu, Indices, 0, 3);
+	p = gpuemit(&gpu, GpuIndices, 0, 3);
 	p[0] = indexbuf;
 	p[1] = 2;
 	gpushader(&gpu, 4, 0, vertexshader);
 	gpushader(&gpu, 5, 1, fragmentshader);
-	p = gpuemit(&gpu, Create, Blend, 11);
+	p = gpuemit(&gpu, GpuCreate, GpuBlend, 11);
 	p[0] = 6;
 	p[3] = 15U<<27;
-	gpubind(&gpu, Blend, 6);
-	p = gpuemit(&gpu, Create, Dsa, 5);
+	gpubind(&gpu, GpuBlend, 6);
+	p = gpuemit(&gpu, GpuCreate, GpuDsa, 5);
 	p[0] = 7;
 	p[1] = 1 | 1<<1 | 1<<2;	/* depth test, depth write, LESS */
-	gpubind(&gpu, Dsa, 7);
-	p = gpuemit(&gpu, Create, Rasterizer, 9);
+	gpubind(&gpu, GpuDsa, 7);
+	p = gpuemit(&gpu, GpuCreate, GpuRasterizer, 9);
 	p[0] = 8;
 	p[1] = 2 | 1U<<29 | 1U<<30;
 	p[2] = p[5] = gpufloat(1);
-	gpubind(&gpu, Rasterizer, 8);
+	gpubind(&gpu, GpuRasterizer, 8);
 	gpusubmit(&gpu);
 }
 
@@ -126,9 +126,9 @@ target(int w, int h)
 	int n;
 
 	if(color != 0){
-		gpuemit(&gpu, Framebuffer, 0, 2);
-		gpuemit(&gpu, Destroy, Surface, 1)[0] = 1;
-		gpuemit(&gpu, Destroy, Surface, 1)[0] = 2;
+		gpuemit(&gpu, GpuFramebuffer, 0, 2);
+		gpuemit(&gpu, GpuDestroy, GpuSurface, 1)[0] = 1;
+		gpuemit(&gpu, GpuDestroy, GpuSurface, 1)[0] = 2;
 		gpusubmit(&gpu);
 		close(imagefd);
 		if(fprint(gpu.ctl, "unref %ud", color) < 0 || fprint(gpu.ctl, "unref %ud", depth) < 0)
@@ -141,24 +141,24 @@ target(int w, int h)
 	pixels = malloc(n);
 	if(pixels == nil)
 		sysfatal("allocate pixels: %r");
-	snprint(desc, sizeof(desc), "2 %d 2 %d %d 1 1 0 0 1 %d", Bgra, w, h, n);
+	snprint(desc, sizeof(desc), "2 %d 2 %d %d 1 1 0 0 1 %d", GpuBgra, w, h, n);
 	color = gpuresource(&gpu, desc);
-	snprint(desc, sizeof(desc), "2 %d 1 %d %d 1 1 0 0 1 %d", Z32, w, h, n);
+	snprint(desc, sizeof(desc), "2 %d 1 %d %d 1 1 0 0 1 %d", GpuZ32, w, h, n);
 	depth = gpuresource(&gpu, desc);
 	imagefd = gpuopen(&gpu, color, OREAD);
-	p = gpuemit(&gpu, Create, Surface, 5);
+	p = gpuemit(&gpu, GpuCreate, GpuSurface, 5);
 	p[0] = 1;
 	p[1] = color;
-	p[2] = Bgra;
-	p = gpuemit(&gpu, Create, Surface, 5);
+	p[2] = GpuBgra;
+	p = gpuemit(&gpu, GpuCreate, GpuSurface, 5);
 	p[0] = 2;
 	p[1] = depth;
-	p[2] = Z32;
-	p = gpuemit(&gpu, Framebuffer, 0, 3);
+	p[2] = GpuZ32;
+	p = gpuemit(&gpu, GpuFramebuffer, 0, 3);
 	p[0] = 1;
 	p[1] = 2;
 	p[2] = 1;
-	p = gpuemit(&gpu, Viewport, 0, 7);
+	p = gpuemit(&gpu, GpuViewport, 0, 7);
 	p[1] = p[4] = gpufloat(w/2.);
 	p[2] = p[5] = gpufloat(h/2.);
 	p[3] = p[6] = gpufloat(.5);
@@ -190,18 +190,18 @@ render(double a)
 	}
 	m[2][3] -= 20./19.5;
 	memmove(m+4, r, sizeof(r));
-	p = gpuemit(&gpu, Constants, 0, 2+7*4);
+	p = gpuemit(&gpu, GpuConstants, 0, 2+7*4);
 	for(i=0; i<7; i++)
 		for(j=0; j<4; j++)
 			p[2+i*4+j] = gpufloat(m[i][j]);
-	p = gpuemit(&gpu, Clearbuf, 0, 8);
+	p = gpuemit(&gpu, GpuClearbuf, 0, 8);
 	p[0] = 5;	/* color and depth */
 	p[1] = gpufloat(16./255);
 	p[2] = gpufloat(24./255);
 	p[3] = gpufloat(32./255);
 	p[4] = gpufloat(1);
 	p[6] = 0x3ff00000;	/* double 1.0 depth */
-	p = gpuemit(&gpu, Draw, 0, 12);
+	p = gpuemit(&gpu, GpuDraw, 0, 12);
 	p[1] = nindex;
 	p[2] = 4;	/* triangles */
 	p[3] = p[4] = 1;
