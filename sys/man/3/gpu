@@ -82,9 +82,19 @@ Control operations, command submission and backing access are serialized.
 All device requests are fenced.
 A command timeout resets and disables the device before releasing DMA memory;
 subsequent rendering requires rebooting the guest.
+.SH EXAMPLE
+.EX
+cd /sys/src/cmd/gputest
+mk
+mk test
+6.out
+.EE
 .SH SOURCE
 .B /sys/src/9/pc/devgpu.c
+.br
+.B /sys/src/cmd/gputest
 .SH SEE ALSO
+.IR gputest (1),
 .IR draw (3)
 .SH BUGS
 This is an experimental privileged interface, not an OpenGL implementation.

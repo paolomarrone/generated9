@@ -176,6 +176,11 @@ The other gojq tests pass.
 For a four-CPU Void Linux live guest with Xfce inside generated9's `vmx`,
 see [VOID.md](VOID.md).
 
+## Native GPU rendering
+
+For generated9's experimental VirtIO GPU driver and native VirGL triangle,
+see [GPU.md](GPU.md).
+
 ## Shared filesystem
 
 QEMU invokes `boot/u9fs` for its guest-only address `10.0.2.1:564`; there is no

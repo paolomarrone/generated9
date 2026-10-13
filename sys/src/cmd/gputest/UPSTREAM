@@ -1,0 +1,32 @@
+VirGL protocol and triangle example
+
+Source: https://gitlab.freedesktop.org/virgl/virglrenderer
+Revision: 4d8bd3c9954a9599e0de70a2e432c761da80398d
+Retrieved from the Chromium mirror:
+https://chromium.googlesource.com/chromiumos/third_party/virglrenderer/+/4d8bd3c9954a9599e0de70a2e432c761da80398d/
+
+References used:
+  src/virgl_protocol.h
+  src/virgl_hw.h
+  src/gallium/include/pipe/p_defines.h
+  tests/test_virgl_cmd.c (virgl_test_render_simple)
+  tests/testvirgl_encode.c
+
+gputest.c adapts the triangle setup and command encoding to native Plan 9
+C, gpu(3), libdraw and libmemdraw. The Red Hat copyright and MIT permission
+notice are preserved in LICENSE. No renderer, Mesa, TGSI compiler or Linux
+driver is linked into the guest. TGSI text is compiled by host VirGL.
+The device tests and generated9 integration use the root LICENSE.
+
+VirtIO GPU transport
+
+Specification: OASIS VirtIO 1.2, section 5.7 (GPU Device)
+https://docs.oasis-open.org/virtio/virtio/v1.2/virtio-v1.2.html
+
+Wire layouts were also checked against include/uapi/linux/virtio_gpu.h,
+Linux v6.12, revision adc218676eef25575469234709c2d87185ca223a:
+https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/uapi/linux/virtio_gpu.h
+Its Red Hat copyright, Dave Airlie and Gerd Hoffmann attribution, and BSD
+permission notice are preserved in sys/src/9/pc/devgpu.c.
+The driver reuses 9front's existing virtio10pc register access and follows
+the PCI capability and split queue conventions of sdvirtio10.c.

@@ -9,8 +9,13 @@ revision `adc218676eef25575469234709c2d87185ca223a`. The original notice is
 preserved in [devgpu.c](sys/src/9/pc/devgpu.c). The transport reuses 9front's
 VirtIO register access and follows its existing PCI and split queue idioms.
 
-New generated9 driver code uses the root [LICENSE](LICENSE); the original
-notice continues to apply to adapted portions.
+The native triangle and command encoder adapt the MIT-licensed tests and
+protocol definitions in virglrenderer, Copyright Red Hat 2014-2015,
+revision `4d8bd3c9954a9599e0de70a2e432c761da80398d`.
+The original [license](sys/src/cmd/gputest/LICENSE) and exact source paths in
+[UPSTREAM](sys/src/cmd/gputest/UPSTREAM) accompany the example.
+New generated9 driver, device tests and integration code use the root
+[LICENSE](LICENSE); the original notices continue to apply to adapted portions.
 
 ## Eigenmath
 

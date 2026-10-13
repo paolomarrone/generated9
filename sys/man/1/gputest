@@ -1,0 +1,41 @@
+.TH GPUTEST 1
+.SH NAME
+gputest \- render and check a VirGL triangle
+.SH SYNOPSIS
+.B gputest
+[
+.B -t
+]
+[
+.B -o
+.I image
+]
+.SH DESCRIPTION
+.I Gputest
+uses
+.IR gpu (3)
+to render a coloured triangle in a 400 by 300 pixel off-screen image.
+It checks the background colour, interpolated centre colour, and triangle
+area after reading the image back from the GPU.
+It then displays the result in a window; type
+.B q
+or delete to exit.
+.PP
+The
+.B -t
+option performs the rendering checks without opening a window.
+The
+.B -o
+option writes the result in Plan 9 image format to
+.I image
+and exits without opening a window.
+Both work from the serial console.
+.PP
+The program uses native Plan 9 C and libraries.
+It sends VirGL commands and TGSI shader text to the host renderer;
+it does not provide an OpenGL API.
+.SH SOURCE
+.B /sys/src/cmd/gputest
+.SH SEE ALSO
+.IR gpu (3),
+.IR image (6)

@@ -1,0 +1,16 @@
+</$objtype/mkfile
+
+TARG=gputest
+OFILES=gputest.$O
+BIN=/$objtype/bin
+CLEANFILES=$O.device device.$O
+TESTDEP=$O.device
+
+</sys/src/cmd/mkone
+
+test:V: $O.out $TESTDEP
+	$O.device
+	$O.out -t
+
+$O.device: device.$O
+	$LD $LDFLAGS -o $target $prereq
