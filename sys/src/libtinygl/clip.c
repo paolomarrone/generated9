@@ -89,7 +89,7 @@ gl_draw_triangle(GLContext *c, GLVertex *a, GLVertex *b, GLVertex *d)
 
 	v[0] = a; v[1] = b; v[2] = d;
 	if(c->clip_enabled == 0){
-		gl_primitive(c,4,v,3);
+		gl_primitive(c,v,3);
 		return;
 	}
 	buf[0][0] = *a; buf[0][1] = *b; buf[0][2] = *d;
@@ -116,7 +116,7 @@ gl_draw_triangle(GLContext *c, GLVertex *a, GLVertex *b, GLVertex *d)
 	v[0] = &buf[side][0];
 	for(i=1; i+1<n; i++){
 		v[1] = &buf[side][i]; v[2] = &buf[side][i+1];
-		gl_primitive(c,4,v,3);
+		gl_primitive(c,v,3);
 	}
 }
 
@@ -129,7 +129,7 @@ gl_draw_line(GLContext *c, GLVertex *a, GLVertex *b)
 
 	if(c->clip_enabled == 0){
 		v[0] = a; v[1] = b;
-		gl_primitive(c,1,v,2);
+		gl_primitive(c,v,2);
 		return;
 	}
 	ends[0] = *a; ends[1] = *b;
@@ -142,7 +142,7 @@ gl_draw_line(GLContext *c, GLVertex *a, GLVertex *b)
 			ends[da < 0 ? 0 : 1] = intersect(&ends[0],&ends[1],da,db);
 	}
 	v[0] = &ends[0]; v[1] = &ends[1];
-	gl_primitive(c,1,v,2);
+	gl_primitive(c,v,2);
 }
 
 void
@@ -153,5 +153,5 @@ gl_draw_point(GLContext *c, GLVertex *a)
 	for(i=0; i<MAX_CLIP_PLANES; i++)
 		if((c->clip_enabled & (1<<i)) && distance(&c->clip_plane[i],a) < 0)
 			return;
-	gl_primitive(c,0,&a,1);
+	gl_primitive(c,&a,1);
 }

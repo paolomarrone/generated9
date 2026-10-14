@@ -283,7 +283,8 @@ void gl_pack(GLPixelstore*, int, int, int, int, const uchar*, int, void*);
 void gl_pixel_format(uchar*, int, int);
 
 /* virgl.c */
-void gl_primitive(GLContext*, int, GLVertex**, int);
+void gl_begin(GLContext*);
+void gl_primitive(GLContext*, GLVertex**, int);
 void gl_draw_triangle(GLContext*, GLVertex*, GLVertex*, GLVertex*);
 void gl_draw_line(GLContext*, GLVertex*, GLVertex*);
 void gl_draw_point(GLContext*, GLVertex*);

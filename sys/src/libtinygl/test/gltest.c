@@ -358,6 +358,51 @@ fragmentstate(void)
 }
 
 static void
+vertexlayouts(void)
+{
+	GLuint texture;
+	uchar rgba[] = {255,0,0,255, 0,255,0,255, 0,0,255,255, 255,255,255,255};
+	double plane[] = {0,0,0,-1};
+
+	clear();
+	glActiveTexture(GL_TEXTURE3);
+	glGenTextures(1,&texture);
+	glBindTexture(GL_TEXTURE_2D,texture);
+	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
+	glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,2,2,0,GL_RGBA,GL_UNSIGNED_BYTE,rgba);
+	glEnable(GL_TEXTURE_2D);
+	glMultiTexCoord4f(GL_TEXTURE3,.75,.25,0,1);
+	glColor3f(1,1,1);
+	texquad();
+	glDisable(GL_TEXTURE_2D);
+	glColor3f(1,0,0);
+	glPointSize(7);
+	glBegin(GL_POINTS);
+	glVertex2f(0,0);
+	glEnd();
+	readback();
+	pixel(16,16,0,255,0,"sparse texture unit");
+	pixel(48,48,0,255,0,"sparse texture coordinates");
+	pixel(32,32,255,0,0,"point after textured triangles");
+	/* A masked clear ignores user clipping and the previous primitive type. */
+	glClipPlane(GL_CLIP_PLANE0,plane);
+	glEnable(GL_CLIP_PLANE0);
+	glScissor(0,0,W/2,H);
+	glEnable(GL_SCISSOR_TEST);
+	clear();
+	readback();
+	pixel(16,16,0,0,255,"clipped masked clear");
+	pixel(48,48,0,255,0,"outside masked clear");
+	glDisable(GL_SCISSOR_TEST);
+	glDisable(GL_CLIP_PLANE0);
+	glPointSize(1);
+	glDeleteTextures(1,&texture);
+	glActiveTexture(GL_TEXTURE0);
+	print("PASS: sparse texture inputs, vertex layout changes and clipped masked clears\n");
+}
+
+static void
 texgenpoints(void)
 {
 	GLuint t;
@@ -1110,6 +1155,7 @@ main(int argc, char **argv)
 	texturepressure(320, 1);
 	texturepressure(20, 1024);
 	fragmentstate();
+	vertexlayouts();
 	texgenpoints();
 	lighting();
 	primitives();

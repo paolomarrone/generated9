@@ -2,7 +2,14 @@
 #include "zgl.h"
 #include <gpu.h>
 
-enum { Nvertex = 8190, Ncomponent = 16+4*MAX_TEXTURE_UNITS };
+enum {
+	Nvertex = 8190,
+	Texcoord = 2,
+	Backcolor = Texcoord+MAX_TEXTURE_UNITS,
+	Pointsize,
+	Nelement,
+	Ncomponent = 4*Nelement,
+};
 
 typedef struct Texkey Texkey;
 typedef struct Shader Shader;
@@ -23,13 +30,15 @@ struct State {
 	int x, y, w, h;
 	u32int raster, sprite, linewidth;
 	int scissor[4];
+	int element[Nelement], stride;	/* offsets and stride in floats */
 };
 struct Render {
 	Gpu gpu;
 	u32int color, depth, vertices;
 	int imagefd, width, height, nvertex, vertexoffset;
 	State state;
-	float vertex[Nvertex][Ncomponent];
+	float vertex[Nvertex*Ncomponent];
+	int element[Nelement];
 	Shader shader[64];
 	u32int sampler[MAX_TEXTURE_UNITS][3];
 	uint nextshader;
@@ -343,7 +352,7 @@ gl_flush(GLContext *c)
 	Gpu *g;
 	State *s;
 	u32int *p;
-	int n;
+	int i, n;
 
 	r = c->opaque;
 	if(r->nvertex == 0)
@@ -352,7 +361,22 @@ gl_flush(GLContext *c)
 	samplers(c);
 	fragment(c);
 	s = &r->state;
-	n = r->nvertex*sizeof(r->vertex[0]);
+	if(memcmp(r->element, s->element, sizeof(r->element)) != 0){
+		/* COLOR always starts at float 4; zero means no element object yet. */
+		if(r->element[1] != 0){
+			gpubind(g, GpuElements, 0);
+			gpuemit(g, GpuDestroy, GpuElements, 1)[0] = 3;
+		}
+		p = gpuemit(g, GpuCreate, GpuElements, 1+Ncomponent);
+		p[0] = 3;
+		for(i=0; i<nelem(s->element); i++){
+			p[1+4*i] = s->element[i]*sizeof(float);
+			p[4+4*i] = GpuFloat4;
+		}
+		gpubind(g, GpuElements, 3);
+		memmove(r->element, s->element, sizeof(r->element));
+	}
+	n = r->nvertex*s->stride*sizeof(float);
 	/* Inline writes are unsynchronized: reuse storage only after a fence. */
 	if(n > sizeof(r->vertex)-r->vertexoffset){
 		gpusubmit(g);
@@ -360,7 +384,7 @@ gl_flush(GLContext *c)
 	}
 	gpuwrite(g, r->vertices, r->vertexoffset, r->vertex, n);
 	p = gpuemit(g, GpuVertices, 0, 3);
-	p[0] = sizeof(r->vertex[0]);
+	p[0] = s->stride*sizeof(float);
 	p[1] = r->vertexoffset;
 	p[2] = r->vertices;
 	r->vertexoffset += n;
@@ -439,19 +463,17 @@ blendfactor(int f)
 	return 0;
 }
 
+/* Raster state is constant between glBegin and glEnd. */
 void
-gl_primitive(GLContext *c, int mode, GLVertex **v, int n)
+gl_begin(GLContext *c)
 {
 	Render *r;
 	State s;
-	V4 *color, *back;
-	float *p, f;
-	int i, j, k, cull, src, dst;
+	int i, mode, cull, src, dst;
 
 	r = c->opaque;
-	if(c->viewport.xsize == 0 || c->viewport.ysize == 0)
-		return;
 	memset(&s, 0, sizeof(s));
+	mode = c->begin_type == GL_POINTS ? 0 : c->begin_type < GL_TRIANGLES ? 1 : 4;
 	s.mode = mode;
 	s.depth = c->depth_test | c->depth_mask<<1 | (c->depth_func-GL_NEVER)<<2
 		| c->alpha_enabled<<8 | (c->alpha_func-GL_NEVER)<<9;
@@ -488,23 +510,61 @@ gl_primitive(GLContext *c, int mode, GLVertex **v, int n)
 		| (c->polygon_mode_front == GL_LINE ? 1 : c->polygon_mode_front == GL_POINT ? 2 : 0)<<10
 		| (c->polygon_mode_back == GL_LINE ? 1 : c->polygon_mode_back == GL_POINT ? 2 : 0)<<12
 		| (c->lighting_enabled && c->light_model_two_side)<<5 | (mode == 0)<<24 | (mode == 0 && c->point_sprite)<<7 | c->offset_fill<<20 | cull<<8 | (!c->current_front_face)<<15 | 1U<<29 | 1U<<30;
-	if(r->nvertex+n > Nvertex || memcmp(&s, &r->state, sizeof(s)) != 0)
+	/* Disabled shader inputs alias live data; only used attributes travel. */
+	s.element[1] = s.element[Backcolor] = 4;
+	s.stride = 8;
+	for(i=0; i<MAX_TEXTURE_UNITS; i++){
+		if(!c->texunit[i].enabled) continue;
+		s.element[Texcoord+i] = s.stride;
+		s.stride += 4;
+	}
+	if(c->lighting_enabled && c->light_model_two_side){
+		s.element[Backcolor] = s.stride;
+		s.stride += 4;
+	}
+	if(mode == 0){
+		s.element[Pointsize] = s.stride;
+		s.stride += 4;
+	}
+	if(memcmp(&s, &r->state, sizeof(s)) != 0)
 		gl_flush(c);
 	r->state = s;
+}
+
+void
+gl_primitive(GLContext *c, GLVertex **v, int n)
+{
+	Render *r;
+	State *s;
+	V4 *color, *back;
+	float *p, f;
+	int i, j, k;
+
+	r = c->opaque;
+	s = &r->state;
+	if(s->w == 0 || s->h == 0)
+		return;
+	if(r->nvertex+n > Nvertex)
+		gl_flush(c);
 	for(i=0; i<n; i++){
-		p = r->vertex[r->nvertex++];
+		p = r->vertex+r->nvertex++*s->stride;
 		color = c->current_shade_model == GL_FLAT ? &c->flat_color : &v[i]->color;
 		back = c->current_shade_model == GL_FLAT ? &c->flat_back_color : &v[i]->back_color;
+		memmove(p, v[i]->pc.v, 4*sizeof(float));
 		for(j=0; j<4; j++){
-			p[j] = v[i]->pc.v[j];
 			f = color->v[j];
 			p[j+4] = f < 0 ? 0 : f > 1 ? 1 : f;
-			f = back->v[j];
-			p[Ncomponent-8+j] = f < 0 ? 0 : f > 1 ? 1 : f;
-			p[Ncomponent-4+j] = v[i]->point_size;
-			for(k=0; k<MAX_TEXTURE_UNITS; k++)
-				p[8+4*k+j] = v[i]->texcoord[k].v[j];
 		}
+		if(s->element[Backcolor] != 4)
+			for(j=0; j<4; j++){
+				f = back->v[j];
+				p[s->element[Backcolor]+j] = f < 0 ? 0 : f > 1 ? 1 : f;
+			}
+		if(s->mode == 0)
+			for(j=0; j<4; j++) p[s->element[Pointsize]+j] = v[i]->point_size;
+		for(k=0; k<MAX_TEXTURE_UNITS; k++)
+			if(s->element[Texcoord+k])
+				memmove(p+s->element[Texcoord+k], v[i]->texcoord[k].v, 4*sizeof(float));
 	}
 }
 
@@ -528,6 +588,8 @@ clearrect(GLContext *c, int mask)
 	clear.blend_enabled = clear.alpha_enabled = clear.cull_face_enabled = 0;
 	clear.offset_fill = clear.lighting_enabled = 0;
 	clear.current_shade_model = GL_SMOOTH;
+	clear.begin_type = GL_TRIANGLES;
+	clear.clip_enabled = 0;
 	clear.polygon_mode_front = clear.polygon_mode_back = GL_FILL;
 	for(i=0; i<MAX_TEXTURE_UNITS; i++) clear.texunit[i].enabled = 0;
 	memset(v, 0, sizeof v);
@@ -538,6 +600,7 @@ clearrect(GLContext *c, int mask)
 		v[i].pc.W = 1;
 		v[i].color = v[i].back_color = c->clear_color;
 	}
+	gl_begin(&clear);
 	gl_draw_triangle(&clear, &v[0], &v[1], &v[2]);
 	gl_draw_triangle(&clear, &v[1], &v[3], &v[2]);
 	gl_flush(&clear);
@@ -630,7 +693,7 @@ tglinit(char *device, int width, int height)
 {
 	Render *r;
 	Gpu *g;
-	u32int *p, caps[65];
+	u32int caps[65];
 	char desc[128], *path, vs[1024], *v, *end;
 	int fd, i;
 
@@ -653,20 +716,13 @@ tglinit(char *device, int width, int height)
 		sysfatal("GPU lacks BGRA rendering or Z32 depth");
 	snprint(desc, sizeof(desc), "0 64 16 %d 1 1 1 0 0 0 %d", sizeof(r->vertex), sizeof(r->vertex));
 	r->vertices = gpuresource(g, desc);
-	p = gpuemit(g, GpuCreate, GpuElements, 1+Ncomponent);
-	p[0] = 3;
-	for(i=0; i<Ncomponent/4; i++){
-		p[1+4*i] = 16*i;
-		p[4+4*i] = GpuFloat4;
-	}
-	gpubind(g, GpuElements, 3);
 	end = vs+sizeof(vs);
-	v = seprint(vs, end, "VERT\nDCL IN[0..%d]\nDCL OUT[0], POSITION\n", 3+MAX_TEXTURE_UNITS);
-	v = seprint(v, end, "DCL OUT[1], COLOR[0]\nDCL OUT[6], BCOLOR[0]\n");
+	v = seprint(vs, end, "VERT\nDCL IN[0..%d]\nDCL OUT[0], POSITION\n", Nelement-1);
+	v = seprint(v, end, "DCL OUT[1], COLOR[0]\nDCL OUT[%d], BCOLOR[0]\n", Backcolor);
 	for(i=0; i<MAX_TEXTURE_UNITS; i++)
-		v = seprint(v, end, "DCL OUT[%d], GENERIC[%d]\n", i+2, i+1);
-	v = seprint(v, end, "DCL OUT[7], PSIZE\n");
-	for(i=0; i<4+MAX_TEXTURE_UNITS; i++)
+		v = seprint(v, end, "DCL OUT[%d], GENERIC[%d]\n", Texcoord+i, i+1);
+	v = seprint(v, end, "DCL OUT[%d], PSIZE\n", Pointsize);
+	for(i=0; i<Nelement; i++)
 		v = seprint(v, end, "MOV OUT[%d], IN[%d]\n", i, i);
 	seprint(v, end, "END\n");
 	gpushader(g, 4, 0, vs);

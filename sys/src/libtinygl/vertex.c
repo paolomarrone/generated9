@@ -89,6 +89,7 @@ void glopBegin(GLContext * c, GLParam * p)
 
 	c->matrix_model_projection_updated = 0;
     }
+    gl_begin(c);
 }
 
 /* Transform to eye and clip coordinates; VirGL clips and rasterizes. */

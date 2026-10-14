@@ -19,6 +19,11 @@ Local adaptations:
 - Inline vertex writes share the buffered command stream with draws. Batches
   occupy disjoint buffer ranges until submission completes; explicit flush,
   readback and resource release preserve command ordering.
+- Raster state is captured once per glBegin. Vertex batches carry position,
+  color and only the enabled texture coordinates, two-sided lighting color
+  and point size they use. Unused shader inputs alias valid attributes;
+  active values keep their original float precision. Element descriptors
+  change with the layout, and buffer reuse still waits for a fence.
 - Explicit rejection of unsupported operations; this is not conformant GL.
 - Correct homogeneous transforms, matrix invalidation when lighting changes,
   general-axis rotation and frustum validation, flat provoking colors for
@@ -48,7 +53,8 @@ Local adaptations:
 - Six user clip planes, captured in eye space through the inverse transpose
   of the modelview matrix. CPU clipping interpolates vertex attributes and
   preserves provoking colors before normal VirGL clipping and rasterization.
-  Display lists evaluate plane transformations when executed.
+  Display lists evaluate plane transformations when executed. Masked clears
+  ignore user clip planes, like ordinary clears.
 
 VirGL encoding derives from the existing generated9 examples and
 virglrenderer at 4d8bd3c9954a9599e0de70a2e432c761da80398d.
