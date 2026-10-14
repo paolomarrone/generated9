@@ -1,59 +1,24 @@
 Eigenmath for generated9
-=======================
 
-This is the command-line Eigenmath computer algebra system by George Weigt.
-It builds with the native Plan 9 compiler, libc and libbio, without APE,
-NPE or a JavaScript runtime. See UPSTREAM for source revisions and licenses.
-
-Build, test and install inside generated9:
+Build with native libc and libbio. On amd64, rebuild 6c first for the NaN
+comparison fix; see boot/README.md.
 
     cd /sys/src/cmd/eigenmath
     mk
     mk test
     mk install
 
-On amd64, use generated9's rebuilt 6c: the bootstrap compiler predates its
-fix for floating-point comparisons involving NaN. See boot/README.md.
-
-Run interactively in a rio window or on the serial console:
-
     eigenmath
-    ? d(sin(x),x)
-    ? integral(x^2,x)
-    ? det(((a,b),(c,d)))
-    ? exit
-
-The question mark is the prompt, not part of the input. Ctrl-D also exits.
-Each interactive line is evaluated separately; use a script or redirected
-input for multiline expressions. Lines are not truncated to 1000 bytes.
-
-From rc:
-
     echo 'd(sin(x),x)' | eigenmath
     eigenmath examples/oscillator
-    eigenmath < examples/oscillator
 
-With no file arguments, Eigenmath reads standard input. A file argument of
-"-" also reads standard input. Several files share one evaluation context;
-execution stops at the first failed file. File arguments do not implicitly
-start an interactive session afterward. run("filename") reads another script.
-Scripts and redirected input retain upstream's 1,000,000-byte size limit.
+With no files, input comes from the console or a pipe. Enter exit or Ctrl-D
+to leave the prompt. See eigenmath(1) for file handling, output and errors.
+The terminal port does not draw graphs.
 
-Results go to standard output, errors to standard error. Evaluation and I/O
-errors return a failing Plan 9 exit status. In interactive mode, an evaluation
-error returns to the prompt; the session retains a failing exit status.
+mk test runs upstream selftest, numeric boundary checks and CLI tests.
+For more upstream examples, run 6.out test/demotest or 6.out test/misctest;
+replace 6 with the architecture's prefix. Runtime tests used amd64.
 
-tty=1 selects linear text output; tty=0 restores two-dimensional formulas.
-Like the upstream command-line front end, draw evaluates to nil and produces
-no graph. The macOS/browser graphical front ends have not been ported.
-
-mk test runs upstream's selftest, numeric boundary checks for the local math
-routines, and native CLI regression tests. Additional upstream examples:
-
-    6.out test/demotest
-    6.out test/misctest
-
-Use your architecture's executable prefix instead of 6 when appropriate.
-Runtime validation has been performed on generated9/amd64.
-
-Eigenmath documentation: https://georgeweigt.github.io/
+Sources and licenses: UPSTREAM.
+Language reference: https://georgeweigt.github.io/

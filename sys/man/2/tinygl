@@ -27,7 +27,6 @@ Matrix transformations and vertex lighting run on the CPU.
 Clipping, interpolation, rasterization and depth testing use VirGL through
 .IR gpu (3).
 Six additional user clip planes are evaluated on the CPU.
-No Mesa, GLX, external compiler or Linux emulation is required in the guest.
 .PP
 .I Tglinit
 creates the process's single current context and an off-screen color/depth
@@ -121,8 +120,7 @@ State changes end the current vertex batch without necessarily submitting it.
 Full command buffers submit automatically; vertex storage is reused only
 after pending work completes.
 .I Tglclose
-finishes pending drawing, closes the GPU context and frees its resources,
-display lists, matrix stacks and other CPU allocations.
+finishes pending drawing, closes the GPU context and frees its allocations.
 A subsequent
 .I tglinit
 creates fresh state.

@@ -1,71 +1,45 @@
 # Working on generated9
 
-generated9 is a development branch of Plan 9/9front. Elegance, generality,
-and simplicity of code and abstractions are primary design requirements.
-A working implementation is necessary; a clear, coherent design is equally
-necessary. Follow the idioms of the subsystem you are changing.
+generated9 is a development branch of Plan 9/9front. Elegance, generality
+and simplicity of code and abstractions are primary requirements.
 
-## Design
+## Design and style
 
-- Seek the smallest coherent mechanism that solves the problem. Remove
-  unnecessary state, indirection, dependencies, and special cases.
-- Generality comes from a precise interface and useful composition. Build
-  abstractions around actual common structure, not hypothetical future uses.
-- Prefer a few orthogonal operations to a growing collection of options,
-  modes, callbacks, and exceptions. Keep policy separate from mechanism
-  where doing so makes the design simpler.
-- Make data representation, ownership, lifetimes, and invariants evident.
-  Keep control flow direct and functions focused. Brevity must not obscure
-  behavior or omit required error handling.
-- Use existing Plan 9 mechanisms where they fit: files, 9P, namespaces,
-  processes, pipes, and small composable programs. Understand their semantics
-  before introducing a new interface or compatibility layer.
-- Remain compatible with upstream 9front whenever practical. Preserve its
-  interfaces, protocols, file formats, and build conventions where possible.
-  Keep divergence small so upstream fixes remain easy to integrate. When a
-  simpler design requires incompatibility, document the reason, affected
-  behavior, and migration path.
-- Prefer fixing the underlying model to adding another workaround. Radical
-  changes are welcome when they simplify the whole design; explain the
-  resulting behavior and any compatibility consequences.
-
-## Code style
-
-- Read nearby code, its mkfiles, and relevant manuals before editing. Local
-  conventions are the reference; do not impose a foreign style on the tree.
-- In native user-space C, follow the existing Plan 9 conventions: `<u.h>`
-  before `<libc.h>`, native types and interfaces, `nil`, `ARGBEGIN` where
-  appropriate, and the established `exits`, `sysfatal`, and `%r` idioms.
-  Kernel and library code must follow their own error and cleanup conventions.
-- Match surrounding indentation, declarations, naming, and brace placement.
-  Use short, meaningful names; add comments for intent, invariants, or subtle
-  constraints rather than paraphrasing the code.
-- Use `mk` and `rc` for native builds and scripts. Host bootstrap tools may
-  use host languages when needed; keep that boundary small and explicit.
-- Keep imported software's conventions within its own code. Isolate the
-  necessary porting changes and avoid unrelated formatting churn.
-- Validate real boundaries and handle failures explicitly. Avoid speculative
-  checks and silent fallbacks that hide broken assumptions.
+- Use the smallest coherent mechanism. Remove unnecessary state, indirection,
+  dependencies and special cases. Fix the model rather than add workarounds.
+- Build abstractions around shared structure, not hypothetical uses.
+  Prefer orthogonal operations; keep policy separate from mechanism.
+- Make ownership, lifetimes and invariants clear. Brevity must preserve
+  correctness and error handling; avoid speculative checks and silent fallbacks.
+- Use Plan 9 files, 9P, namespaces, processes and pipes where they fit.
+  Understand their semantics before adding interfaces or compatibility layers.
+- Preserve upstream interfaces, protocols, formats and build conventions when
+  practical. Explain necessary incompatibilities and how users migrate.
+- Read nearby code, mkfiles and manuals. Match local style, names and types.
+  Native user C uses <u.h> before <libc.h>, nil, ARGBEGIN and Plan 9 errors;
+  kernel and library code follow their subsystem's conventions.
+- Comment intent and non-obvious constraints. Keep control flow direct.
+- Use mk and rc for native work. Keep host bootstrap dependencies separate.
+  Preserve imported code's conventions and isolate porting changes.
 
 ## Changes and validation
 
-- Keep changes focused and reviewable. Avoid new dependencies, frameworks,
-  configuration knobs, or helper layers without a concrete need.
-- Test behavior at the level affected by the change. Prefer a small test
-  that exposes a real regression over tests that mirror the implementation.
-  Documentation-only edits need no runtime test.
-- For the development VM, see `boot/README.md`. Use `boot/test` for changes
-  to boot or shared filesystem behavior; use the native build and relevant
-  subsystem tests for changes to 9front itself. Report what was actually tested.
-- The VM writes directly into the checkout. Keep downloaded images, generated
-  binaries, logs, and mutable guest state out of commits.
+- Keep changes focused. Add dependencies, frameworks or options only for a
+  concrete need. Radical simplification is welcome; explain its consequences.
+- Test behavior and real failure boundaries, not implementation details.
+  Run relevant native checks and report what ran. Documentation needs no
+  runtime test. Use boot/test for boot or file-sharing changes.
+- See boot/README.md for the VM. It writes directly into this checkout;
+  do not commit downloads, binaries, logs or mutable guest state.
+- Keep documentation terse. Put interfaces in manuals, build/test instructions
+  in READMEs and provenance in UPSTREAM/CREDITS.md. Link rather than repeat.
+  Preserve commands, limits and license notices; omit session narratives.
 
 ## History and attribution
 
-- Work on `gen`. `origin` is `paolomarrone/generated9`; `upstream` is 9front.
-  Preserve upstream history and keep commits small enough to understand.
-- Preserve original authorship and license notices. Record the source and
-  exact revision of imported or adapted code in `CREDITS.md` and, where
-  useful, a local `UPSTREAM` file. Follow the component's own license.
-- New generated9 contributions use the root `LICENSE`. Existing components
-  retain their original licenses, including the exceptions in `lib/legal/NOTICE`.
+- Work on gen. origin is paolomarrone/generated9; upstream is 9front.
+  Preserve upstream history and keep commits small and reviewable.
+- Preserve authorship and license notices. Record imported/adapted sources
+  and exact revisions in CREDITS.md and, where useful, a local UPSTREAM file.
+- New contributions use the root LICENSE. Existing components keep their
+  licenses, including the exceptions in lib/legal/NOTICE.

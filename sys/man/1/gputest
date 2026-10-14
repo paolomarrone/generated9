@@ -31,9 +31,8 @@ option writes the result in Plan 9 image format to
 and exits without opening a window.
 Both work from the serial console.
 .PP
-The program uses native Plan 9 C and libraries.
 It sends VirGL commands and TGSI shader text to the host renderer;
-it does not provide an OpenGL API.
+the host compiles the shaders.
 .SH SOURCE
 .B /sys/src/cmd/gputest
 .SH SEE ALSO

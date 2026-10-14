@@ -160,8 +160,6 @@ texture dimensions to 16384, array size to 2048, highest mip level to 14,
 and sample count to 64. The host may impose lower limits.
 Backing size and transfer layout must match the resource format.
 Guest backing limits do not bound the host GPU memory consumed by a resource.
-Buffers, single-level BGRA colour and Z32 depth images, and BGRX display
-resources have been exercised.
 .PP
 QEMU does not propagate all VirGL renderer errors to the guest.
 A successful write confirms transport completion, not a valid rendering result.

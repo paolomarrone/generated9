@@ -26,6 +26,8 @@ Frames are copied into the window with
 .IR draw (2).
 Keyboard, mouse, clipboard and URLs use the native files and plumber.
 Window and cursor operations obey rio's focus and placement policy.
+Fullscreen, placement and decorations belong to rio; window flags cannot
+disable resizing. Pointer warps require the pointer inside the current window.
 .PP
 Audio uses a shared-memory mixer process writing signed 16-bit stereo PCM
 at 44100 Hz to
@@ -75,9 +77,10 @@ limits the number of frames.
 .SH BUGS
 The renderer implements the classic OpenGL path. Programmable shaders,
 render textures, instancing and modern OpenGL examples are unavailable.
-Targets are limited to 2048 by 2048 pixels. One window/context per process
-is supported. Window icons, opacity, gamepads and clipboard images are
-unavailable. Only amd64 with QEMU VirGL has been tested.
+Targets are limited to 2048 by 2048 pixels, with one window/context per process.
+Window icons, opacity, gamepads, touch, clipboard images and physical monitor
+measurements are unavailable. Unsupported window requests log a warning.
+Only amd64 with QEMU VirGL has been tested.
 .PP
 .B FileRename
 supports renaming within one directory, including paths to that directory.

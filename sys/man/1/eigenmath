@@ -62,7 +62,7 @@ Evaluation and I/O errors produce a failing exit status.
 A failed script prevents subsequent command-line files from running.
 Interactive evaluation errors return to the prompt but retain a failing
 session exit status.
-.SH LIMITATIONS
+.SH BUGS
 Scripts and redirected input are limited to 1,000,000 bytes.
 Interactive expressions occupy one line.
 As in the upstream terminal program,

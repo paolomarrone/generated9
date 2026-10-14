@@ -1,6 +1,6 @@
-QuickJS on generated9
+QuickJS for generated9
 
-Build and install inside Plan 9:
+Build with the native compiler and APE:
 
     cd /sys/src/cmd/6c
     mk
@@ -12,75 +12,49 @@ Build and install inside Plan 9:
     mk test
     mk install
 
-The build uses pcc, the native compiler/linker, and APE. It bootstraps qjsc,
-compiles the upstream JavaScript REPL to C, then links qjs. There is no Go or
-host compiler dependency. Binaries are installed in /$objtype/bin.
-
-The amd64 compiler must include generated9's unordered-comparison fix. The
-bootstrap distribution's 6c mishandles NaN comparisons; the first four commands
-above rebuild it. Rebuild existing QuickJS objects afterward. The QuickJS build
-checks NaN equality and fails if the compiler still produces the wrong result.
-
-Examples:
+The bootstrap 6c predates the NaN comparison fix; rebuild it first.
+The build checks that fix, bootstraps qjsc, and compiles the upstream REPL
+into qjs. Binaries go to /$objtype/bin.
 
     qjs -e 'print(2n ** 100n)'
     qjs program.js
     qjs -m module.js
     qjs --std -e 'print(os.platform); print(std.loadFile("/dev/sysname"))'
 
-qjs with no arguments starts the upstream REPL. It uses ANSI terminal escape
-sequences: use the serial terminal or vt under rio. Type \q to leave it.
-Scripts can import the built-in "std" and "os" modules for files, processes,
-environment variables, pipes and timers. os.platform is "plan9". Use /bin/rc
-or /bin/ape/sh when a script needs an explicit shell; /bin/sh is not assumed.
+With no arguments, qjs starts the ANSI REPL. Use a serial terminal or vt
+under rio; type \q to exit. The built-in std and os modules provide files,
+processes, environment, pipes and timers. os.platform is "plan9".
+Use /bin/rc or /bin/ape/sh for an explicit shell; /bin/sh is not assumed.
 
-Ray tracer:
-
-    cd /sys/src/cmd/quickjs
-    qjs examples/raytrace.js > /tmp/spheres.ppm
-    page /tmp/spheres.ppm
-
-Run page inside rio. The script renders three spheres over a checkerboard,
-with shadows, reflections and four samples per pixel. It writes a binary PPM
-to standard output, using only the built-in std module. The default size is
-480 by 300; supply width and height to change it, for example:
+The example ray tracer writes a binary PPM; width and height are optional
+(default 480 by 300). Run page inside rio:
 
     qjs examples/raytrace.js 800 500 > /tmp/spheres.ppm
+    page /tmp/spheres.ppm
 
-qjsc -c produces bytecode in C; qjsc -e adds a main function. The latter can
-be compiled with the same pcc flags and linked with the objects in OFILES in
-mkfile, as exercised by mk test. Automatic executable generation by qjsc is
-not configured. Bytecode must be rebuilt with the corresponding engine version.
+qjsc -c emits bytecode as C; -e adds main. Compile with the pcc flags and
+OFILES in mkfile, as mk test does. Automatic executable generation is not
+configured. Rebuild bytecode when the engine version changes.
 
-Scope and limits
+Limits
 
-This port is validated on generated9/amd64. Other architectures have not been
-validated. The upstream language and module implementation is retained; this
-is not a Node.js runtime and does not provide Node or browser APIs.
+Tested on amd64. Node.js and browser APIs, workers, Atomics and dynamic C
+modules are unavailable. The event loop uses APE select, with descriptors
+0..95. Writable descriptors are reported ready without checking capacity;
+a large pipe write can block. Use small writes or separate processes.
 
-Workers, Atomics and dynamic C modules (.so) are unavailable. The event loop
-uses APE select, whose descriptor range is 0..95; registrations outside that
-range throw. APE reports writable descriptors as ready without checking pipe
-capacity, so a large write can still block. Use small writes or separate
-processes where this matters.
+Plan 9/APE provide no symbolic links. stat has second-resolution times and
+no blocks property; local timezone conversion uses APE's 32-bit time_t.
+Terminal dimensions are unavailable. std.urlGet needs an external curl,
+which this port does not supply.
 
-Filesystem behavior follows Plan 9 and APE: symbolic links are unavailable,
-stat has second-resolution timestamps and no blocks property. Local timezone
-conversion inherits APE's 32-bit time_t range. Terminal dimensions are not
-reported. std.urlGet requires an external curl, which this port does not supply.
+Tests
 
-Validation
+mk test runs upstream language, closure, loop, BigInt, cyclic-import and
+built-in tests, plus native I/O, numeric, process, timer and failure cases.
+It also compiles and runs qjsc output.
 
-mk test runs the unmodified upstream closure, language, loop, BigInt, cyclic
-import and built-in tests. test_plan9.js covers numeric edge cases, UTF-8/JSON
-files, metadata, binary I/O, environment inheritance, process status, pipes,
-descriptor validation and timers. The runner also checks failures for uncaught
-exceptions, recursion and memory limits, and compiles/runs qjsc-generated C.
-
-The full upstream test_std.js assumes Unix shell paths and symbolic links.
-test_rw_handler.js opens more descriptors than APE select supports. Those tests
-and the worker/dynamic-module tests are not included in mk test. The complete
-Test262 suite has not been run; this is not a claim of full conformance.
-
-See doc/quickjs.html for the upstream API manual and UPSTREAM for exact sources,
-local changes and license provenance.
+test_std.js assumes Unix shell paths and links; test_rw_handler.js exceeds
+APE's descriptor limit. These and worker/dynamic-module tests are excluded.
+Test262 has not been run; full conformance is not claimed.
+See doc/quickjs.html for the API and UPSTREAM for sources and licenses.

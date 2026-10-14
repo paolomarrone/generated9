@@ -20,8 +20,7 @@ neverball \- tilt a level to guide a rolling ball
 ]
 .SH DESCRIPTION
 .I Neverball
-runs Neverball 1.6.0 in a rio window using the native C toolchain,
-TinyGL/VirGL, Plan 9 image and font readers, and PCM audio.
+runs Neverball 1.6.0 in a rio window.
 Tilt the floor to collect enough coins and reach the goal before time
 runs out, without falling off the level.
 .PP
@@ -69,4 +68,4 @@ Settings, log, Screenshots, Replays and Scores.
 Requires a VirtIO GPU with VirGL and its host-owner access.
 The native port supports mouse and keyboard, English menus and a rio window;
 fullscreen display modes, gamepads, VR, reflections and multisampling are
-not provided. It is not a port of SDL.
+not provided.

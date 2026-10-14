@@ -16,11 +16,8 @@ glgears \- animate classic OpenGL gears with TinyGL and VirGL
 ]
 .SH DESCRIPTION
 .I Glgears
-runs Brian Paul's classic three-gear scene in a native rio window using
+runs Brian Paul's three-gear scene in a rio window using
 .IR tinygl (2).
-The application uses classic GL display lists, matrices, materials and lights.
-TinyGL transforms and lights vertices on the CPU and submits primitives
-through GPU files for VirGL rasterization and depth testing.
 .PP
 Space pauses rotation, arrow keys rotate the view, and
 .B q
@@ -43,4 +40,4 @@ Without a frame count it renders one measured frame.
 .IR teapot (1)
 .SH BUGS
 Requires the host owner and a VirtIO GPU with VirGL.
-The demo is not an OpenGL conformance test or a general GPU benchmark.
+Window frame rates include copies and are limited by the animation timer.

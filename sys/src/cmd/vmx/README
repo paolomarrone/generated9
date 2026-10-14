@@ -1,257 +1,151 @@
-Multiprocessor guests
+vmx development
 
-Build the host kernel as well as the monitor:
+Build inside generated9:
 
 	cd /sys/src/9/pc64
 	mk
 	cd /sys/src/cmd/vmx
 	mk install
+	mk test
 
-Boot the new kernel before using vmx -P. In the checkout's QEMU environment:
+Boot the new kernel before using the monitor. In the checkout environment:
 
 	./boot/qemu -m 4G -smp 4 -kernel sys/src/9/pc64/9pc64
 
-Inside generated9, for example:
+The outer host needs KVM with nested Intel VMX enabled. Guest options and
+limits are in vmx(1); the kernel interface is in vmx(3). boot/VOID.md gives
+a complete Linux desktop setup with graphics and audio.
 
-	vmx -P 4 -M 512M -c /dev/cons -m initramfs bzImage 'console=ttyS0'
+Execution
 
-Without -P, the existing single-CPU/PIC configuration remains the default.
-With -P 2 or more, each virtual CPU has its own #X instance, registers and
-local APIC. All CPUs map the same memory segment. Kernel processes execute
-the CPUs concurrently; one monitor event loop serializes exits and device
-emulation. Device workers send notifications to that loop. Only the loop
-may select the current CPU or use the register cache.
-The cache keeps a snapshot of the kernel's text register file and converts
-values only when requested. Resuming a CPU invalidates the whole snapshot,
-including values that have not yet been converted.
+Each virtual CPU has a #X instance and local APIC; all share guest memory.
+Kernel processes execute CPUs concurrently. One monitor loop handles exits,
+devices and worker notifications. Only that loop selects the current CPU or
+uses the register cache. Register snapshots are decoded on demand and
+invalidated on resume. HLT/MSR exit fields avoid extra register reads;
+older kernels use the register-file fallback.
 
-The monitor implements xAPIC and x2APIC physical and logical destinations, fixed and
-lowest-priority interrupts, INIT/SIPI, NMIs, local timers, and an I/O APIC
-with 24 pins. Intel MP 1.4 tables describe the CPUs and interrupt routes.
-Both APIC interfaces share the same interrupt and timer state. x2APIC accesses
-use MSRs, avoiding instruction decoding and extra register reads for APIC MMIO.
-The kernel includes MSR operands and HLT flags in exit messages. Kernels without
-these optional fields use the register-file fallback. Guests can still select
-xAPIC (for example, Linux with nox2apic).
-Guest CPU count is limited to 64. There is no ACPI, SMI delivery or
-APIC address relocation. The 9P debugger continues to select CPU 0.
+xAPIC and x2APIC share interrupt and timer state. Intel MP 1.4 tables describe
+CPUs and interrupt routes. ACPI, SMI delivery and APIC relocation are absent;
+the debugger selects CPU 0. The single-CPU default retains the PIC path.
 
-The host kernel adds INIT and NMI control messages, chooses a supported
-EPT page-table memory type, and invalidates the shared VPID after switching
-virtual CPUs. Invalidation and guest entry cannot be interrupted by another
-context switch. An IPI wakes the processor handling a queued VM command,
-instead of waiting for its next clock interrupt. This is necessary to keep
-guest timer handlers from consuming all execution time on an SMP host.
-Before reentering a guest, the kernel yields to runnable processes, allowing
-the monitor awakened by a command to continue without waiting for preemption.
-When virtual CPUs share a host CPU, PAUSE exits yield to other processes so
-a guest spinning on a lock does not keep its holder from running. The kernel
-then executes PAUSE in hardware with a monitor trap, preserving instruction
-semantics and debugger single-step. This requires PAUSE exiting and monitor
-trap support. A CPU that is not shared does not incur these extra exits.
-All CPUs use the host TSC, including time spent outside the guest. If the
-host provides IA32_TSC_ADJUST, a VMCS offset cancels its per-CPU software
-adjustments. This preserves a common hardware clock despite the host's
-approximate boot-time synchronization. Hardware counters must be synchronized;
-without TSC_ADJUST, the host's adjusted counters must be synchronized instead.
-The tsc and tscadjust registers implement guest writes to IA32_TSC and
-IA32_TSC_ADJUST using per-CPU VMCS offsets. They never write the host clock;
-INIT preserves them. The monitor advertises TSC_ADJUST only when the kernel
-provides these registers, and invariant TSC only when the host reports it.
-CPUID describes one thread per core and one package, and reports the TSC/APIC
-frequency ratio at MHz resolution when the host supplies a cycle frequency.
-With invariant TSC and TSC_ADJUST, Linux disables its TSC clocksource watchdog,
-avoiding comparisons against delayed PIT ticks. Its soft-lockup watchdog remains
-enabled; no clocksource or watchdog command-line overrides are needed. The outer
-QEMU CPU must expose invariant TSC too; boot/qemu uses host,migratable=off for KVM.
+An IPI wakes a CPU handling a VM command. Before guest reentry, the kernel
+yields to runnable processes so the monitor can run. When CPUs are shared,
+PAUSE exits yield to other processes, then execute PAUSE under a monitor trap.
+VPID invalidation and guest entry cannot be interrupted by a context switch.
 
-Removing a virtual CPU's ctl, including closing it with ORCLOSE, now destroys
-it immediately. Guest memory is released when its last mapping is removed.
-Open descriptors hold the CPU object alive, without retaining its mappings;
-they cannot reach a new CPU that reuses its directory number. The old practice
-of keeping the last removed CPU for debugging is no longer supported; inspect
-a stopped CPU before removing its ctl.
+Guest TSC uses the host counter plus a per-CPU offset. TSC_ADJUST cancels
+host software adjustments; hardware counters must be synchronized.
+Without it, the host's adjusted counters must already be synchronized.
+Guest writes affect only the virtual offset and survive INIT.
+The monitor advertises invariant TSC only when the host provides it;
+boot/qemu exposes it through KVM's host,migratable=off CPU model.
 
-Accelerated graphics
+Removing ctl releases the CPU and its mappings immediately, including with
+ORCLOSE. Old descriptors cannot reach a reused slot. Inspect a stopped CPU
+before removing it; the last removed CPU is no longer retained for debugging.
 
-With a generated9 VirtIO/VirGL GPU, add -g '#∇' to a framebuffer VM:
+Graphics
 
-	vmx -P 4 -M 2G -w 1024x768 -g '#∇' ...
+-g exposes a modern VirtIO GPU with VirGL capability set 1. Guest rendering
+contexts map to gpu(3) contexts; allocation contexts keep resources alive
+independently. The bridge translates resource IDs; object names, shaders
+and subcontexts pass through. Disk and network retain legacy VirtIO transport.
 
-Build and boot the current host kernel first. The outer QEMU must expose
-virtio-vga-gl with a working OpenGL backend; see boot/GPU.md and boot/VOID.md.
-The guest sees a modern VirtIO PCI GPU with two split queues, one scanout
-and VirGL capability set 1. Its existing Linux DRM and Mesa drivers work
-without guest patches. Disk and network devices retain their legacy transport.
+Query backing is synchronized in both directions so guest resets precede
+reuse. Results are published before their ready flags. Queue workers
+serialize GPU operations and complete fences after host completion;
+interrupts go through the monitor loop.
 
-Each guest rendering context owns a gpu(3) context. Allocation contexts keep
-resources alive independently of rendering contexts; gpu(3)'s attach operation
-shares their backing and host handles. Only resource identifiers in VirGL
-commands are translated. Object names, shaders and subcontexts pass through.
-Query backing is synchronized in both directions on submission: Mesa resets
-it through the guest mapping before reusing a query. Returning only host writes
-would let a later submission overwrite that reset with an old completed result.
-The bridge returns only changed query state and publishes the result before its
-ready flag, which another guest CPU can poll without waiting for the interrupt.
-Queue workers serialize GPU operations and return a guest fence only after the
-host operation completes. Interrupts still go through the monitor event loop.
+There are at most 4096 guest resources, 64 MiB backing per resource,
+32 host contexts and 256 MiB backing per context. Allocation contexts count
+toward the limit. Scatter lists and readback use copies; partial readback
+preserves bytes outside the transfer box. GPU updates wake presentation;
+legacy framebuffers poll every 20 ms. There is no video decoding, Vulkan,
+resource blob transport or GPU passthrough. See gpu(3) and UPSTREAM.gpu.
 
-There are at most 4096 guest resources, with at most 64 MiB backing each.
-The host's 32-context and 256 MiB-per-context limits also apply; allocation
-contexts count toward that limit. Guest scatter lists are copied into native
-resource files, coalescing adjacent entries. Readback preserves guest bytes
-outside the transferred box. Scanout is read back into the existing rio window,
-using the framebuffer's existing changed-row comparison to reduce draw traffic;
-the cursor restores its old area from a separate scanout image. GPU updates wake
-the drawing process directly; legacy framebuffers still poll every 20 ms.
-This is not zero-copy presentation. There is no video codec or Vulkan transport,
-resource blob support or GPU passthrough.
+Audio
 
-Audio output
+-a exposes one VirtIO Sound stream: stereo S16LE PCM at 44100 Hz.
+The backend opens at START and closes at RELEASE/reset. The guest mixes
+and resamples; audio/mixfs can share the host output. There is no input stream.
 
-Add -a /dev/audio to expose a modern VirtIO sound card. The host file must
-accept audio(3)'s stereo signed 16-bit little-endian PCM at 44100 Hz. It is
-opened at START and closed at RELEASE or device reset, so an idle VM does
-not retain the exclusive audio device. A namespace with audio/mixfs can
-share the host output with other native applications. No mixer, resampler
-or input stream is implemented in vmx; the guest handles mixing and format
-conversion through its normal audio stack.
-
-One worker services control and playback queues. Writes to the host file
-pace playback, and stat's length supplies the number of buffered output
-bytes. Control messages take priority between periods. RELEASE publishes
-all queued completions before its response and sends a single interrupt;
-notification happens with no locks or live buffers held, allowing reset
-even if the monitor's notification channel is full. Periods are limited
-to 64 KiB and guest buffers to 1 MiB. The host file must provide bounded
-write backpressure, as audio(3) does; an arbitrary blocked pipe can delay
-control requests and reset.
-
-The wire protocol follows VirtIO 1.2 section 5.14 (Sound Device):
-https://docs.oasis-open.org/virtio/virtio/v1.2/virtio-v1.2.html
-This is new generated9 code under the root license, with no imported
-sound driver or emulator source. See boot/VOID.md for the outer QEMU setup.
+One worker handles control and playback. Host writes pace playback;
+stat's length supplies queued output bytes. Control takes priority between
+periods. RELEASE publishes pending completions before its response;
+notification holds no locks or live buffers. Periods are at most 64 KiB,
+guest buffers at most 1 MiB. The backend must provide bounded write
+backpressure as audio(3) does; a blocked pipe can delay control and reset.
 
 Tests
 
-Inside generated9, mk test checks instruction decoding against real APIC
-MMIO registers, MSR operand widths, priority/EOI behavior, and timer reloads
-with a controlled clock. It runs without VMX hardware. The cases cover 16-
-and 32-bit addressing, and on amd64 also REX prefix ordering, RIP-relative,
-address-size and segment overrides.
-Register-cache tests check snapshot invalidation, partial writes, clean exit
-values, flushing pending writes before a read, and isolation between CPUs.
-HLT and MSR exits exercise the supplied register values without a register read.
-x2APIC tests cover 32-bit physical and logical destinations, broadcast, SELF IPI,
-read-only and reserved registers, reserved bits, mode transitions and INIT.
-The VirtIO tests negotiate modern features, validate queue alignment and size,
-keep enabled queue addresses fixed, transfer data through a real split queue,
-reject invalid descriptor heads and cycles, and return an outstanding buffer
-during device reset. Sound tests check discovery, malformed control requests,
-unsupported formats, exact PCM bytes, stop/start, host open failure and retry,
-RELEASE with queued periods, and reset while the notification channel is full.
-The GPU driver's gputest checks sharing across
-contexts, stale descriptors after reattachment, resource limits and release.
+mk test needs no VMX hardware. It checks instruction decoding, registers,
+APICs, timers, VirtIO queues and sound, including reset and failure paths.
 
-test/virgl.c runs under Linux/Xorg with Mesa and GLX. Build it on Linux with
-the X11 and GL development headers and libraries, then run it inside the guest:
-
-	cc -O2 -o virgl test/virgl.c -lGL -lX11
-	./virgl
-
-It reuses one timestamp query across 300 rendered frames and checks that each
-result advances. This exercises query backing synchronization and the outer
-renderer; boot/VOID.md records an outer EGL polling defect found with it.
-It requires GL_ARB_timer_query or OpenGL 3.3.
-
-test/run is a Linux-host integration test. It boots generated9 with nested
-Intel VMX, builds the native monitor, and runs Linux inside vmx. It requires
-the rebuilt generated9 kernel, KVM with nested VMX enabled, a static Linux C
-toolchain, and Python 3. A Linux bzImage must have SMP, Intel MP table parsing,
-initramfs, devtmpfs, x2APIC, CPU hotplug, Magic SysRq and a serial console enabled.
-Virtio PCI and block support must be built in or supplied as matching host
-modules. Zstd-compressed modules require Python 3.14.
-
-From the checkout root, with a locally installed Linux kernel:
-
-	sys/src/cmd/vmx/test/run /boot/vmlinuz-VERSION --modules VERSION
-
-If virtio is built in, omit --modules. --cpus selects the test matrix
-(default: 1 2 4 8); --host-cpus selects the outer VM's CPU count. For example,
---host-cpus 2 --cpus 4 exercises more virtual CPUs than host CPUs; with TSC
-enabled it also checks that scheduling delays do not cause Linux soft lockups.
---timeout sets the limit in seconds per guest (default: 900).
---xapic selects Linux's nox2apic boot option to test the legacy APIC interface.
-
-Each guest must report exactly the requested number of online CPUs. Threads
-are pinned to separate CPUs and check shared atomic operations, floating
-point state, timers, mapping protection changes, isolated forked address
-spaces, and concurrent direct virtio disk I/O. The workload is repeated
-after two offline/online cycles of each secondary CPU. A SysRq NMI broadcast
-and per-CPU interrupt counters check NMI delivery and local APIC timers.
-SMP guests must select the TSC clocksource without command-line overrides,
-including after CPU hotplug. A five-second guest sleep is compared with the
-outer Linux host's clock (four to seven seconds, allowing scheduling delays).
-The single-CPU test exercises the original PIC path; it does not require TSC.
-That configuration still lacks PIT mode 4, needed for one-shot timer events.
-
-The runner also builds and runs test/6.device on the generated9 host. It checks
-TSC reads and writes, positive and negative adjustments, isolation between CPUs,
-and preservation across INIT. Guest instructions check that RDTSC agrees with
-the register interface and that stepping PAUSE preserves flags and clears RF,
-including when virtual CPUs share a host CPU. The lifetime checks cover
-32 allocation/removal cycles with 64 MiB mappings, ORCLOSE, explicit quit and
-remove, failed opens, concurrent register reads, blocked waits, and stale open
-descriptors and bound directories after slot reuse. It verifies that guest
-pages are released even while old descriptors remain open. RDMSR, WRMSR and HLT
-instructions also check the register values carried by exit messages. To run it alone:
+Device tests require VMX on the generated9 host:
 
 	mk test/6.device
 	test/6.device
 
-In an amd64 generated9 guest, a native process test is also available:
+Inside an amd64 generated9 guest, run the process test with its expected
+CPU count:
 
 	cd /sys/src/cmd/vmx
 	mk test/6.plan9
 	test/6.plan9 2
 
-The argument is the expected number of CPUs. The test counts /dev/sysstat
-entries, pins one process to each CPU, and checks shared atomic increments,
-floating-point state across yields, and the monotonic clock.
+The first checks TSC, exits, stepping and CPU/mapping lifetime. The second
+checks CPU count, pinned processes, shared atomics, floating point and time.
 
-The Linux test creates its own disposable disks. Logs and generated images remain
-under usr/glenda/tmp/vmx-smp-* and are not source files. It does not download
-or vendor Linux or its modules. Check the complete guest and monitor logs
-when investigating a failure; recognizing multiple CPUs alone is not a pass.
+From the Linux host, test/run builds the monitor and boots nested Linux:
 
-Validated on an amd64 generated9 host under Intel nested KVM:
+	sys/src/cmd/vmx/test/run /boot/vmlinuz-VERSION --modules VERSION
 
-	Linux 6.18.56: 1, 2, 4 and 8 CPUs on 4 host CPUs; 4 CPUs on 2 host CPUs.
-	SMP uses x2APIC; the xAPIC fallback also passes with 4 CPUs on 4 host CPUs.
-	generated9: boot to rc and the native process test, with 2 and 4 CPUs
-	            on 2 host CPUs.
+It needs the rebuilt generated9 kernel, nested Intel VMX, Python 3 and a
+static Linux C toolchain. The bzImage needs SMP, Intel MP tables, initramfs,
+devtmpfs, x2APIC, CPU hotplug, Magic SysRq and a serial console. VirtIO PCI
+and block support must be built in or supplied as matching host modules;
+omit --modules for built-ins. Zstd modules require Python 3.14.
 
-The limit of 64 CPUs is not a claim of testing all sizes. The 386 sources
-compile with 8c; runtime tests above used amd64.
+--cpus selects guest counts (default 1 2 4 8); --host-cpus selects the outer
+count (default 4). --host-cpus 2 --cpus 4 exercises oversubscription.
+--xapic tests nox2apic; --timeout sets seconds per guest (default 900).
 
-Architecture references
+Tests cover CPU count, atomics, floating point, timers, memory protection,
+fork isolation, concurrent disk I/O, hotplug and NMI delivery. SMP must use
+TSC without clocksource overrides and keep time across hotplug. The PIC
+path still lacks PIT mode 4 for one-shot timer events. Logs and disposable
+images remain under usr/glenda/tmp/vmx-smp-*; Linux is not downloaded.
 
-Intel 64 Architecture x2APIC Specification, 318148-004 (March 2010):
-sections 2.3, 2.4 and 2.7 cover the MSR interface, destinations and mode transitions.
-https://courses.cs.washington.edu/courses/cse451/21wi/readings/x2apic.pdf
+Validated under amd64 nested KVM with Linux 6.18.56: 1/2/4/8 CPUs on four
+host CPUs, four on two, and the four-CPU xAPIC fallback. Native generated9
+guests passed with two and four CPUs on two host CPUs. The 64-CPU limit is
+not a tested configuration. The 386 sources compile; runtime tests used amd64.
 
-Intel 64 and IA-32 Architectures Software Developer's Manual:
-Volume 2, section 2.2.1: REX prefixes and instruction encoding.
-Volume 2, WRMSR entry: MSR operand widths.
-Volume 3: processor initialization, local APICs, VMX event injection, EPT and VPID.
-Volume 3B, section 19.17.3: IA32_TSC_ADJUST and per-CPU TSC writes.
-Volume 3C: PAUSE exiting and monitor trap flag.
+For the VirGL query regression, build on Linux with X11/GL headers and
+run under Xorg/Mesa in the nested guest:
+
+	cc -O2 -o virgl test/virgl.c -lGL -lX11
+	./virgl
+
+It reuses a timestamp query over 300 frames, requiring increasing results.
+It needs GL_ARB_timer_query or OpenGL 3.3. See boot/VOID.md for the outer
+renderer polling defect this catches.
+
+References
+
+Intel SDM: instruction encoding, WRMSR, initialization, APICs, VMX events,
+EPT/VPID, IA32_TSC_ADJUST, PAUSE exiting and monitor trap flag.
 https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html
 
-Linux 6.18, arch/x86/kernel/tsc.c: check_system_tsc_reliable and
-calibrate_delay_is_known describe clock verification and delay calibration.
+Intel x2APIC Specification, 318148-004 (March 2010), sections 2.3, 2.4, 2.7.
+https://courses.cs.washington.edu/courses/cse451/21wi/readings/x2apic.pdf
+Intel MultiProcessor Specification 1.4: tables and interrupt assignments.
+
+Linux 6.18: check_system_tsc_reliable and calibrate_delay_is_known.
 https://github.com/torvalds/linux/blob/v6.18/arch/x86/kernel/tsc.c
 
-Intel MultiProcessor Specification, version 1.4: configuration tables and
-interrupt assignments. The implementation is new generated9 code; the
-existing vmx code retains its upstream authorship and license.
+VirtIO 1.2: PCI transport (4.1), GPU (5.7) and sound (5.14).
+https://docs.oasis-open.org/virtio/virtio/v1.2/virtio-v1.2.html
+
+See CREDITS.md and UPSTREAM.gpu for provenance and licenses.

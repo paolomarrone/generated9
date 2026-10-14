@@ -18,9 +18,6 @@ neverputt \- three-dimensional miniature golf
 .SH DESCRIPTION
 .I Neverputt
 runs the miniature golf game from Neverball 1.6.0 in a rio window.
-It uses the native C toolchain, TinyGL through VirtIO GPU files,
-Plan 9 image and font readers, and PCM audio.
-.PP
 Select a course and one through four players from the menus.
 Players take turns on the same machine.
 Mouse movement aims and sets shot strength; button 1 advances the shot.
@@ -67,4 +64,4 @@ Settings, log and Screenshots directory.
 Requires a VirtIO GPU with VirGL and its host-owner access.
 The native port supports mouse and keyboard, English menus and a rio window;
 fullscreen display modes, gamepads, VR, reflections and multisampling are
-not provided. It is not a port of SDL.
+not provided.

@@ -1,46 +1,24 @@
-Three native raylib games
+Three raylib games
 
-Build in generated9 after installing libgpu, libtinygl and libraylib:
+Install libgpu, libtinygl and libraylib, then build inside generated9:
 
     cd /sys/src/games/raygames
     mk install
+    mk test
 
-Run inside rio with the same VirtIO GPU/VirGL setup as games/raydemo:
+Run in rio with the VirtIO/VirGL setup from boot/GPU.md:
 
     games/arkanoid
     games/asteroids
     games/missile
 
-Arkanoid: Left/Right move the paddle; Space launches the ball.
-Asteroids: Left/Right turn, Up accelerates, Down brakes; Space fires.
-Missile Commander: point at a target and click button 1, 2 or 3 to fire
-from the left, middle or right launcher. Protect the cities and launchers.
+No external assets are needed. See raygames(1) for controls and options.
+The frame-based logic slows when rendering cannot sustain 60 fps.
+Paused and game-over windows wait for events, except in fixed-frame runs.
 
-All three: P pauses, R restarts, Escape exits. Enter starts another round
-after losing. The arena keeps its aspect ratio when the window is resized;
-mouse aiming uses the same coordinate transform as drawing.
-Paused and game-over windows wait for input or window events instead of
-redrawing continuously. The fixed-frame test option keeps timed frames.
+mk test checks game logic without a window. For a repeatable graphics run:
 
-No game data need to be downloaded. These are small, single-round games
-from the official raylib-games collection, with geometry and a built-in
-font, and no audio. They use raylib's classic rendering path on TinyGL/VirGL
-and the native Plan 9 C toolchain. See UPSTREAM and LICENSE for provenance.
-
-Options: -n frames exits after a fixed frame count; -s seed selects a
-repeatable random sequence; -o file.png captures the last displayed frame.
-The original game logic advances once per frame, paced at 60 fps. It slows
-down if rendering cannot sustain that rate.
-
-Validation:
-
-    mk test
     games/arkanoid -n 120 -s 1 -o /tmp/arkanoid.png
-    games/asteroids -n 120 -s 1 -o /tmp/asteroids.png
-    games/missile -n 120 -s 1 -o /tmp/missile.png
 
-The logic tests need no window. They cover launch, brick collision, loss
-and restart; meteor splitting; rejected aims, simultaneous detonations,
-explosion reuse and expiry, and single scoring of impacts. Interactive checks
-exercise real keyboard/mouse input, pause, restart, resizing and PNG capture in rio.
-The port has been tested on amd64 with QEMU and VirGL.
+The same options work for the other games. Tested on amd64/QEMU VirGL.
+Source revisions, authors and licenses are in UPSTREAM and LICENSE.
