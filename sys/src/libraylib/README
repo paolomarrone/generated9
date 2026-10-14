@@ -60,7 +60,11 @@ Validation (amd64, QEMU with VirGL and an HDA audio device):
 The -a test requires /dev/audio. It checks generated WAV data, resampling,
 playback, stream pause/resume and device recreation. The default tests check
 file operations, packed component layouts, images, texture updates, screen
-capture and repeated window/context creation. The example needs no assets.
+capture and repeated window/context creation. They also inject Unicode
+keyboard records through a pipe and check failed window control requests
+in a private namespace. A separate clock test uses ramfs to simulate clock
+adjustments, checking that elapsed time follows uptime instead of civil time.
+The example needs no assets.
 
 Additional smoke tests used the pinned upstream example assets: OBJ cube,
 IQM guy, glTF robot, M3D Suzanne, VOX fez, the PixAntiqua TrueType font, and

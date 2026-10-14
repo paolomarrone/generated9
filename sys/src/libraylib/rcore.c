@@ -4166,7 +4166,7 @@ void InitTimer(void)
     else TRACELOG(LOG_WARNING, "TIMER: Hi-resolution timer not available");
 #endif
 
-    CORE.Time.base = nsec();
+    CORE.Time.base = uptime();
     CORE.Time.previous = GetTime(); // Get time as double
 }
 

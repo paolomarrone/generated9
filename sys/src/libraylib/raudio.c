@@ -392,7 +392,7 @@ struct rAudioProcessor {
 typedef struct AudioData {
     struct {
         QLock lock;
-        int fd, pid, owner, quit;
+        int fd, owner, quit;
         float volume;
         bool isReady;               // Check if audio device is ready
         size_t pcmBufferSize;       // Pre-allocated buffer size

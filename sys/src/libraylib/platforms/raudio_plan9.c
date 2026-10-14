@@ -40,14 +40,13 @@ InitAudioDevice(void)
 	int pid;
 	char err[ERRMAX];
 
-	if(AUDIO.System.pid != 0) return;
+	if(AUDIO.System.owner != 0) return;
 	AUDIO.System.fd = open("/dev/audio", OWRITE);
 	if(AUDIO.System.fd < 0){
 		rerrstr(err, sizeof err);
 		TraceLog(LOG_WARNING, "AUDIO: Open /dev/audio: %s", err);
 		return;
 	}
-	AUDIO.System.owner = getpid();
 	AUDIO.System.quit = 0;
 	AUDIO.System.volume = 1;
 	AUDIO.System.isReady = true;
@@ -60,7 +59,7 @@ InitAudioDevice(void)
 		return;
 	}
 	if(pid == 0) mixaudio();
-	AUDIO.System.pid = pid;
+	AUDIO.System.owner = getpid();
 	atexit(CloseAudioDevice);
 	TraceLog(LOG_INFO, "AUDIO: /dev/audio, 44100 Hz stereo");
 }
@@ -68,13 +67,13 @@ InitAudioDevice(void)
 void
 CloseAudioDevice(void)
 {
-	if(AUDIO.System.pid == 0 || getpid() != AUDIO.System.owner) return;
+	if(AUDIO.System.owner == 0 || getpid() != AUDIO.System.owner) return;
 	qlock(&AUDIO.System.lock);
 	AUDIO.System.quit = 1;
 	qunlock(&AUDIO.System.lock);
 	while(rendezvous(&AUDIO.System, nil) == (void*)~(uintptr)0) {}
 	close(AUDIO.System.fd);
-	AUDIO.System.pid = 0;
+	AUDIO.System.owner = 0;
 	AUDIO.System.isReady = false;
 	free(AUDIO.System.pcmBuffer);
 	AUDIO.System.pcmBuffer = nil;

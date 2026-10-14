@@ -24,22 +24,24 @@ static struct {
 	Cursor invisible;
 } platform;
 
-static void
+static int
 wctl(char *fmt, ...)
 {
 	va_list arg;
 	char buf[128], err[ERRMAX];
-	int fd, n;
+	int fd, n, ok;
 
 	va_start(arg, fmt);
 	n = vsnprint(buf, sizeof buf, fmt, arg);
 	va_end(arg);
 	fd = open("/dev/wctl", OWRITE);
-	if(fd < 0 || write(fd, buf, n) != n){
+	ok = fd >= 0 && write(fd, buf, n) == n;
+	if(!ok){
 		rerrstr(err, sizeof err);
 		TraceLog(LOG_WARNING, "WINDOW: %s: %s", buf, err);
 	}
 	if(fd >= 0) close(fd);
+	return ok;
 }
 
 void
@@ -78,25 +80,25 @@ bool WindowShouldClose(void) { return !CORE.Window.ready || CORE.Window.shouldCl
 void ToggleFullscreen(void) { TraceLog(LOG_WARNING, "WINDOW: Fullscreen is managed by rio"); }
 void ToggleBorderlessWindowed(void) { TraceLog(LOG_WARNING, "WINDOW: Borders are managed by rio"); }
 void MaximizeWindow(void) { TraceLog(LOG_WARNING, "WINDOW: Maximize is managed by rio"); }
-void MinimizeWindow(void) { wctl("hide"); CORE.Window.flags |= FLAG_WINDOW_MINIMIZED; }
-void RestoreWindow(void) { wctl("unhide"); CORE.Window.flags &= ~FLAG_WINDOW_MINIMIZED; }
+void MinimizeWindow(void) { if(wctl("hide")) CORE.Window.flags |= FLAG_WINDOW_MINIMIZED|FLAG_WINDOW_HIDDEN; }
+void RestoreWindow(void) { if(wctl("unhide")) CORE.Window.flags &= ~(FLAG_WINDOW_MINIMIZED|FLAG_WINDOW_HIDDEN); }
 void SetWindowIcon(Image image) { USED(image); TraceLog(LOG_WARNING, "WINDOW: Icons are unavailable"); }
 void SetWindowIcons(Image *images, int count) { USED(images,count); TraceLog(LOG_WARNING, "WINDOW: Icons are unavailable"); }
 
 void
 SetWindowState(unsigned int flags)
 {
-	if(flags & FLAG_WINDOW_HIDDEN) wctl("hide");
+	if((flags & FLAG_WINDOW_HIDDEN) && wctl("hide")) CORE.Window.flags |= FLAG_WINDOW_HIDDEN;
 	if(flags & ~(FLAG_WINDOW_HIDDEN|FLAG_WINDOW_RESIZABLE))
 		TraceLog(LOG_WARNING, "WINDOW: Unsupported window flags 0x%x", flags & ~(FLAG_WINDOW_HIDDEN|FLAG_WINDOW_RESIZABLE));
-	CORE.Window.flags |= flags & (FLAG_WINDOW_HIDDEN|FLAG_WINDOW_RESIZABLE);
+	CORE.Window.flags |= flags & FLAG_WINDOW_RESIZABLE;
 }
 
 void
 ClearWindowState(unsigned int flags)
 {
-	if(flags & FLAG_WINDOW_HIDDEN) wctl("unhide");
-	CORE.Window.flags &= ~(flags & FLAG_WINDOW_HIDDEN);
+	if((flags & FLAG_WINDOW_HIDDEN) && wctl("unhide"))
+		CORE.Window.flags &= ~(FLAG_WINDOW_HIDDEN|FLAG_WINDOW_MINIMIZED);
 	/* rio windows remain resizable. */
 }
 
@@ -204,7 +206,7 @@ SwapScreenBuffer(void)
 		sysfatal("raylib: present frame: %r");
 }
 
-double GetTime(void) { return (nsec() - CORE.Time.base)*1e-9; }
+double GetTime(void) { return (uptime() - CORE.Time.base)*1e-9; }
 
 void
 OpenURL(const char *url)
@@ -277,7 +279,8 @@ keyboard(char *p)
 
 	if(*p == 'c'){
 		chartorune(&r, p+1);
-		if(r < KF && CORE.Input.Keyboard.charPressedQueueCount < MAX_CHAR_PRESSED_QUEUE)
+		if(r >= ' ' && r != Kdel && (r < KF || r >= Spec+0x100)
+		&& CORE.Input.Keyboard.charPressedQueueCount < MAX_CHAR_PRESSED_QUEUE)
 			CORE.Input.Keyboard.charPressedQueue[CORE.Input.Keyboard.charPressedQueueCount++] = r;
 		key = keycode(r);
 		if(key && CORE.Input.Keyboard.currentKeyState[key] && CORE.Input.Keyboard.previousKeyState[key])

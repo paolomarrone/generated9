@@ -1,5 +1,6 @@
 #include <u.h>
 #include <libc.h>
+#include <keyboard.h>
 #include <raylib.h>
 #define RAYMATH_STATIC_INLINE
 #include <raymath.h>
@@ -7,6 +8,56 @@
 enum { W=160, H=120 };
 static char dir[128];
 static char *original;
+static int keyboardfd;
+
+static void
+windowerrors(void)
+{
+	if(bind("/dev/zero", "/dev/wctl", MREPL) < 0) sysfatal("bind window control: %r");
+	MinimizeWindow();
+	if(IsWindowMinimized()) sysfatal("failed minimize changed window state");
+	SetWindowState(FLAG_WINDOW_HIDDEN);
+	if(IsWindowHidden()) sysfatal("failed hide changed window state");
+	if(unmount(nil, "/dev/wctl") < 0) sysfatal("restore window control: %r");
+	MinimizeWindow();
+	if(!IsWindowMinimized()) sysfatal("minimize window");
+	if(bind("/dev/zero", "/dev/wctl", MREPL) < 0) sysfatal("bind window control: %r");
+	RestoreWindow();
+	ClearWindowState(FLAG_WINDOW_HIDDEN);
+	if(!IsWindowMinimized() || !IsWindowHidden()) sysfatal("failed restore changed window state");
+	if(unmount(nil, "/dev/wctl") < 0) sysfatal("restore window control: %r");
+	RestoreWindow();
+	if(IsWindowMinimized() || IsWindowHidden()) sysfatal("restore window");
+	print("PASS: window state follows successful control requests\n");
+}
+
+static void
+characters(void)
+{
+	Rune input[] = {'A', 0xe8, KF|1, '\t', 0xf900, 0x10400, 0x1f600};
+	int expected[] = {'A', 0xe8, 0xf900, 0x10400, 0x1f600};
+	char buf[64], *p;
+	int i, n, c;
+
+	p = buf;
+	for(i=0; i<nelem(input); i++){
+		*p++ = 'c';
+		p += runetochar(p, &input[i]);
+		*p++ = 0;
+	}
+	if(write(keyboardfd, buf, p-buf) != p-buf) sysfatal("write keyboard: %r");
+	n = 0;
+	for(i=0; i<100; i++){
+		sleep(10);
+		PollInputEvents();
+		while((c=GetCharPressed()) != 0){
+			if(n == nelem(expected) || c != expected[n++]) sysfatal("unexpected character U+%ux", c);
+		}
+		if(n == nelem(expected)) break;
+	}
+	if(n != nelem(expected)) sysfatal("missing Unicode characters: %d", n);
+	print("PASS: Unicode text input excludes control and function keys\n");
+}
 
 static void
 cleanup(void)
@@ -115,6 +166,10 @@ graphics(void)
 		UnloadImage(readback);
 		UnloadModel(model);
 		UnloadTexture(texture);
+		if(pass == 0){
+			windowerrors();
+			characters();
+		}
 		CloseWindow();
 	}
 	print("PASS: model rendering, dynamic textures, screen capture and window/context recreation\n");
@@ -172,7 +227,8 @@ audio(void)
 void
 main(int argc, char **argv)
 {
-	int fd, withaudio;
+	char path[32];
+	int fd, withaudio, kbd[2];
 
 	withaudio = 0;
 	ARGBEGIN{
@@ -189,6 +245,10 @@ main(int argc, char **argv)
 	atexit(cleanup);
 	if(!ChangeDirectory(dir)) sysfatal("change directory");
 	SetTraceLogLevel(LOG_WARNING);
+	if(rfork(RFNAMEG) < 0 || pipe(kbd) < 0) sysfatal("keyboard namespace: %r");
+	snprint(path, sizeof path, "/fd/%d", kbd[0]);
+	if(bind(path, "/dev/kbd", MREPL) < 0) sysfatal("bind test keyboard: %r");
+	keyboardfd = kbd[1];
 	images();
 	files();
 	graphics();
