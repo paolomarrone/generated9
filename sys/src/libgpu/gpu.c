@@ -58,8 +58,19 @@ gpufini(Gpu *g)
 u32int
 gpuresource(Gpu *g, char *desc)
 {
-	if(fprint(g->ctl, "resource %s", desc) < 0)
+	u32int id;
+
+	id = gputryresource(g, desc);
+	if(id == 0)
 		sysfatal("gpu resource: %r");
+	return id;
+}
+
+u32int
+gputryresource(Gpu *g, char *desc)
+{
+	if(fprint(g->ctl, "resource %s", desc) < 0)
+		return 0;
 	return info(g);
 }
 
@@ -129,7 +140,7 @@ gpushader(Gpu *g, int id, int type, char *text)
 	p[0] = id;
 	p[1] = type;
 	p[2] = n;
-	p[3] = 512;	/* maximum TGSI tokens, including declarations */
+	p[3] = 2048;	/* maximum TGSI tokens, including declarations */
 	memmove(p+5, text, n);
 	p = gpuemit(g, GpuBindshader, 0, 2);
 	p[0] = id;

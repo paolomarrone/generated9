@@ -3,9 +3,10 @@
 enum {
 	GpuCreate = 1, GpuBind = 2, GpuDestroy = 3, GpuViewport = 4,
 	GpuFramebuffer = 5, GpuVertices = 6, GpuClearbuf = 7, GpuDraw = 8,
+	GpuSamplerViews = 10, GpuSamplerStates = 18,
 	GpuIndices = 11, GpuConstants = 12, GpuBindshader = 31,
 	GpuBlend = 1, GpuRasterizer = 2, GpuDsa = 3, GpuShader = 4,
-	GpuElements = 5, GpuSurface = 8,
+	GpuElements = 5, GpuSamplerView = 6, GpuSamplerState = 7, GpuSurface = 8,
 	GpuBgra = 1, GpuZ32 = 18, GpuFloat4 = 31,
 };
 
@@ -20,6 +21,7 @@ struct Gpu {
 void gpuinit(Gpu*, char*);
 void gpufini(Gpu*);
 u32int gpuresource(Gpu*, char*);
+u32int gputryresource(Gpu*, char*);
 int gpuopen(Gpu*, u32int, int);
 u32int *gpuemit(Gpu*, int, int, int);
 void gpusubmit(Gpu*);

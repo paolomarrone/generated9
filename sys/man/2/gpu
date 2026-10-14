@@ -1,6 +1,6 @@
 .TH GPU 2
 .SH NAME
-gpuinit, gpufini, gpuresource, gpuopen, gpuemit, gpusubmit, gpubind, gpushader, gpufloat \- VirGL file client
+gpuinit, gpufini, gpuresource, gputryresource, gpuopen, gpuemit, gpusubmit, gpubind, gpushader, gpufloat \- VirGL file client
 .SH SYNOPSIS
 .B #include <u.h>
 .br
@@ -13,6 +13,8 @@ gpuinit, gpufini, gpuresource, gpuopen, gpuemit, gpusubmit, gpubind, gpushader, 
 .B void gpufini(Gpu *g)
 .PP
 .B u32int gpuresource(Gpu *g, char *description)
+.PP
+.B u32int gputryresource(Gpu *g, char *description)
 .PP
 .B int gpuopen(Gpu *g, u32int id, int mode)
 .PP
@@ -49,6 +51,9 @@ Closing all context files releases its host resources.
 sends a
 .B resource
 control command with the supplied description and returns the allocated ID.
+.I Gputryresource
+does the same, but returns zero and sets the error string if the allocation
+command fails, allowing the caller to release resources before retrying.
 .I Gpuopen
 opens that resource with the given mode; the caller owns the descriptor.
 Resource uploads, downloads and removal use control commands documented in
@@ -66,7 +71,7 @@ The buffer is then reusable.
 appends an object binding.
 .I Gpushader
 appends creation and binding of a shader from NUL-terminated TGSI text,
-with a limit of 512 translated TGSI tokens.
+with a limit of 2048 translated TGSI tokens.
 Type zero selects a vertex shader and one selects a fragment shader.
 The host compiles the shader; no guest shader compiler is used.
 .I Gpufloat
@@ -78,7 +83,9 @@ returns a float's 32-bit wire representation.
 .IR tinygl (2),
 .IR gpu (3)
 .SH DIAGNOSTICS
-Errors are fatal. The client is synchronous and not thread-safe.
+Errors are fatal except for allocation failure in
+.IR gputryresource .
+The client is synchronous and not thread-safe.
 .SH BUGS
 The interface is experimental and exposes a subset of VirGL v1 encoding.
 It assumes little-endian 32-bit words and IEEE floating-point values and
