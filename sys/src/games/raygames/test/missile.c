@@ -83,8 +83,14 @@ main(void)
 	if(missile[0].active || score != 100 || explosionIndex != 2)
 		sysfatal("one score per intercepted missile");
 	pressed = KEY_P;
-	UpdateGame();
+	if(UpdateGame()) sysfatal("paused game requests frames");
 	if(!pause) sysfatal("pause");
+	pressed = KEY_P;
+	if(!UpdateGame() || pause) sysfatal("resume requests frames");
+	pressed = 0;
+	gameOver = true;
+	if(UpdateGame()) sysfatal("game over requests frames");
+	pause = true;
 	InitGame();
 	if(pause || gameOver || score || framesCounter || interceptorNumber
 	|| missileIndex || explosionIndex) sysfatal("restart");

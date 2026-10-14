@@ -36,10 +36,15 @@ main(void)
 		sysfatal("one shot must preserve the new fragments");
 
 	pressed = KEY_P;
-	UpdateGame();
+	if(UpdateGame()) sysfatal("paused game requests frames");
 	pressed = 0;
 	if(!pause) sysfatal("pause");
+	pressed = KEY_P;
+	if(!UpdateGame() || pause) sysfatal("resume requests frames");
+	pressed = 0;
 	gameOver = victory = true;
+	if(UpdateGame()) sysfatal("game over requests frames");
+	pause = true;
 	InitGame();
 	if(pause || gameOver || victory || midMeteorsCount || smallMeteorsCount
 	|| destroyedMeteorsCount) sysfatal("restart");

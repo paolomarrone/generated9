@@ -43,6 +43,9 @@ launchers respectively.
 In all three games, P pauses, R restarts and Escape exits.
 Enter starts a new round after losing.
 Resizing preserves the arena's aspect ratio and adjusts mouse aiming.
+Paused and game-over windows wait for events instead of redrawing continuously,
+except during fixed-frame runs with
+.BR -n .
 .PP
 .B -n
 exits after the given number of displayed frames.

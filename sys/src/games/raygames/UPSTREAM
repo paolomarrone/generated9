@@ -21,6 +21,8 @@ Local changes:
 - Native headers, 6c/mk builds and one shared window loop in game.c.
 - Fixed logical arena with aspect-preserving rendering and mouse mapping.
 - Native command-line options, screenshot capture and R to restart.
+- UpdateGame reports whether it needs timed frames. The shared loop uses
+  raylib event waiting while paused or game over, except in fixed-frame tests.
 - Restart resets pause and round counters; no browser or desktop main loop.
 - Initialize Arkanoid's ball radius before positioning it.
 - Place Arkanoid's pause message below the bricks so it remains legible.

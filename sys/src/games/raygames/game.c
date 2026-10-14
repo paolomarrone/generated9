@@ -51,7 +51,8 @@ main(int argc, char **argv)
 		SetMouseOffset(-x,-y);
 		SetMouseScale(1/scale,1/scale);
 		if(IsKeyPressed(KEY_R)) InitGame();
-		UpdateGame();
+		if(UpdateGame() || limit != 0) DisableEventWaiting();
+		else EnableEventWaiting();
 		BeginDrawing();
 		ClearBackground(BLACK);
 		BeginScissorMode(x,y,screenWidth*scale,screenHeight*scale);

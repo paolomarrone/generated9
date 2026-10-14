@@ -29,11 +29,15 @@ main(void)
 
 	pos = ball.position;
 	pressed = KEY_P;
-	UpdateGame();
+	if(UpdateGame()) sysfatal("paused game requests frames");
 	pressed = 0;
 	for(i = 0; i < 10; i++) UpdateGame();
 	if(!pause || ball.position.x != pos.x || ball.position.y != pos.y)
 		sysfatal("pause");
+	pressed = KEY_P;
+	if(!UpdateGame() || pause) sysfatal("resume requests frames");
+	if(UpdateGame()) sysfatal("pause before restart");
+	pressed = 0;
 	InitGame();
 	if(pause || gameOver) sysfatal("restart while paused");
 	for(i = 0; i < PLAYER_MAX_LIFE; i++){
@@ -42,8 +46,9 @@ main(void)
 		UpdateGame();
 	}
 	if(!gameOver || player.life != 0) sysfatal("lost lives");
+	if(UpdateGame()) sysfatal("game over requests frames");
 	pressed = KEY_ENTER;
-	UpdateGame();
+	if(!UpdateGame()) sysfatal("restart requests frames");
 	if(gameOver || player.life != PLAYER_MAX_LIFE) sysfatal("restart after loss");
 	print("arkanoid: ok\n");
 	exits(nil);

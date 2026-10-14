@@ -7,5 +7,5 @@ extern const int screenWidth, screenHeight;
 extern char *gameTitle;
 
 void InitGame(void);
-void UpdateGame(void);
+bool UpdateGame(void); /* true while the game needs timed frames */
 void DrawGame(void);

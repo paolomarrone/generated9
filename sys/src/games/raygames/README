@@ -19,6 +19,8 @@ from the left, middle or right launcher. Protect the cities and launchers.
 All three: P pauses, R restarts, Escape exits. Enter starts another round
 after losing. The arena keeps its aspect ratio when the window is resized;
 mouse aiming uses the same coordinate transform as drawing.
+Paused and game-over windows wait for input or window events instead of
+redrawing continuously. The fixed-frame test option keeps timed frames.
 
 No game data need to be downloaded. These are small, single-round games
 from the official raylib-games collection, with geometry and a built-in

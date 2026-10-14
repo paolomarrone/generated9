@@ -94,7 +94,7 @@ void InitGame(void)
 }
 
 // Update game (one frame)
-void UpdateGame(void)
+bool UpdateGame(void)
 {
     if (!gameOver)
     {
@@ -218,6 +218,7 @@ void UpdateGame(void)
             gameOver = false;
         }
     }
+    return !pause && !gameOver;
 }
 
 // Draw game (one frame)
