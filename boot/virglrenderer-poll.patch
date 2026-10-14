@@ -1,0 +1,44 @@
+Restore the GL context before asynchronous query polling.
+
+Source: virglrenderer 1.3.0, ca50e008863837e094747a69974dde3ae148aeaa
+https://chromium.googlesource.com/chromiumos/third_party/virglrenderer/+/refs/tags/1.3.0/
+
+The caller (for example QEMU's display backend) can change the current GL
+context between polling calls. The synchronous fence path resets the cached
+context before checking queries; the asynchronous path needs the same reset.
+Without it, query reads can run in the wrong GL context and return undefined
+results. Tested with QEMU 11.1.1, the native gpu(3) query reproducer and
+vmx/test/virgl.c inside Void Linux; see boot/VOID.md.
+
+This change follows the upstream MIT license:
+
+Copyright (C) 2014 Red Hat Inc.
+
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the "Software"),
+to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included
+in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+OTHER DEALINGS IN THE SOFTWARE.
+
+diff --git a/src/vrend/vrend_renderer.c b/src/vrend/vrend_renderer.c
+index 4bf88e0..a735d32 100644
+--- a/src/vrend/vrend_renderer.c
++++ b/src/vrend/vrend_renderer.c
+@@ -7299,2 +7299,5 @@ void vrend_renderer_poll(void) {
++      /* The caller may have made an unrelated GL context current. */
++      vrend_renderer_force_ctx_0();
++
+       /* queries must be checked before fences are retired. */
+       vrend_renderer_check_queries();

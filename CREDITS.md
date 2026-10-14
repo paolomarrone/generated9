@@ -108,6 +108,13 @@ recorded in [UPSTREAM.gpu](sys/src/cmd/vmx/UPSTREAM.gpu) and
 [LICENSE.gpu](sys/src/cmd/vmx/LICENSE.gpu). It connects guest VirGL clients
 to generated9's GPU file interface using vmx's existing device transport.
 
+[virglrenderer-poll.patch](boot/virglrenderer-poll.patch) fixes asynchronous
+query polling in the outer host's virglrenderer 1.3.0, revision
+`ca50e008863837e094747a69974dde3ae148aeaa`. The upstream renderer is copyright
+2014 Red Hat Inc.; the patch preserves its copyright and MIT license notice.
+Build instructions are in
+[boot/VOID.md](boot/VOID.md); this library is used only by the outer QEMU.
+
 The multicore work extends 9front's existing vmx monitor and kernel driver,
 introduced by aiju in commits
 [`389ba6bdd9885f7570d8f87ea14b3eba48c000f6`](https://github.com/9front/9front/commit/389ba6bdd9885f7570d8f87ea14b3eba48c000f6)
