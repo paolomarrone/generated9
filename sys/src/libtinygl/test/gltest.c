@@ -53,6 +53,129 @@ texquad(void)
 }
 
 static void
+framebuffers(void)
+{
+	GLuint f[2], t, d, replacement;
+	uchar tex[W*H*4], px[4] = {0,255,0,255};
+	int got;
+
+	tglclose();
+	tglinit(device, W, H);
+	glGenFramebuffers(2, f);
+	if(glIsFramebuffer(f[0])) sysfatal("reserved framebuffer is defined");
+	glBindFramebuffer(GL_FRAMEBUFFER, f[0]);
+	if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT)
+		sysfatal("empty framebuffer completeness");
+	tglresize(48,48);
+	glGetIntegerv(GL_FRAMEBUFFER_BINDING,&got);
+	if(got != f[0] || glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT)
+		sysfatal("resize changed incomplete framebuffer");
+	tglresize(W,H);
+	glGenTextures(1, &t);
+	glBindTexture(GL_TEXTURE_2D, t);
+	glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,W,H,0,GL_RGBA,GL_UNSIGNED_BYTE,nil);
+	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
+	glFramebufferTexture2D(GL_FRAMEBUFFER,GL_COLOR_ATTACHMENT0,GL_TEXTURE_2D,t,0);
+	glGenRenderbuffers(1,&d);
+	glBindRenderbuffer(GL_RENDERBUFFER,d);
+	glRenderbufferStorage(GL_RENDERBUFFER,GL_DEPTH_COMPONENT24,16,16);
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER,GL_DEPTH_ATTACHMENT,GL_RENDERBUFFER,d);
+	if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_INCOMPLETE_DIMENSIONS)
+		sysfatal("mismatched attachment dimensions");
+	glRenderbufferStorage(GL_RENDERBUFFER,GL_DEPTH_COMPONENT24,W,H);
+	if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+		sysfatal("complete framebuffer");
+	clear();
+	glEnable(GL_DEPTH_TEST);
+	glEnable(GL_CULL_FACE);
+	glColor3f(1,0,0); triangle(-.5);
+	glColor3f(0,1,0); triangle(.5);
+	readback();
+	pixel(32,32,255,0,0,"render texture depth and front face");
+	glDisable(GL_DEPTH_TEST);
+	glFrontFace(GL_CW);
+	triangle(0);
+	readback();
+	pixel(32,32,255,0,0,"render texture back-face culling");
+	glFrontFace(GL_CCW);
+	glDisable(GL_CULL_FACE);
+	clear();
+	glEnable(GL_SCISSOR_TEST);
+	glScissor(0,0,W,H/2);
+	glClearColor(1,0,0,1);
+	glClear(GL_COLOR_BUFFER_BIT);
+	glDisable(GL_SCISSOR_TEST);
+	readback();
+	pixel(1,1,0,0,255,"render texture top");
+	pixel(1,H-1,255,0,0,"render texture bottom");
+	glReadPixels(1,1,1,1,GL_RGBA,GL_UNSIGNED_BYTE,tex);
+	if(tex[0] != 255 || tex[1] || tex[2]) sysfatal("framebuffer pixel origin");
+	tglresize(48,48);
+	glGetIntegerv(GL_FRAMEBUFFER_BINDING,&got);
+	if(got != f[0]) sysfatal("resize changed framebuffer binding");
+	readback();
+	pixel(1,H-1,255,0,0,"render texture survives default resize");
+	glBindFramebuffer(GL_FRAMEBUFFER,0);
+	tglresize(W,H);
+	glViewport(0,0,W,H);
+	glColor3f(1,1,1);
+	glEnable(GL_TEXTURE_2D);
+	texquad();
+	readback();
+	pixel(1,1,0,0,255,"sample rendered top");
+	pixel(1,H-1,255,0,0,"sample rendered bottom");
+	glDisable(GL_TEXTURE_2D);
+	glGetTexImage(GL_TEXTURE_2D,0,GL_RGBA,GL_UNSIGNED_BYTE,tex);
+	if(tex[0] != 255 || tex[1] || tex[2]) sysfatal("rendered texture readback");
+	glTexSubImage2D(GL_TEXTURE_2D,0,0,0,1,1,GL_RGBA,GL_UNSIGNED_BYTE,px);
+	glGetTexImage(GL_TEXTURE_2D,0,GL_RGBA,GL_UNSIGNED_BYTE,tex);
+	if(memcmp(tex,px,4) || tex[4] != 255 || tex[5] || tex[6])
+		sysfatal("partial update preserves rendered pixels");
+	glBindFramebuffer(GL_FRAMEBUFFER,f[1]);
+	glFramebufferTexture2D(GL_FRAMEBUFFER,GL_COLOR_ATTACHMENT0,GL_TEXTURE_2D,t,0);
+	glBindFramebuffer(GL_FRAMEBUFFER,0);
+	glDeleteTextures(1,&t);
+	glGenTextures(1,&replacement);
+	glBindTexture(GL_TEXTURE_2D,replacement);
+	glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,1,1,0,GL_RGBA,GL_UNSIGNED_BYTE,px);
+	glBindFramebuffer(GL_FRAMEBUFFER,f[0]);
+	readback();
+	pixel(1,H-1,255,0,0,"deleted name preserves unbound framebuffer attachment");
+	glDeleteFramebuffers(1,&f[0]);
+	glBindFramebuffer(GL_FRAMEBUFFER,f[1]);
+	readback();
+	pixel(1,H-1,255,0,0,"shared framebuffer attachment lifetime");
+	glDeleteFramebuffers(1,&f[1]);
+	glDeleteTextures(1,&replacement);
+	glDeleteRenderbuffers(1,&d);
+
+	glBindFramebuffer(GL_FRAMEBUFFER,f[0]);
+	glGenTextures(1,&t);
+	glBindTexture(GL_TEXTURE_2D,t);
+	glTexImage2D(GL_TEXTURE_2D,0,GL_RGB,W,H,0,GL_RGBA,GL_UNSIGNED_BYTE,nil);
+	glFramebufferTexture2D(GL_FRAMEBUFFER,GL_COLOR_ATTACHMENT0,GL_TEXTURE_2D,t,0);
+	glClearColor(0,0,1,0);
+	glClear(GL_COLOR_BUFFER_BIT);
+	glReadPixels(0,0,1,1,GL_RGBA,GL_UNSIGNED_BYTE,tex);
+	if(tex[3] != 255) sysfatal("RGB framebuffer has alpha");
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_DST_ALPHA,GL_ZERO);
+	glColor4f(1,0,0,0);
+	triangle(0);
+	readback();
+	pixel(32,32,255,0,0,"RGB destination alpha blending");
+	glDisable(GL_BLEND);
+	glGetTexImage(GL_TEXTURE_2D,0,GL_RGBA,GL_UNSIGNED_BYTE,tex);
+	if(tex[3] != 255) sysfatal("rendered RGB texture has alpha");
+	glDeleteTextures(1,&t);
+	if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT)
+		sysfatal("deleted texture still attached to bound framebuffer");
+	glDeleteFramebuffers(1,&f[0]);
+	print("PASS: render textures, depth, orientation, readback, updates, resize and attachment lifetime\n");
+}
+
+static void
 clipplanes(void)
 {
 	double plane[4] = {1,0,0,0}, got[4];
@@ -896,6 +1019,7 @@ errors(void)
 		"target size must", "bad display list id", "invalid viewport",
 		"invalid operation inside glBegin", "display list nesting too deep",
 		"buffer access out of bounds", "buffer access out of bounds",
+		"incomplete framebuffer", "unsupported framebuffer texture attachment",
 	};
 
 	for(i=0; i<nelem(expected); i++){
@@ -929,6 +1053,14 @@ errors(void)
 				glVertexPointer(3, GL_FLOAT, 0, nil);
 				glEnableClientState(GL_VERTEX_ARRAY);
 				glDrawArrays(GL_TRIANGLES, 0, 3);
+				break;
+			case 9:
+				glBindFramebuffer(GL_FRAMEBUFFER,1);
+				glClear(GL_COLOR_BUFFER_BIT);
+				break;
+			case 10:
+				glBindFramebuffer(GL_FRAMEBUFFER,1);
+				glFramebufferTexture2D(GL_FRAMEBUFFER,GL_DEPTH_ATTACHMENT,GL_TEXTURE_2D,0,0);
 				break;
 			}
 			exits("invalid input accepted");
@@ -1178,6 +1310,7 @@ main(int argc, char **argv)
 	lighting();
 	primitives();
 	pixelops();
+	framebuffers();
 	errors();
 	lifetime();
 	exits(nil);

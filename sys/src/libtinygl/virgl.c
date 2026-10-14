@@ -36,6 +36,8 @@ struct State {
 struct Render {
 	Gpu gpu;
 	u32int color, depth, vertices;
+	u32int targetcolor, targetdepth;
+	int targetwidth, targetheight;
 	int imagefd, width, height, nvertex, vertexoffset;
 	State state;
 	float vertex[Nvertex*Ncomponent];
@@ -46,6 +48,51 @@ struct Render {
 	u32int nextview;
 	uvlong clock;
 };
+
+static void
+unbindtarget(Render *r)
+{
+	Gpu *g = &r->gpu;
+	if(r->targetcolor == 0) return;
+	gpuemit(g, GpuFramebuffer, 0, 2);
+	gpuemit(g, GpuDestroy, GpuSurface, 1)[0] = 1;
+	if(r->targetdepth != 0)
+		gpuemit(g, GpuDestroy, GpuSurface, 1)[0] = 2;
+	r->targetcolor = r->targetdepth = 0;
+}
+
+void
+gl_sync_texture(GLContext *c, GLTexture *t)
+{
+	Render *r = c->opaque;
+	GLImage *im;
+	int fd, n;
+
+	if(!t->dirty) return;
+	im = t->image[0];
+	n = im->width*im->height*4;
+	gpusubmit(&r->gpu);
+	fd = gpuopen(&r->gpu, t->resource, OREAD);
+	if(fprint(r->gpu.ctl, "download %ud 0 0 0 0 %d %d 1 0 0 0",
+		t->resource, im->width, im->height) < 0 || pread(fd, im->pixels, n, 0) != n)
+		sysfatal("read rendered texture: %r");
+	close(fd);
+	if(im->format == GL_RGB)
+		gl_pixel_format(im->pixels, im->width*im->height, GL_RGB);
+	t->dirty = 0;
+}
+
+void
+gl_release_depth(GLContext *c, GLRenderbuffer *d)
+{
+	Render *r = c->opaque;
+	if(d->resource == 0) return;
+	if(r->targetdepth == d->resource) unbindtarget(r);
+	gpusubmit(&r->gpu);
+	if(fprint(r->gpu.ctl, "unref %ud", d->resource) < 0)
+		sysfatal("release GL depth: %r");
+	d->resource = 0;
+}
 
 /* Texture state changes flush the batch before changing this state. */
 void
@@ -59,6 +106,8 @@ gl_release_texture(GLContext *c, GLTexture *t)
 		return;
 	r = c->opaque;
 	g = &r->gpu;
+	gl_sync_texture(c, t);
+	if(r->targetcolor == t->resource) unbindtarget(r);
 	p = gpuemit(g, GpuSamplerViews, 0, 2+MAX_TEXTURE_UNITS);
 	p[0] = 1;
 	gpuemit(g, GpuDestroy, GpuSamplerView, 1)[0] = t->view;
@@ -76,7 +125,7 @@ oldtexture(GLContext *c)
 
 	old = nil;
 	for(t=c->textures; t!=nil; t=t->next){
-		if(t->resource == 0)
+		if(t->resource == 0 || t->ref > 1)
 			continue;
 		for(i=0; i<MAX_TEXTURE_UNITS; i++)
 			if(c->texunit[i].enabled && c->texunit[i].texture == t)
@@ -105,6 +154,12 @@ resource(GLContext *c, char *desc)
 	return id;
 }
 
+static int
+textureformat(GLTexture *t)
+{
+	return t->image[0]->format == GL_RGB ? GpuBgrx : GpuBgra;
+}
+
 static void
 uploadtexture(GLContext *c, GLTexture *t, int levels)
 {
@@ -117,15 +172,17 @@ uploadtexture(GLContext *c, GLTexture *t, int levels)
 
 	r = c->opaque;
 	t->used = ++r->clock;
-	if(t->resource != 0)
+	if(t->resource != 0 && t->levels == levels)
 		return;
+	gl_release_texture(c, t);
+	t->levels = levels;
 	g = &r->gpu;
 	bytes = 0;
 	for(i=0; i<levels; i++)
 		bytes += t->image[i]->width*t->image[i]->height*4;
 	im = t->image[0];
-	snprint(desc, sizeof(desc), "2 %d 8 %d %d 1 1 %d 0 0 %d",
-		GpuBgra, im->width, im->height, levels-1, bytes);
+	snprint(desc, sizeof(desc), "2 %d 10 %d %d 1 1 %d 0 0 %d",
+		textureformat(t), im->width, im->height, levels-1, bytes);
 	t->resource = resource(c, desc);
 	t->view = r->nextview++;
 	fd = gpuopen(g, t->resource, OWRITE);
@@ -143,9 +200,56 @@ uploadtexture(GLContext *c, GLTexture *t, int levels)
 	p = gpuemit(g, GpuCreate, GpuSamplerView, 6);
 	p[0] = t->view;
 	p[1] = t->resource;
-	p[2] = GpuBgra;
+	p[2] = textureformat(t);
 	p[4] = (levels-1)<<8;
 	p[5] = 0 | 1<<3 | 2<<6 | 3<<9;
+}
+
+static void
+target(GLContext *c, int writing)
+{
+	Render *r = c->opaque;
+	Gpu *g = &r->gpu;
+	GLFramebuffer *f = c->framebuffer;
+	GLRenderbuffer *d;
+	GLImage *im;
+	u32int color, depth, *p;
+	char desc[128];
+	int w, h;
+
+	color = r->color; depth = r->depth;
+	w = r->width; h = r->height;
+	if(f != nil){
+		if(gl_framebuffer_status(c) != GL_FRAMEBUFFER_COMPLETE)
+			gl_fatal_error("incomplete framebuffer");
+		im = f->color->image[0];
+		w = im->width; h = im->height;
+		uploadtexture(c, f->color, 1);
+		color = f->color->resource;
+		depth = 0;
+		d = f->depth;
+		if(d != nil){
+			if(d->resource == 0){
+				snprint(desc, sizeof(desc), "2 %d 1 %d %d 1 1 0 0 0 %d", GpuZ32, w, h, w*h*4);
+				d->resource = resource(c, desc);
+			}
+			depth = d->resource;
+		}
+		if(writing) f->color->dirty = 1;
+	}
+	if(color == r->targetcolor && depth == r->targetdepth) return;
+	unbindtarget(r);
+	p = gpuemit(g, GpuCreate, GpuSurface, 5);
+	p[0] = 1; p[1] = color;
+	p[2] = f == nil ? GpuBgra : textureformat(f->color);
+	if(depth != 0){
+		p = gpuemit(g, GpuCreate, GpuSurface, 5);
+		p[0] = 2; p[1] = depth; p[2] = GpuZ32;
+	}
+	p = gpuemit(g, GpuFramebuffer, 0, 3);
+	p[0] = 1; p[1] = depth != 0 ? 2 : 0; p[2] = 1;
+	r->targetcolor = color; r->targetdepth = depth;
+	r->targetwidth = w; r->targetheight = h;
 }
 
 static int
@@ -175,6 +279,8 @@ samplers(GLContext *c)
 		if(!c->texunit[i].enabled)
 			continue;
 		t = c->texunit[i].texture;
+		if(c->framebuffer != nil && c->framebuffer->color == t)
+			gl_fatal_error("framebuffer texture feedback");
 		levels = gl_texture_levels(t);
 		if(levels == 0)
 			continue;
@@ -435,14 +541,20 @@ gl_flush(GLContext *c)
 void
 glFlush(void)
 {
-	GLContext *c;
-	Render *r;
-
-	c = gl_get_context();
+	GLContext *c = gl_get_context();
+	Render *r = c->opaque;
 	assert(!c->in_begin);
-	r = c->opaque;
 	gl_flush(c);
-	gpusubmit(&r->gpu);
+	gpuflush(&r->gpu);
+}
+
+void
+glFinish(void)
+{
+	GLContext *c = gl_get_context();
+	Render *r = c->opaque;
+	glFlush();
+	gpuwait(&r->gpu);
 	r->vertexoffset = 0;
 }
 
@@ -475,6 +587,7 @@ gl_begin(GLContext *c)
 	int i, mode, cull, src, dst;
 
 	r = c->opaque;
+	target(c, 1);
 	memset(&s, 0, sizeof(s));
 	s.transform = c->matrix_model_projection;
 	mode = c->begin_type == GL_POINTS ? 0 : c->begin_type < GL_TRIANGLES ? 1 : 4;
@@ -498,7 +611,6 @@ gl_begin(GLContext *c)
 		if(c->current_cull_face != GL_FRONT)
 			cull |= 2;
 	}
-	/* Y_0_TOP resources invert readback; the viewport uses GL coordinates. */
 	s.linewidth = gpufloat(c->line_width > 64 ? 64 : c->line_width);
 	for(i=0; i<4; i++){
 		vlong v = c->scissor[i&1];
@@ -510,10 +622,11 @@ gl_begin(GLContext *c)
 		for(i=0; i<MAX_TEXTURE_UNITS; i++)
 			if(c->point_sprite && c->texunit[i].replace) s.sprite |= 1<<(i+1);
 	}
+	/* Gallium reverses front faces on targets without Y_0_TOP. */
 	s.raster = 2 | c->line_smooth<<26 | c->scissor_enabled<<14
 		| (c->polygon_mode_front == GL_LINE ? 1 : c->polygon_mode_front == GL_POINT ? 2 : 0)<<10
 		| (c->polygon_mode_back == GL_LINE ? 1 : c->polygon_mode_back == GL_POINT ? 2 : 0)<<12
-		| (c->lighting_enabled && c->light_model_two_side)<<5 | (mode == 0)<<24 | (mode == 0 && c->point_sprite)<<7 | c->offset_fill<<20 | cull<<8 | (!c->current_front_face)<<15 | 1U<<29 | 1U<<30;
+		| (c->lighting_enabled && c->light_model_two_side)<<5 | (mode == 0)<<24 | (mode == 0 && c->point_sprite)<<7 | c->offset_fill<<20 | cull<<8 | ((!c->current_front_face) ^ (c->framebuffer != nil))<<15 | 1U<<29 | 1U<<30;
 	/* Disabled shader inputs alias live data; only used attributes travel. */
 	s.element[1] = s.element[Backcolor] = 4;
 	s.stride = 8;
@@ -585,8 +698,8 @@ clearrect(GLContext *c, int mask)
 	clear = *c;
 	gl_M4_Id(&clear.matrix_model_projection);
 	clear.viewport.xmin = clear.viewport.ymin = 0;
-	clear.viewport.xsize = r->width;
-	clear.viewport.ysize = r->height;
+	clear.viewport.xsize = r->targetwidth;
+	clear.viewport.ysize = r->targetheight;
 	clear.depth_test = clear.depth_mask = (mask&GL_DEPTH_BUFFER_BIT) != 0;
 	clear.depth_func = GL_ALWAYS;
 	clear.color_mask = mask&GL_COLOR_BUFFER_BIT ? c->color_mask : 0;
@@ -623,6 +736,7 @@ gl_clear(GLContext *c, int mask)
 		gl_fatal_error("unsupported clear mask");
 	assert(!c->in_begin);
 	gl_flush(c);
+	target(c, 1);
 	if(!c->depth_mask) mask &= ~GL_DEPTH_BUFFER_BIT;
 	if(c->color_mask == 0) mask &= ~GL_COLOR_BUFFER_BIT;
 	if(mask == 0)
@@ -648,7 +762,6 @@ tglresize(int w, int h)
 	Render *r;
 	Gpu *g;
 	char desc[128];
-	u32int *p;
 	int n;
 
 	if(w < 1 || h < 1 || w > 2048 || h > 2048)
@@ -661,9 +774,8 @@ tglresize(int w, int h)
 	gl_flush(c);
 	g = &r->gpu;
 	if(r->color != 0){
-		gpuemit(g, GpuFramebuffer, 0, 2);
-		gpuemit(g, GpuDestroy, GpuSurface, 1)[0] = 1;
-		gpuemit(g, GpuDestroy, GpuSurface, 1)[0] = 2;
+		if(r->targetcolor == r->color)
+			unbindtarget(r);
 		gpusubmit(g);
 		close(r->imagefd);
 		if(fprint(g->ctl, "unref %ud", r->color) < 0
@@ -678,18 +790,6 @@ tglresize(int w, int h)
 	snprint(desc, sizeof(desc), "2 %d 1 %d %d 1 1 0 0 1 %d", GpuZ32, w, h, n);
 	r->depth = resource(c, desc);
 	r->imagefd = gpuopen(g, r->color, OREAD);
-	p = gpuemit(g, GpuCreate, GpuSurface, 5);
-	p[0] = 1;
-	p[1] = r->color;
-	p[2] = GpuBgra;
-	p = gpuemit(g, GpuCreate, GpuSurface, 5);
-	p[0] = 2;
-	p[1] = r->depth;
-	p[2] = GpuZ32;
-	p = gpuemit(g, GpuFramebuffer, 0, 3);
-	p[0] = 1;
-	p[1] = 2;
-	p[2] = 1;
 	gpusubmit(g);
 }
 
@@ -717,7 +817,8 @@ tglinit(char *device, int width, int height)
 	if(fd < 0 || readn(fd, caps, sizeof(caps)) != sizeof(caps))
 		sysfatal("read GPU capabilities: %r");
 	close(fd);
-	if((caps[17] & 1<<GpuBgra) == 0 || (caps[1] & 1<<GpuZ32) == 0)
+	if((caps[17] & 1<<GpuBgra) == 0 || (caps[17] & 1<<GpuBgrx) == 0
+	|| (caps[1] & 1<<GpuZ32) == 0)
 		sysfatal("GPU lacks BGRA rendering or Z32 depth");
 	snprint(desc, sizeof(desc), "0 64 16 %d 1 1 1 0 0 0 %d", sizeof(r->vertex), sizeof(r->vertex));
 	r->vertices = gpuresource(g, desc);
@@ -742,20 +843,35 @@ tglinit(char *device, int width, int height)
 void
 tglread(void *pixels, int bytes)
 {
-	GLContext *c;
-	Render *r;
-	int n;
+	GLContext *c = gl_get_context();
+	Render *r = c->opaque;
+	uchar *p = pixels, *row;
+	int n, fd, y, stride;
 
-	c = gl_get_context();
 	assert(!c->in_begin);
-	r = c->opaque;
-	n = r->width*r->height*4;
-	if(pixels == nil || bytes < n)
-		gl_fatal_error("readback buffer too small");
 	glFlush();
+	target(c, 0);
+	gpusubmit(&r->gpu);
+	stride = r->targetwidth*4;
+	n = stride*r->targetheight;
+	if(pixels == nil || bytes < n) gl_fatal_error("readback buffer too small");
+	fd = c->framebuffer == nil ? r->imagefd : gpuopen(&r->gpu, r->targetcolor, OREAD);
 	if(fprint(r->gpu.ctl, "download %ud 0 0 0 0 %d %d 1 0 0 0",
-		r->color, r->width, r->height) < 0 || pread(r->imagefd, pixels, n, 0) != n)
+		r->targetcolor, r->targetwidth, r->targetheight) < 0 || pread(fd, pixels, n, 0) != n)
 		sysfatal("read GL frame: %r");
+	if(c->framebuffer != nil){
+		close(fd);
+		if(c->framebuffer->color->image[0]->format == GL_RGB)
+			gl_pixel_format(pixels, n/4, GL_RGB);
+		row = gl_malloc(stride);
+		for(y=0; y<r->targetheight/2; y++){
+			memmove(row, p+y*stride, stride);
+			memmove(p+y*stride, p+(r->targetheight-1-y)*stride, stride);
+			memmove(p+(r->targetheight-1-y)*stride, row, stride);
+		}
+		free(row);
+	}
+	r->vertexoffset = 0;
 }
 
 void
@@ -769,19 +885,21 @@ glReadPixels(GLint x, GLint y, GLsizei w, GLsizei h, GLenum fmt, GLenum type, GL
 	c = gl_get_context();
 	assert(!c->in_begin);
 	r = c->opaque;
-	if(x < 0 || y < 0 || w < 0 || h < 0 || x > r->width || y > r->height
-	|| w > r->width-x || h > r->height-y)
+	gl_flush(c);
+	target(c, 0);
+	if(x < 0 || y < 0 || w < 0 || h < 0 || x > r->targetwidth || y > r->targetheight
+	|| w > r->targetwidth-x || h > r->targetheight-y)
 		gl_fatal_error("read pixels outside framebuffer");
 	if(w == 0 || h == 0) return;
-	pixels = gl_malloc(r->width*r->height*4);
-	tglread(pixels, r->width*r->height*4);
+	pixels = gl_malloc(r->targetwidth*r->targetheight*4);
+	tglread(pixels, r->targetwidth*r->targetheight*4);
 	/* Framebuffer luminance is the clamped RGB sum, unlike texture extraction. */
 	if(fmt == GL_LUMINANCE || fmt == GL_LUMINANCE_ALPHA)
-		for(p=pixels, i=0; i<r->width*r->height; i++, p+=4){
+		for(p=pixels, i=0; i<r->targetwidth*r->targetheight; i++, p+=4){
 			l = p[0]+p[1]+p[2];
 			p[2] = l > 255 ? 255 : l;
 		}
-	gl_pack(&c->pack, w, h, fmt, type, pixels+((r->height-1-y)*r->width+x)*4, -r->width*4, out);
+	gl_pack(&c->pack, w, h, fmt, type, pixels+((r->targetheight-1-y)*r->targetwidth+x)*4, -r->targetwidth*4, out);
 	free(pixels);
 }
 
@@ -794,7 +912,9 @@ tglclose(void)
 	c = gl_get_context();
 	assert(!c->in_begin && !c->compile_flag);
 	r = c->opaque;
-	glFlush();
+	glFinish();
+	gl_free_framebuffers(c);
+	gpusubmit(&r->gpu);
 	close(r->imagefd);
 	gpufini(&r->gpu);
 	glClose();

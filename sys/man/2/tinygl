@@ -82,10 +82,26 @@ framebuffer coordinates start at the lower left and must lie inside the target.
 Fixed-function texture environments include modulate, replace, decal, add,
 blend and combine (replace, modulate, add, signed add and interpolate).
 .PP
+Framebuffer objects accept one level-zero RGB or RGBA 2D texture at
+.B GL_COLOR_ATTACHMENT0
+and an optional depth renderbuffer at
+.BR GL_DEPTH_ATTACHMENT .
+Attachments must have equal, nonzero dimensions, at most 2048 by 2048.
+Depth storage uses 32-bit floating point; depth-component formats requesting
+16, 24 or 32 bits are accepted. Check completeness with
+.BR glCheckFramebufferStatus .
+There are no depth textures, stencil attachments, multiple color outputs
+or framebuffer blits. Sampling the active color attachment is rejected.
+Deleting a texture or renderbuffer detaches it from the bound framebuffer;
+attachments in other framebuffers retain it.
+Rendered texture contents are read back only for CPU access or replacement;
+sampling another render target stays on the GPU.
+.PP
 Array strides are byte counts; zero means tightly packed.
 Texture images are retained in guest memory. Under resource pressure,
 unused GPU copies are evicted in order of least recent use and uploaded
-again when needed. Currently enabled textures are kept resident during a draw.
+again when needed. Currently enabled textures and framebuffer attachments
+are kept resident.
 .PP
 Buffer objects store array and index data in guest memory for array capture,
 lighting and user clipping.
@@ -98,8 +114,9 @@ Redefinition preserves the old list until compilation finishes.
 Calls to undefined lists do nothing.
 .PP
 .I Tglresize
-finishes pending drawing and replaces the render target, releasing the old
-resources. Its contents become undefined.
+finishes pending drawing and replaces the default render target, releasing
+its old resources. Its contents become undefined. Texture attachments and
+the current framebuffer binding are preserved.
 It does not change GL state or the viewport: call
 .B glViewport
 as appropriate for the new size.
@@ -107,7 +124,8 @@ Viewport dimensions may be zero and are limited to 4096; coordinates are
 limited to the range -4096 through 4096.
 .PP
 .I Tglread
-finishes pending drawing, downloads the color target and copies it into
+finishes pending drawing, downloads the currently bound color target and
+copies it into
 .IR pixels .
 .I Bytes
 must be at least width times height times four.
@@ -117,7 +135,10 @@ GL window coordinates still have their origin at the lower left.
 The application owns the buffer and chooses how to display or save it.
 .PP
 .B glFlush
-submits pending primitives and waits for completion.
+submits pending primitives without waiting for their completion.
+.B glFinish
+also waits for completion. The next submission may wait for earlier work;
+the device keeps at most one request in flight.
 State changes end the current vertex batch without necessarily submitting it.
 Full command buffers submit automatically; vertex storage is reused only
 after pending work completes.

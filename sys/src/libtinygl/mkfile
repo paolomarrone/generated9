@@ -9,6 +9,7 @@ OFILES=\
 	clear.$O\
 	clip.$O\
 	get.$O\
+	framebuffer.$O\
 	init.$O\
 	light.$O\
 	list.$O\

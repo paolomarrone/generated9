@@ -112,6 +112,7 @@ struct GLTexture {
   GLTexture *next;
   GLuint name;
   int defined, min, mag, wrap[2], generate;
+  int ref, dirty, levels;
   GLImage *image[MAX_TEXTURE_LEVELS];
   u32int resource, view;
   uvlong used;
@@ -175,9 +176,27 @@ struct GLArray {
   GLBuffer *buffer;
 };
 
+typedef struct GLRenderbuffer GLRenderbuffer;
+struct GLRenderbuffer {
+  GLRenderbuffer *next;
+  GLuint name;
+  int defined, ref, width, height, format;
+  u32int resource;
+};
+typedef struct GLFramebuffer GLFramebuffer;
+struct GLFramebuffer {
+  GLFramebuffer *next;
+  GLuint name;
+  int defined;
+  GLTexture *color;
+  GLRenderbuffer *depth;
+};
+
 /* display context */
 
 typedef struct GLContext {
+  GLFramebuffer *framebuffers, *framebuffer;
+  GLRenderbuffer *renderbuffers, *renderbuffer;
   /* lights */
   GLLight lights[MAX_LIGHTS];
   GLLight *first_light;
@@ -307,6 +326,13 @@ void gl_init_textures(GLContext*);
 void gl_free_textures(GLContext*);
 void gl_release_texture(GLContext*, GLTexture*);
 int gl_texture_levels(GLTexture*);
+GLTexture *gl_find_texture(GLContext*, GLuint);
+void gl_unref_texture(GLContext*, GLTexture*);
+void gl_sync_texture(GLContext*, GLTexture*);
+void gl_release_depth(GLContext*, GLRenderbuffer*);
+int gl_framebuffer_status(GLContext*);
+void gl_free_framebuffers(GLContext*);
+
 
 
 /* specular buffer "api" */

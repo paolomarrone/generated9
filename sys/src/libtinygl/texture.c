@@ -1,8 +1,8 @@
 /* Texture objects, pixel unpacking and fixed-function texture state. */
 #include "zgl.h"
 
-static GLTexture*
-findtexture(GLContext *c, GLuint name)
+GLTexture*
+gl_find_texture(GLContext *c, GLuint name)
 {
 	GLTexture *t;
 
@@ -19,6 +19,7 @@ newtexture(GLContext *c, GLuint name)
 
 	t = gl_zalloc(sizeof(*t));
 	t->name = name;
+	t->ref = 1;
 	t->min = GL_NEAREST_MIPMAP_LINEAR;
 	t->mag = GL_LINEAR;
 	t->wrap[0] = t->wrap[1] = GL_REPEAT;
@@ -72,7 +73,7 @@ glGenTextures(int n, unsigned int *names)
 		gl_fatal_error("invalid texture count");
 	name = 1;
 	while(n-- > 0){
-		while(name != 0 && findtexture(c, name) != nil)
+		while(name != 0 && gl_find_texture(c, name) != nil)
 			name++;
 		if(name == 0)
 			gl_fatal_error("texture names exhausted");
@@ -89,7 +90,7 @@ glIsTexture(GLuint name)
 
 	c = gl_get_context();
 	assert(!c->in_begin);
-	t = findtexture(c, name);
+	t = gl_find_texture(c, name);
 	return name != 0 && t != nil && t->defined;
 }
 
@@ -100,7 +101,7 @@ glopBindTexture(GLContext *c, GLParam *p)
 
 	if(p[1].i != GL_TEXTURE_2D)
 		gl_fatal_error("unsupported texture target");
-	t = findtexture(c, p[2].ui);
+	t = gl_find_texture(c, p[2].ui);
 	if(t == nil)
 		t = newtexture(c, p[2].ui);
 	gl_flush(c);
@@ -115,6 +116,17 @@ freeimages(GLTexture *t)
 
 	for(i=0; i<MAX_TEXTURE_LEVELS; i++)
 		free(t->image[i]);
+}
+
+void
+gl_unref_texture(GLContext *c, GLTexture *t)
+{
+	if(t != nil && --t->ref == 0){
+		t->dirty = 0;	/* Deleted contents need no readback. */
+		gl_release_texture(c, t);
+		freeimages(t);
+		free(t);
+	}
 }
 
 void
@@ -135,11 +147,13 @@ glDeleteTextures(int n, const unsigned int *names)
 				continue;
 			for(i=0; i<MAX_TEXTURE_UNITS; i++)
 				if(c->texunit[i].texture == t)
-					c->texunit[i].texture = findtexture(c, 0);
-			gl_release_texture(c, t);
+					c->texunit[i].texture = gl_find_texture(c, 0);
+			if(c->framebuffer != nil && c->framebuffer->color == t){
+				c->framebuffer->color = nil;
+				gl_unref_texture(c, t);
+			}
 			*link = t->next;
-			freeimages(t);
-			free(t);
+			gl_unref_texture(c, t);
 			break;
 		}
 		names++;
@@ -649,6 +663,8 @@ glGetTexImage(GLenum target, GLint level, GLenum fmt, GLenum type, GLvoid *pixel
 	assert(!c->in_begin);
 	if(target != GL_TEXTURE_2D || level < 0 || level >= MAX_TEXTURE_LEVELS)
 		gl_fatal_error("invalid texture image query");
+	gl_flush(c);
+	gl_sync_texture(c, c->texunit[c->active_texture].texture);
 	im = c->texunit[c->active_texture].texture->image[level];
 	if(im != nil) gl_pack(&c->pack, im->width, im->height, fmt, type, im->pixels, im->width*4, pixels);
 }

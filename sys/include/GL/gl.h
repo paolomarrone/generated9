@@ -862,6 +862,42 @@ void glTexCoordPointer(GLint size, GLenum type, GLsizei stride,
 /* opengl 1.2 polygon offset */
 void glPolygonOffset(GLfloat factor, GLfloat units);
 
+/* Framebuffer objects: one 2D color texture and optional depth renderbuffer. */
+enum {
+    GL_FRAMEBUFFER = 0x8D40, GL_RENDERBUFFER = 0x8D41,
+    GL_FRAMEBUFFER_BINDING = 0x8CA6, GL_DRAW_FRAMEBUFFER_BINDING = 0x8CA6,
+    GL_RENDERBUFFER_BINDING = 0x8CA7,
+    GL_COLOR_ATTACHMENT0 = 0x8CE0, GL_DEPTH_ATTACHMENT = 0x8D00,
+    GL_STENCIL_ATTACHMENT = 0x8D20, GL_TEXTURE_CUBE_MAP_POSITIVE_X = 0x8515,
+    GL_FRAMEBUFFER_COMPLETE = 0x8CD5,
+    GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT = 0x8CD6,
+    GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT = 0x8CD7,
+    GL_FRAMEBUFFER_INCOMPLETE_DIMENSIONS = 0x8CD9,
+    GL_FRAMEBUFFER_UNSUPPORTED = 0x8CDD,
+    GL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE = 0x8CD0,
+    GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME = 0x8CD1,
+    GL_FRAMEBUFFER_ATTACHMENT_TEXTURE_LEVEL = 0x8CD2,
+    GL_RENDERBUFFER_WIDTH = 0x8D42, GL_RENDERBUFFER_HEIGHT = 0x8D43,
+    GL_RENDERBUFFER_INTERNAL_FORMAT = 0x8D44,
+    GL_DEPTH_COMPONENT16 = 0x81A5, GL_DEPTH_COMPONENT24 = 0x81A6,
+    GL_DEPTH_COMPONENT32 = 0x81A7, GL_DEPTH_COMPONENT32F = 0x8CAC
+};
+void glGenFramebuffers(GLsizei, GLuint*);
+void glDeleteFramebuffers(GLsizei, const GLuint*);
+void glBindFramebuffer(GLenum, GLuint);
+GLboolean glIsFramebuffer(GLuint);
+GLenum glCheckFramebufferStatus(GLenum);
+void glFramebufferTexture2D(GLenum, GLenum, GLenum, GLuint, GLint);
+void glFramebufferRenderbuffer(GLenum, GLenum, GLenum, GLuint);
+void glGetFramebufferAttachmentParameteriv(GLenum, GLenum, GLenum, GLint*);
+void glGenRenderbuffers(GLsizei, GLuint*);
+void glDeleteRenderbuffers(GLsizei, const GLuint*);
+void glBindRenderbuffer(GLenum, GLuint);
+GLboolean glIsRenderbuffer(GLuint);
+void glRenderbufferStorage(GLenum, GLenum, GLsizei, GLsizei);
+void glGetRenderbufferParameteriv(GLenum, GLenum, GLint*);
+void glFinish(void);
+
 /* non compatible functions */
 
 void glDebug(int mode);

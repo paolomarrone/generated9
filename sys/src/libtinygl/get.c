@@ -6,6 +6,8 @@ void glGetIntegerv(int pname,int *params)
 
   assert(!c->in_begin);
   switch(pname) {
+  case GL_FRAMEBUFFER_BINDING: *params = c->framebuffer == nil ? 0 : c->framebuffer->name; break;
+  case GL_RENDERBUFFER_BINDING: *params = c->renderbuffer == nil ? 0 : c->renderbuffer->name; break;
   case GL_ARRAY_BUFFER_BINDING:
     *params = c->array_buffer == nil ? 0 : c->array_buffer->name;
     break;

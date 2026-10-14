@@ -17,13 +17,19 @@ Local adaptations:
   rasterization and depth testing use VirGL; lighting remains on the CPU.
   Frame readback returns top-down XRGB32 bytes; window policy stays in the app.
 - Inline vertex writes share the buffered command stream with draws. Batches
-  occupy disjoint buffer ranges until submission completes; explicit flush,
+  occupy disjoint buffer ranges until their fence completes; asynchronous flush,
   readback and resource release preserve command ordering.
 - Raster state is captured once per glBegin. Vertex batches carry position,
   color and only the enabled texture coordinates, two-sided lighting color
   and point size they use. Unused shader inputs alias valid attributes;
   active values keep their original float precision. Element descriptors
   change with the layout, and buffer reuse still waits for a fence.
+- Framebuffer objects retain color textures and depth renderbuffers. Rendering
+  and sampling use GPU storage; CPU reads and updates synchronize dirty images.
+  Ownership and attachment rules follow the Khronos EXT_framebuffer_object spec:
+  https://registry.khronos.org/OpenGL/extensions/EXT/EXT_framebuffer_object.txt
+  Revision 123, October 6, 2016.
+  No implementation code was imported for this addition.
 - Explicit rejection of unsupported operations; this is not conformant GL.
 - Correct homogeneous transforms, matrix invalidation when lighting changes,
   general-axis rotation and frustum validation, flat provoking colors for
