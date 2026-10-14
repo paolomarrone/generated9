@@ -32,6 +32,7 @@ struct Vcpu {
 	int nmi;
 	Lapic apic;
 	char *rcname[Nreg];
+	char *rctext[Nreg];	/* values in the current register snapshot */
 	uvlong rcval[Nreg];
 	uvlong rcvalid[Nreg/64], rcdirty[Nreg/64];
 	char rbuf[4096];

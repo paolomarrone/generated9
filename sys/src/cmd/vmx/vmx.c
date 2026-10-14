@@ -165,6 +165,7 @@ rcflush(int togo)
 		}
 		cpu->rcvalid[i] = 0;
 	}
+	memset(cpu->rctext, 0, sizeof(cpu->rctext));
 	if(!togo && p != buf && write(cpu->regsfd, buf, p - buf) < p - buf)
 		sysfatal("rcflush: write: %r");
 	return p != buf ? buf : nil;
@@ -174,8 +175,7 @@ static void
 rcload(void)
 {
 	char *buf = cpu->rbuf;
-	char *p, *q, *f[2];
-	int nf;
+	char *p, *q;
 	int i, rc;
 
 	rcflush(0);
@@ -184,15 +184,17 @@ rcload(void)
 	buf[rc] = 0;
 	p = buf;
 	for(i = 0; i < nelem(cpu->rcname); i++){
-		q = strchr(p, '\n');
-		if(q == nil) break;
-		*q = 0;
-		nf = tokenize(p, f, nelem(f));
-		p = q + 1;
-		if(nf < 2) break;
-		cpu->rcname[i] = f[0];
-		cpu->rcval[i] = strtoull(f[1], nil, 0);
-		cpu->rcvalid[i>>6] |= 1ULL<<(i&63);
+		/* The register file has unquoted ASCII names and numeric values. */
+		for(q = p; *q != 0 && *q != ' ' && *q != '\t' && *q != '\n'; q++)
+			;
+		if(*q != ' ' && *q != '\t') break;
+		*q++ = 0;
+		cpu->rcname[i] = p;
+		cpu->rctext[i] = q;
+		for(p = q; *p != 0 && *p != '\n'; p++)
+			;
+		if(*p == 0) sysfatal("rcload: incomplete register file");
+		*p++ = 0;
 	}
 	for(; i < nelem(cpu->rcname); i++){
 		cpu->rcname[i] = nil;
@@ -214,10 +216,14 @@ rget(char *reg)
 	int i;
 
 	i = rclookup(reg);
-	if(i < 0 || (cpu->rcvalid[i>>6]>>(i&63)&1) == 0){
+	if(i < 0 || (cpu->rcvalid[i>>6]>>(i&63)&1) == 0 && cpu->rctext[i] == nil){
 		rcload();
 		i = rclookup(reg);
 		if(i < 0) sysfatal("unknown register %s", reg);
+	}
+	if((cpu->rcvalid[i>>6]>>(i&63)&1) == 0){
+		cpu->rcval[i] = strtoull(cpu->rctext[i], nil, 0);
+		cpu->rcvalid[i>>6] |= 1ULL<<(i&63);
 	}
 	return cpu->rcval[i];
 }

@@ -21,6 +21,9 @@ local APIC. All CPUs map the same memory segment. Kernel processes execute
 the CPUs concurrently; one monitor event loop serializes exits and device
 emulation. Device workers send notifications to that loop. Only the loop
 may select the current CPU or use the register cache.
+The cache keeps a snapshot of the kernel's text register file and converts
+values only when requested. Resuming a CPU invalidates the whole snapshot,
+including values that have not yet been converted.
 
 The monitor implements xAPIC physical and logical destinations, fixed and
 lowest-priority interrupts, INIT/SIPI, NMIs, local timers, and an I/O APIC
@@ -102,6 +105,8 @@ MMIO registers, MSR operand widths, priority/EOI behavior, and timer reloads
 with a controlled clock. It runs without VMX hardware. The cases cover 16-
 and 32-bit addressing, and on amd64 also REX prefix ordering, RIP-relative,
 address-size and segment overrides.
+Register-cache tests check snapshot invalidation, partial writes, clean exit
+values, flushing pending writes before a read, and isolation between CPUs.
 The VirtIO tests negotiate modern features, validate queue alignment and size,
 keep enabled queue addresses fixed, transfer data through a real split queue,
 reject invalid descriptor heads and cycles, and return an outstanding buffer

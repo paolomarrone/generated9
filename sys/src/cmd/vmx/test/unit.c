@@ -7,6 +7,59 @@
 static uvlong now;
 static Region *code, *lapic;
 
+static void
+registers(void)
+{
+	Vcpu *saved, *c;
+	char path[64], *s, *absent = "absent", *expected = "ax=0x123456789abcde55;";
+	int fd;
+	static char first[] = "ax 0x123456789abcdef0\nbx 0x1111111111111111\ncx 017\ndx 42\nsi 0x50\n";
+	static char second[] = "ax 0xfedcba9876543210\nbx 0x2222222222222222\ncx 020\ndx 43\nsi 0x60\n";
+
+	saved = cpu;
+	c = emalloc(2 * sizeof(Vcpu));
+	snprint(path, sizeof(path), "/tmp/vmx-regs.%d", getpid());
+	fd = create(path, ORDWR|ORCLOSE, 0600);
+	assert(fd >= 0);
+	c[0].regsfd = c[1].regsfd = fd;
+	assert(pwrite(fd, first, sizeof(first)-1, 0) == sizeof(first)-1);
+	cpu = c;
+	assert(rget(RAX) == 0x123456789abcdef0ULL && rhave(RDX));
+	rsetsz(RAX, 0x55, 1);
+	/* Reading another value in the snapshot must preserve pending writes. */
+	assert(rget(RBX) == 0x1111111111111111ULL);
+	assert(rget(RAX) == 0x123456789abcde55ULL);
+	rpoke(RDX, 99, 1);
+	assert(rget(RDX) == 99 && rget(RCX) == 15);
+	s = rcflush(1);
+	assert(s != nil && strcmp(s, expected) == 0);
+	assert(pwrite(fd, second, sizeof(second)-1, 0) == sizeof(second)-1);
+	/* Resuming invalidates decoded and still-unread values alike. */
+	assert(rget(RBX) == 0x2222222222222222ULL);
+	assert(rget(RSI) == 0x60);
+	assert(rget(RAX) == 0xfedcba9876543210ULL && rget(RDX) == 43);
+	assert(pwrite(fd, first, sizeof(first)-1, 0) == sizeof(first)-1);
+	cpu = c + 1;
+	assert(rget(RBX) == 0x1111111111111111ULL);
+	cpu = c;
+	assert(rget(RBX) == 0x2222222222222222ULL);
+	/* An uncached lookup writes dirty registers before taking a new snapshot. */
+	rcflush(1);
+	close(fd);
+	fd = create(path, ORDWR|ORCLOSE, 0600);
+	assert(fd >= 0);
+	cpu->regsfd = fd;
+	rset(RAX, 0x42);
+	rset(RBX, 0x73);
+	assert(!rhave(absent));
+	assert(rget(RAX) == 0x42 && rget(RBX) == 0x73);
+	assert(rcflush(1) == nil);
+	close(fd);
+	free(c);
+	cpu = saved;
+	print("PASS: register snapshots, partial writes, exit values and CPU isolation\n");
+}
+
 uvlong
 nanosec(void)
 {
@@ -334,6 +387,7 @@ threadmain(int, char **)
 		assert(cpus[i].ctlfd >= 0);
 	}
 	cpu = cpus + 1;
+	registers();
 	apicinit();
 	lapic = regptr(Lapicbase);
 	code = mkregion(0x80001000, 0x80002000, REGRWX);
