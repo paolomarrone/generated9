@@ -10,13 +10,24 @@ usage(void)
 	exits("usage");
 }
 
+static void
+scene(Model model, Camera3D camera)
+{
+	BeginMode3D(camera);
+	DrawGrid(10,1);
+	DrawModel(model,(Vector3){0,1,0},1,WHITE);
+	EndMode3D();
+}
+
 void
 main(int argc, char **argv)
 {
 	Camera3D camera = {{5,4,5},{0,1,0},{0,1,0},45,CAMERA_PERSPECTIVE};
+	Camera3D overhead = {{0,8,0},{0,0,0},{0,0,-1},8,CAMERA_ORTHOGRAPHIC};
 	Vector3 axis = {0,1,0};
 	Image image;
 	Texture texture;
+	RenderTexture preview;
 	Model model;
 	Sound sound = {0};
 	Wave wave = {0};
@@ -34,6 +45,8 @@ main(int argc, char **argv)
 	InitWindow(800,600,"raylib on generated9");
 	if(!IsWindowReady()) sysfatal("initialize raylib window");
 	SetTargetFPS(60);
+	preview = LoadRenderTexture(256,256);
+	if(!IsRenderTextureValid(preview)) sysfatal("initialize render texture");
 	image = GenImageChecked(128,128,16,16,SKYBLUE,RAYWHITE);
 	texture = LoadTextureFromImage(image);
 	UnloadImage(image);
@@ -62,12 +75,19 @@ main(int argc, char **argv)
 		if(IsKeyDown(KEY_RIGHT)) angle += dt;
 		radius = Clamp(radius-GetMouseWheelMove()*.5,3,12);
 		camera.position = Vector3RotateByAxisAngle((Vector3){radius,4,0},axis,angle);
+		BeginTextureMode(preview);
+		ClearBackground(LIGHTGRAY);
+		scene(model,overhead);
+		EndTextureMode();
 		BeginDrawing();
 		ClearBackground(RAYWHITE);
-		BeginMode3D(camera);
-		DrawGrid(10,1);
-		DrawModel(model,(Vector3){0,1,0},1,WHITE);
-		EndMode3D();
+		scene(model,camera);
+		if(GetScreenWidth() >= 300 && GetScreenHeight() >= 360){
+			DrawTexturePro(preview.texture,(Rectangle){0,0,256,-256},
+				(Rectangle){GetScreenWidth()-212,GetScreenHeight()-212,192,192},
+				(Vector2){0,0},0,WHITE);
+			DrawText("render texture",GetScreenWidth()-208,GetScreenHeight()-232,18,DARKBLUE);
+		}
 		if(GetScreenWidth() > 40){
 			BeginScissorMode(20,20,GetScreenWidth()-40,100);
 			DrawRectangle(20,20,GetScreenWidth()-40,100,DARKBLUE);
@@ -83,6 +103,7 @@ main(int argc, char **argv)
 		UnloadSound(sound);
 		CloseAudioDevice();
 	}
+	UnloadRenderTexture(preview);
 	UnloadModel(model);
 	UnloadTexture(texture);
 	CloseWindow();

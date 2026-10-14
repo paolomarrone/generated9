@@ -2,8 +2,9 @@
 
 The amd64 kernel's VirtIO GPU driver exposes VirGL through files.
 `libgpu` encodes commands; TinyGL supplies a classic OpenGL subset.
-Rendering uses the host GPU. TinyGL transforms vertices on the guest CPU;
-completed images are read back and presented with libdraw.
+Rendering and vertex projection use the host GPU. Lighting and user clipping
+remain on the guest CPU. Completed window images are read back for libdraw;
+render textures can be sampled directly on the GPU.
 
 The host needs QEMU with VirGL, virglrenderer, an OpenGL display backend
 and access to a DRM render node. The guest uses the Plan 9 C toolchain.
@@ -64,8 +65,9 @@ query-polling issue and setup in [VOID.md](VOID.md).
 ## Libraries and programs
 
 TinyGL supports geometry, matrices, lighting, display lists, textures and
-fixed-function blending. It is not a conformant OpenGL implementation;
-there is no GLSL, stencil, EGL or GLX. One context per process is supported,
+fixed-function blending, plus color/depth render textures. It is not a
+conformant OpenGL implementation; there is no GLSL, stencil, EGL or GLX.
+One context per process is supported,
 and invalid operations are fatal. See [tinygl(2)](../sys/man/2/tinygl).
 The lower-level interfaces are [gpu(2)](../sys/man/2/gpu) and
 [gpu(3)](../sys/man/3/gpu); device directories can be rebound in a namespace.
@@ -145,10 +147,16 @@ Raylib and raygui tests need a rio window; see their source READMEs.
 
 ## Limits and performance
 
-The driver has one synchronous command queue. TinyGL batches vertex data
-and draws, but CPU transforms, pixel readback and software composition remain.
-The display process holds the draw lock during its transfer. Multiple clients
-share these costs. Paused demos and idle arcade windows stop rendering.
+The driver allows one request in flight. `submit` returns after copying the
+commands; `wait` completes them. The original `cmd` file remains synchronous.
+TinyGL batches vertices and draws; `glFlush` submits, `glFinish` also waits.
+Lighting, pixel readback and software composition still cost guest CPU time.
+The display holds the draw lock only while copying pixels into private memory.
+Paused demos and idle arcade windows stop rendering.
+
+Read `#∇/stats` before and after a workload to separate display copy time,
+draw-lock duration and device waits. See [gpu(3)](../sys/man/3/gpu) for fields.
+These counters include all clients; wait time is not GPU execution time.
 
 `teapot -n 300` measures the window path; `teapot -b 240` measures unpaced
 rendering and readback. Timings include copies and fence waits, not just GPU

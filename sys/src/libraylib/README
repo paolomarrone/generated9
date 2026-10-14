@@ -12,8 +12,8 @@ The native backend uses rio, TinyGL/VirGL and /dev/audio. Clients compile
 with -p; headers select the libraries. See raylib(2) for API conventions,
 window and audio behavior, and classic GL limits.
 
-raydemo shows a textured cube. Space pauses, arrows orbit and the wheel
-zooms. -a adds sound; -n limits frames.
+raydemo shows a textured cube and a second camera rendered into a texture.
+Space pauses, arrows orbit and the wheel zooms. -a adds sound; -n limits frames.
 
 Tests, inside a rio window with VirGL available:
 
@@ -21,9 +21,9 @@ Tests, inside a rio window with VirGL available:
     mk test
     ./6.out -a
 
-The optional -a run needs /dev/audio. Tests cover rendering, images,
-models/animation, files, input, clocks and resource lifetime; audio tests
-cover decoding, resampling, streaming and playback state.
+The optional -a run needs /dev/audio. Tests cover rendering, render textures,
+images, models/animation, files, input, clocks and resource lifetime; audio
+tests cover decoding, resampling, streaming and playback state.
 Runtime validation used amd64/QEMU VirGL and HDA. Other architectures
 have not been tested. External test assets are not installed or bundled.
 

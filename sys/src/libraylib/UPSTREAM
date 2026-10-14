@@ -16,6 +16,8 @@ and tests are generated9 contributions under the root LICENSE.
 Port changes:
 - Native rio, /dev/kbd, /dev/snarf, plumber, directory and timer interfaces.
 - Classic OpenGL rendering through generated9's TinyGL/VirGL implementation.
+  The native path also enables framebuffer objects with color textures and
+  depth renderbuffers; upstream BeginTextureMode/EndTextureMode are unchanged.
 - Native /dev/audio output; the upstream mixer, codecs and miniaudio data
   converters are retained. Native QLocks implement their synchronization.
 - C library includes and scalar math operations adapted for native libc.

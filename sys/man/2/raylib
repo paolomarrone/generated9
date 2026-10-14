@@ -24,6 +24,12 @@ and VirGL through
 .IR gpu (3).
 Frames are copied into the window with
 .IR draw (2).
+Render textures support off-screen 2D and 3D drawing through
+.B LoadRenderTexture
+and
+.BR BeginTextureMode .
+Their color textures can be sampled without CPU readback; use a negative
+source height when drawing them upright, as in upstream raylib.
 Keyboard, mouse, clipboard and URLs use the native files and plumber.
 Window and cursor operations obey rio's focus and placement policy.
 Fullscreen, placement and decorations belong to rio; window flags cannot
@@ -55,7 +61,7 @@ member.
 Build instructions, tests and native constraints.
 .TP
 .B /sys/src/libraylib/examples
-Self-contained rotating textured cube demo; run
+Textured cube with a second camera rendered into a texture; run
 .B mk install
 then
 .BR games/raydemo .
@@ -76,7 +82,7 @@ limits the number of frames.
 .IR rio (4)
 .SH BUGS
 The renderer implements the classic OpenGL path. Programmable shaders,
-render textures, instancing and modern OpenGL examples are unavailable.
+instancing and modern OpenGL examples are unavailable.
 Targets are limited to 2048 by 2048 pixels, with one window/context per process.
 Window icons, opacity, gamepads, touch, clipboard images and physical monitor
 measurements are unavailable. Unsupported window requests log a warning.

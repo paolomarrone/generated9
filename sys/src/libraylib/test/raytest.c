@@ -287,6 +287,48 @@ skinning(void)
 }
 
 static void
+rendertextures(void)
+{
+	RenderTexture targets[2];
+	Image image;
+	int i, pass;
+
+	for(pass=0; pass<3; pass++){
+		for(i=0; i<2; i++){
+			targets[i] = LoadRenderTexture(32,16);
+			if(!IsRenderTextureValid(targets[i])) sysfatal("load render texture");
+			BeginTextureMode(targets[i]);
+			ClearBackground(BLUE);
+			DrawRectangle(0,0,32,8,RED);
+			EndTextureMode();
+		}
+		/* Compose one target into another, then into the window. */
+		BeginTextureMode(targets[1]);
+		ClearBackground(BLACK);
+		DrawTextureRec(targets[0].texture,(Rectangle){0,0,32,-16},(Vector2){0,0},WHITE);
+		EndTextureMode();
+		BeginDrawing();
+		ClearBackground(BLACK);
+		DrawTextureRec(targets[1].texture,(Rectangle){0,0,32,-16},(Vector2){4,4},WHITE);
+		EndDrawing();
+		image = LoadImageFromScreen();
+		if(!ColorIsEqual(GetImageColor(image,6,6),RED)
+		|| !ColorIsEqual(GetImageColor(image,6,18),BLUE)
+		|| !ColorIsEqual(GetImageColor(image,2,2),BLACK))
+			sysfatal("render texture composition/orientation: %08ux %08ux %08ux",
+				ColorToInt(GetImageColor(image,6,6)), ColorToInt(GetImageColor(image,6,18)),
+				ColorToInt(GetImageColor(image,2,2)));
+		UnloadImage(image);
+		image = LoadImageFromTexture(targets[0].texture);
+		if(!ColorIsEqual(GetImageColor(image,2,2),BLUE)
+		|| !ColorIsEqual(GetImageColor(image,2,14),RED)) sysfatal("render texture readback");
+		UnloadImage(image);
+		for(i=0; i<2; i++) UnloadRenderTexture(targets[i]);
+	}
+	print("PASS: render textures, composition, orientation, readback and recreation\n");
+}
+
+static void
 graphics(void)
 {
 	Image image, readback;
@@ -328,6 +370,7 @@ graphics(void)
 		UnloadModel(model);
 		UnloadTexture(texture);
 		if(pass == 0){
+			rendertextures();
 			loaders();
 			skinning();
 			windowerrors();
