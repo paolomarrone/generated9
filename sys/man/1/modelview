@@ -1,0 +1,54 @@
+.TH MODELVIEW 1
+.SH NAME
+modelview \- inspect three-dimensional models
+.SH SYNOPSIS
+.B modelview
+[
+.B -n
+.I frames
+]
+[
+.B -o
+.I screenshot.png
+]
+[
+.I model
+]
+.SH DESCRIPTION
+.I Modelview
+opens a model in a rio window using raygui controls and raylib's classic
+OpenGL renderer. With no file it displays a generated torus.
+OBJ, IQM, glTF/GLB, M3D and VOX files use raylib's existing loaders.
+Associated textures are loaded relative to the model as supported by
+those loaders. The view is centered and scaled to fit the model's bounds.
+.PP
+Drag with button 1 to orbit; the wheel zooms.
+Space toggles automatic rotation and R resets the camera.
+The toolbar opens another file, toggles grid, wireframe and lighting,
+and sets the rotation and animation speed.
+Enter accepts an edited path; Open loads the path explicitly.
+An unsuccessful open preserves the current model.
+An empty path restores the torus.
+Escape leaves path editing or, when not editing, exits.
+.PP
+Models with embedded animation expose Animate and Next controls.
+Keyframes are interpolated on the CPU, using 60 keyframes per second at
+speed 1. The API does not expose source timing; use Speed to adjust it.
+Static views wait for input instead of redrawing continuously.
+.PP
+.B -n
+exits after the specified number of displayed frames.
+.B -o
+saves the final frame as a PNG, including the controls.
+.SH SOURCE
+.B /sys/src/cmd/modelview
+.SH SEE ALSO
+.IR raygui (2),
+.IR raylib (2),
+.IR tinygl (2),
+.IR rio (4)
+.SH BUGS
+Requires QEMU VirGL and the native GPU driver.
+Materials use classic GL; programmable shaders and physically based
+material effects are unavailable. Separate animation files are not loaded.
+Window targets are limited to 2048 by 2048 pixels.

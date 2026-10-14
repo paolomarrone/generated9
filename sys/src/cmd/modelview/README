@@ -1,0 +1,26 @@
+Native model viewer using raygui, raylib and TinyGL/VirGL.
+
+    mk install
+    modelview
+    modelview /path/to/model.glb
+
+Without a file it shows a generated torus. OBJ, IQM, glTF/GLB, M3D and VOX
+use raylib's existing loaders. Materials use classic GL; programmable
+shaders and physically based material effects are unavailable.
+
+Drag to orbit, use the wheel to zoom, Space to rotate and R to reset.
+The raygui controls open another file, show wireframe, toggle the grid and
+lighting, and play embedded animations. Playback uses 60 keyframes per
+second at speed 1. Raylib's animation API does not expose the original sample
+rate; the speed slider can adjust models sampled at another rate. Static
+views wait for input rather than redrawing continuously. Escape ends path
+editing, or exits when not editing.
+
+    modelview -n 120 -o /tmp/model.png /path/to/model.obj
+
+This renders a bounded number of frames and saves a PNG. See modelview(1).
+The viewer owns the loaded meshes, animation data and material textures;
+replacing a model releases them. An unsuccessful open retains the old view.
+
+New generated9 code under the root LICENSE. The libraries retain their
+own licenses. No example assets are bundled with this program.

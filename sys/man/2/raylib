@@ -65,6 +65,8 @@ limits the number of frames.
 .SH SOURCE
 .B /sys/src/libraylib
 .SH SEE ALSO
+.IR modelview (1),
+.IR raygui (2),
 .IR tinygl (2),
 .IR draw (2),
 .IR audio (3),
