@@ -105,7 +105,9 @@ The application owns the buffer and chooses how to display or save it.
 .PP
 .B glFlush
 submits pending primitives and waits for completion.
-Batches also finish when full or when incompatible drawing state changes.
+State changes end the current vertex batch without necessarily submitting it.
+Full command buffers submit automatically; vertex storage is reused only
+after pending work completes.
 .I Tglclose
 finishes pending drawing, closes the GPU context and frees its resources,
 display lists, matrix stacks and other CPU allocations.

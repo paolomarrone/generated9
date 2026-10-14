@@ -27,7 +27,7 @@ struct State {
 struct Render {
 	Gpu gpu;
 	u32int color, depth, vertices;
-	int imagefd, vertexfd, width, height, nvertex;
+	int imagefd, width, height, nvertex, vertexoffset;
 	State state;
 	float vertex[Nvertex][Ncomponent];
 	Shader shader[64];
@@ -322,9 +322,7 @@ fragment(GLContext *c)
 		p = seprint(p, end, "MOV OUT[0], TEMP[0]\nEND\n");
 		if(p >= end-1)
 			gl_fatal_error("texture program too large");
-		gpusubmit(g);
 		gpushader(g, 64+j, 1, text);
-		gpusubmit(g);
 	}else{
 		cmd = gpuemit(g, GpuBindshader, 0, 2);
 		cmd[0] = 64+j;
@@ -337,6 +335,7 @@ fragment(GLContext *c)
 			cmd[2+4*i+j] = gpufloat(c->texunit[i].env.color.v[j]);
 }
 
+/* Encode the vertex batch; glFlush submits the accumulated commands. */
 void
 gl_flush(GLContext *c)
 {
@@ -354,18 +353,26 @@ gl_flush(GLContext *c)
 	fragment(c);
 	s = &r->state;
 	n = r->nvertex*sizeof(r->vertex[0]);
-	if(pwrite(r->vertexfd, r->vertex, n, 0) != n
-	|| fprint(g->ctl, "upload %ud 0 0 0 0 %d 1 1 0 0 0", r->vertices, n) < 0)
-		sysfatal("upload GL vertices: %r");
+	/* Inline writes are unsynchronized: reuse storage only after a fence. */
+	if(n > sizeof(r->vertex)-r->vertexoffset){
+		gpusubmit(g);
+		r->vertexoffset = 0;
+	}
+	gpuwrite(g, r->vertices, r->vertexoffset, r->vertex, n);
+	p = gpuemit(g, GpuVertices, 0, 3);
+	p[0] = sizeof(r->vertex[0]);
+	p[1] = r->vertexoffset;
+	p[2] = r->vertices;
+	r->vertexoffset += n;
 	p = gpuemit(g, GpuCreate, GpuRasterizer, 9);
 	p[0] = 9;
 	p[1] = s->raster;
 	p[3] = s->sprite;
 	p[2] = gpufloat(1);
 	p[5] = s->linewidth;
-	gpubind(g, GpuRasterizer, 9);
 	p[6] = s->offset[0];
 	p[7] = s->offset[1];
+	gpubind(g, GpuRasterizer, 9);
 	p = gpuemit(g, GpuCreate, GpuDsa, 5);
 	p[0] = 7;
 	p[1] = s->depth;
@@ -395,8 +402,21 @@ gl_flush(GLContext *c)
 	gpuemit(g, GpuDestroy, GpuDsa, 1)[0] = 7;
 	gpubind(g, GpuRasterizer, 0);
 	gpuemit(g, GpuDestroy, GpuRasterizer, 1)[0] = 9;
-	gpusubmit(g);
 	r->nvertex = 0;
+}
+
+void
+glFlush(void)
+{
+	GLContext *c;
+	Render *r;
+
+	c = gl_get_context();
+	assert(!c->in_begin);
+	r = c->opaque;
+	gl_flush(c);
+	gpusubmit(&r->gpu);
+	r->vertexoffset = 0;
 }
 
 static int
@@ -575,7 +595,6 @@ gl_clear(GLContext *c, int mask)
 	depth.d = c->clear_depth;
 	p[5] = depth.u[0];
 	p[6] = depth.u[1];
-	gpusubmit(&r->gpu);
 }
 
 void
@@ -658,7 +677,6 @@ tglinit(char *device, int width, int height)
 		sysfatal("GPU lacks BGRA rendering or Z32 depth");
 	snprint(desc, sizeof(desc), "0 64 16 %d 1 1 1 0 0 0 %d", sizeof(r->vertex), sizeof(r->vertex));
 	r->vertices = gpuresource(g, desc);
-	r->vertexfd = gpuopen(g, r->vertices, OWRITE);
 	p = gpuemit(g, GpuCreate, GpuElements, 1+Ncomponent);
 	p[0] = 3;
 	for(i=0; i<Ncomponent/4; i++){
@@ -666,9 +684,6 @@ tglinit(char *device, int width, int height)
 		p[4+4*i] = GpuFloat4;
 	}
 	gpubind(g, GpuElements, 3);
-	p = gpuemit(g, GpuVertices, 0, 3);
-	p[0] = sizeof(r->vertex[0]);
-	p[2] = r->vertices;
 	end = vs+sizeof(vs);
 	v = seprint(vs, end, "VERT\nDCL IN[0..%d]\nDCL OUT[0], POSITION\n", 3+MAX_TEXTURE_UNITS);
 	v = seprint(v, end, "DCL OUT[1], COLOR[0]\nDCL OUT[6], BCOLOR[0]\n");
@@ -697,7 +712,7 @@ tglread(void *pixels, int bytes)
 	n = r->width*r->height*4;
 	if(pixels == nil || bytes < n)
 		gl_fatal_error("readback buffer too small");
-	gl_flush(c);
+	glFlush();
 	if(fprint(r->gpu.ctl, "download %ud 0 0 0 0 %d %d 1 0 0 0",
 		r->color, r->width, r->height) < 0 || pread(r->imagefd, pixels, n, 0) != n)
 		sysfatal("read GL frame: %r");
@@ -739,8 +754,7 @@ tglclose(void)
 	c = gl_get_context();
 	assert(!c->in_begin && !c->compile_flag);
 	r = c->opaque;
-	gl_flush(c);
-	close(r->vertexfd);
+	glFlush();
 	close(r->imagefd);
 	gpufini(&r->gpu);
 	glClose();

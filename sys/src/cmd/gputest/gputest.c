@@ -19,6 +19,41 @@ enum {
 static Gpu gpu;
 static Image *picture;
 
+static void
+buffers(void)
+{
+	uchar *a, *b;
+	u32int id;
+	char desc[128];
+	int fd, i, n;
+
+	n = 600013;	/* spans command buffers and ends in a partial word */
+	a = malloc(n);
+	b = malloc(n);
+	if(a == nil || b == nil)
+		sysfatal("buffer test allocation: %r");
+	for(i=0; i<n; i++) a[i] = i*7;
+	gpuinit(&gpu, nil);
+	snprint(desc, sizeof(desc), "0 64 16 %d 1 1 1 0 0 0 %d", n, n);
+	id = gpuresource(&gpu, desc);
+	/* The next command must submit an exactly full buffer. */
+	for(i=0; i<=nelem(gpu.command); i++) gpuemit(&gpu, 0, 0, 0);
+	gpuwrite(&gpu, id, 0, a, n);
+	gpuwrite(&gpu, id, 17, "abc", 3);
+	memmove(a+17, "abc", 3);
+	gpusubmit(&gpu);
+	if(fprint(gpu.ctl, "download %ud 0 0 0 0 %d 1 1 0 0 0", id, n) < 0)
+		sysfatal("download inline buffer: %r");
+	fd = gpuopen(&gpu, id, OREAD);
+	if(pread(fd, b, n, 0) != n || memcmp(a, b, n) != 0)
+		sysfatal("inline buffer contents");
+	close(fd);
+	gpufini(&gpu);
+	free(a);
+	free(b);
+	fprint(2, "PASS: full command buffer, inline chunks, byte offsets and partial words\n");
+}
+
 static uchar*
 render(void)
 {
@@ -160,6 +195,7 @@ main(int argc, char **argv)
 	}ARGEND
 	if(argc != 0)
 		sysfatal("usage: gputest [-t] [-o image]");
+	if(test) buffers();
 	pixels = render();
 	check(pixels);
 	if(out != nil){

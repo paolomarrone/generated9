@@ -16,6 +16,9 @@ Local adaptations:
   and vertex lighting run on the guest CPU; clipping, interpolation,
   rasterization and depth testing run through host VirGL. Frame readback
   returns top-down XRGB32 bytes; libdraw window policy stays in the app.
+- Inline vertex writes share the buffered command stream with draws. Batches
+  occupy disjoint buffer ranges until submission completes; explicit flush,
+  readback and resource release preserve command ordering.
 - Explicit rejection of unsupported operations; this is not conformant GL.
 - Correct homogeneous transforms, matrix invalidation when lighting changes,
   general-axis rotation and frustum validation, flat provoking colors for

@@ -613,13 +613,6 @@ void glCallList(unsigned int list)
   gl_add_op(p);
 }
 
-void glFlush(void)
-{
-  GLContext *c=gl_get_context();
-  assert(!c->in_begin);
-  gl_flush(c);
-}
-
 void glHint(int target,int mode)
 {
   GLParam p[3];

@@ -8,6 +8,8 @@ https://chromium.googlesource.com/chromiumos/third_party/virglrenderer/+/4d8bd3c
 References used:
   src/virgl_protocol.h
   src/virgl_hw.h
+  src/vrend_decode.c (inline writes)
+  src/vrend_renderer.c (inline buffer transfer synchronization)
   src/gallium/include/pipe/p_defines.h
   tests/test_virgl_cmd.c (virgl_test_render_simple)
   tests/testvirgl_encode.c

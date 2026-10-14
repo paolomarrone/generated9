@@ -53,6 +53,27 @@ texquad(void)
 }
 
 static void
+streaming(void)
+{
+	int x, y;
+
+	/* Distinct colors survive command submissions and vertex-buffer reuse. */
+	clear();
+	for(y=0; y<H; y++)
+		for(x=0; x<W; x++){
+			glViewport(x, y, 1, 1);
+			glColor3f(x*4/255., y*4/255., (x^y)*4/255.);
+			texquad();
+		}
+	readback();
+	for(y=0; y<H; y++)
+		for(x=0; x<W; x++)
+			pixel(x, H-1-y, x*4, y*4, (x^y)*4, "streamed vertices");
+	glViewport(0, 0, W, H);
+	print("PASS: vertex contents across command submissions and buffer reuse\n");
+}
+
+static void
 texturepressure(int count, int size)
 {
 	GLuint tex[320];
@@ -1002,6 +1023,7 @@ main(int argc, char **argv)
 	print("PASS: display list compilation, execution and deletion\n");
 	matrices();
 	geometry();
+	streaming();
 	lists();
 	polygons();
 	arrays();

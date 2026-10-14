@@ -104,9 +104,11 @@ gpuemit(Gpu *g, int op, int object, int n)
 {
 	u32int *p;
 
-	if(n < 0 || n > nelem(g->command)-g->ncommand-1)
-		sysfatal("gpu command buffer full");
-	g->command[g->ncommand++] = op | object<<8 | n<<16;
+	if(n < 0 || n >= nelem(g->command))
+		sysfatal("gpu command too large");
+	if(n+1 > nelem(g->command)-g->ncommand)
+		gpusubmit(g);
+	g->command[g->ncommand++] = op | object<<8 | (u32int)n<<16;
 	p = g->command+g->ncommand;
 	memset(p, 0, n*4);
 	g->ncommand += n;
@@ -121,6 +123,37 @@ gpusubmit(Gpu *g)
 	if(write(g->cmd, g->command, g->ncommand*4) != g->ncommand*4)
 		sysfatal("gpu submit: %r");
 	g->ncommand = 0;
+}
+
+void
+gpuwrite(Gpu *g, u32int id, ulong offset, void *data, int n)
+{
+	u32int *p;
+	uchar *src;
+	int m;
+
+	if(n < 0 || offset+n < offset)
+		sysfatal("bad gpu buffer write");
+	src = data;
+	while(n > 0){
+		m = nelem(g->command)-g->ncommand;
+		if(m <= 12){
+			gpusubmit(g);
+			continue;
+		}
+		m = (m-12)*4;
+		if(m > n) m = n;
+		p = gpuemit(g, GpuInline, 0, 11+(m+3)/4);
+		p[0] = id;
+		p[2] = 2;	/* PIPE_TRANSFER_WRITE */
+		p[5] = offset;
+		p[8] = m;
+		p[9] = p[10] = 1;
+		memmove(p+11, src, m);
+		src += m;
+		offset += m;
+		n -= m;
+	}
 }
 
 void

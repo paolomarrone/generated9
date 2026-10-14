@@ -1,6 +1,6 @@
 .TH GPU 2
 .SH NAME
-gpuinit, gpufini, gpuresource, gputryresource, gpuopen, gpuemit, gpusubmit, gpubind, gpushader, gpufloat \- VirGL file client
+gpuinit, gpufini, gpuresource, gputryresource, gpuopen, gpuemit, gpusubmit, gpuwrite, gpubind, gpushader, gpufloat \- VirGL file client
 .SH SYNOPSIS
 .B #include <u.h>
 .br
@@ -21,6 +21,8 @@ gpuinit, gpufini, gpuresource, gputryresource, gpuopen, gpuemit, gpusubmit, gpub
 .B u32int *gpuemit(Gpu *g, int op, int object, int words)
 .PP
 .B void gpusubmit(Gpu *g)
+.PP
+.B void gpuwrite(Gpu *g, u32int id, ulong offset, void *data, int bytes)
 .PP
 .B void gpubind(Gpu *g, int type, int id)
 .PP
@@ -61,11 +63,25 @@ Resource uploads, downloads and removal use control commands documented in
 .PP
 .I Gpuemit
 appends a command header and the requested number of zeroed payload words
-to the context's 2048-word command buffer, returning the payload pointer.
-It does not submit automatically; commands must fit in the remaining space.
+to the context's 65536-word command buffer, returning the payload pointer.
+If the command does not fit in the remaining space, it first submits the
+buffer. A single command payload must contain fewer than 65536 words.
+Fill the returned payload before appending another command.
 .I Gpusubmit
 writes the accumulated commands and waits for device completion.
 The buffer is then reusable.
+.PP
+.I Gpuwrite
+copies bytes into inline writes to a buffer resource at the given byte offset,
+splitting them across command buffers as needed. The writes remain queued
+until submission. They update the host resource; use a download control
+command before reading the resource's guest backing.
+VirGL inline writes are unsynchronized. Use disjoint ranges for pending draws
+and call
+.I gpusubmit
+before overwriting a range those draws use.
+Control commands are not queued with these encoded commands; submit pending
+commands before a dependent download or resource removal.
 .PP
 .I Gpubind
 appends an object binding.
