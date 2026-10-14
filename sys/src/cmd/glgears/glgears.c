@@ -345,7 +345,7 @@ main(int argc, char **argv)
 		render();	/* exclude initial shader compilation */
 		if(limit == 0)
 			limit = 1;
-		start = nsec();
+		start = uptime();
 		for(frames=0; frames<limit; frames++){
 			angle += 2;
 			render();
@@ -360,10 +360,10 @@ main(int argc, char **argv)
 		render();
 		present();
 		frames = since = 0;
-		start = last = report = nsec();
+		start = last = report = uptime();
 		for(;;){
 			e = event(&ev);
-			now = nsec();
+			now = uptime();
 			if(e == Ekeyboard){
 				switch(ev.kbdc){
 				case 'q': case 0x7f: goto Done;
@@ -398,7 +398,7 @@ main(int argc, char **argv)
 	}
 Done:
 	if(frames != 0)
-		fprint(2, "%dx%d, %d frames: %.1f fps\n", width, height, frames, frames*1e9/(nsec()-start));
+		fprint(2, "%dx%d, %d frames: %.1f fps\n", width, height, frames, frames*1e9/(uptime()-start));
 	if(out != nil)
 		save(out);
 	tglclose();

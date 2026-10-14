@@ -128,7 +128,7 @@ video_swap(void)
 		snapshot[0] = 0;
 	}
 	frames++;
-	now = nsec();
+	now = uptime();
 	if(last == 0) last = now;
 	if(now-last >= 1000000000LL){
 		fps = frames*1e9/(now-last)+.5;

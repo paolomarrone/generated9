@@ -158,7 +158,7 @@ main(int argc, char **argv)
 	buttons = grab = frames = 0;
 	prev = Pt(-1,-1);
 	alive = 1;
-	last = start = nsec();
+	last = start = uptime();
 	while(alive){
 		kind = event(&e);
 		if(kind == keys){
@@ -197,7 +197,7 @@ main(int argc, char **argv)
 			continue;
 		video_prepare();
 		audio_check();
-		now = nsec();
+		now = uptime();
 		st_timer(now-last > 250000000 ? .25 : (now-last)*1e-9);
 		last = now;
 		st_paint((now-start)*1e-9);
@@ -205,7 +205,7 @@ main(int argc, char **argv)
 		if(++frames == limit)
 			break;
 	}
-	fprint(2,"Neverputt: %d frames, %.1f fps\n",frames,frames*1e9/(nsec()-start));
+	fprint(2,"Neverputt: %d frames, %.1f fps\n",frames,frames*1e9/(uptime()-start));
 	audio_free();
 	goto_state(&st_null);
 	mtrl_quit();

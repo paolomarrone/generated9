@@ -206,16 +206,16 @@ render(double a)
 	p[2] = 4;	/* triangles */
 	p[3] = p[4] = 1;
 	p[10] = nvertex-1;
-	start = nsec();
+	start = uptime();
 	gpusubmit(&gpu);
-	now = nsec();
+	now = uptime();
 	submitns += now-start;
 	if(fprint(gpu.ctl, "download %ud 0 0 0 0 %d %d 1 0 0 0", color, width, height) < 0)
 		sysfatal("download frame: %r");
 	n = width*height*4;
 	if(pread(imagefd, pixels, n, 0) != n)
 		sysfatal("read frame: %r");
-	readns += nsec()-now;
+	readns += uptime()-now;
 }
 
 static void
@@ -326,14 +326,14 @@ present(void)
 	Point at;
 	Rectangle r;
 
-	start = nsec();
+	start = uptime();
 	if(loadimage(picture, picture->r, pixels, width*height*4) < 0)
 		sysfatal("present frame: %r");
 	last = start;
 	if(measure){
 		if(flushimage(display, 0) < 0)
 			sysfatal("flush pixels: %r");
-		last = nsec();
+		last = uptime();
 		loadns += last-start;
 	}
 	at = addpt(screen->r.min, Pt((Dx(screen->r)-width)/2, Header));
@@ -345,13 +345,13 @@ present(void)
 	if(measure){
 		if(flushimage(display, 0) < 0)
 			sysfatal("flush drawing: %r");
-		now = nsec();
+		now = uptime();
 		drawns += now-last;
 		last = now;
 	}
 	if(flushimage(display, 1) < 0)
 		sysfatal("flush frame: %r");
-	now = nsec();
+	now = uptime();
 	flushns += now-last;
 	presentns += now-start;
 }
@@ -402,10 +402,10 @@ main(int argc, char **argv)
 				limit = 1;
 			render(.6);	/* exclude shader compilation and first use from timing */
 			submitns = readns = 0;
-			start = nsec();
+			start = uptime();
 			for(frames=0; frames<limit; frames++)
 				render(.6+frames*.02);
-			stats(frames, nsec()-start);
+			stats(frames, uptime()-start);
 		}
 		if(out != nil)
 			save(out);
@@ -423,10 +423,10 @@ main(int argc, char **argv)
 		frames = since = 0;
 		submitns = readns = presentns = 0;
 		loadns = drawns = flushns = 0;
-		start = last = report = nsec();
+		start = last = report = uptime();
 		for(;;){
 			e = event(&ev);
-			now = nsec();
+			now = uptime();
 			if(e == Ekeyboard){
 				if(ev.kbdc == 'q' || ev.kbdc == 0x7f)
 					break;
@@ -459,7 +459,7 @@ main(int argc, char **argv)
 				break;
 		}
 		if(frames != 0)
-			stats(frames, nsec()-start);
+			stats(frames, uptime()-start);
 	}
 	free(indices);
 	close(imagefd);

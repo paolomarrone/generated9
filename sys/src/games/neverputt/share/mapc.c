@@ -2868,7 +2868,7 @@ void main(int argc, char *argv[])
                 exits("mapc");
             }
 
-            time0 = nsec();
+            time0 = uptime();
             {
                 init_file(&f);
                 read_map(&f, fin);
@@ -2889,7 +2889,7 @@ void main(int argc, char *argv[])
                     sysfatal("write %s: %r", dst);
                 }
             }
-            time1 = nsec();
+            time1 = uptime();
 
             dump_file(&f, dst, (time1-time0)*1e-9);
 
