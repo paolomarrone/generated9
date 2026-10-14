@@ -26,7 +26,7 @@ void glopMatrixMode(GLContext *c,GLParam *p)
     c->matrix_mode=1;
     break;
   case GL_TEXTURE:
-    c->matrix_mode=2;
+    c->matrix_mode=2+c->active_texture;
     break;
   default:
     assert(0);

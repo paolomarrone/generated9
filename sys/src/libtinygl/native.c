@@ -43,18 +43,11 @@ gl_free(void *p)
 #define UNSUPPORTED(name) \
 void glop##name(GLContext*, GLParam*) { gl_fatal_error(#name " is not supported"); }
 
-UNSUPPORTED(TexImage2D)
-UNSUPPORTED(BindTexture)
-UNSUPPORTED(TexEnv)
-UNSUPPORTED(TexParameter)
-UNSUPPORTED(PixelStore)
 UNSUPPORTED(InitNames)
 UNSUPPORTED(PushName)
 UNSUPPORTED(PopName)
 UNSUPPORTED(LoadName)
 
-void glGenTextures(int, unsigned int*) { gl_fatal_error("textures are not supported"); }
-void glDeleteTextures(int, const unsigned int*) { gl_fatal_error("textures are not supported"); }
 void glSelectBuffer(int, unsigned int*) { gl_fatal_error("selection is not supported"); }
 int glRenderMode(int mode)
 {

@@ -16,10 +16,18 @@ void glopNormal(GLContext * c, GLParam * p)
 
 void glopTexCoord(GLContext * c, GLParam * p)
 {
-    c->current_tex_coord.X = p[1].f;
-    c->current_tex_coord.Y = p[2].f;
-    c->current_tex_coord.Z = p[3].f;
-    c->current_tex_coord.W = p[4].f;
+    c->texunit[0].coord.X = p[1].f;
+    c->texunit[0].coord.Y = p[2].f;
+    c->texunit[0].coord.Z = p[3].f;
+    c->texunit[0].coord.W = p[4].f;
+}
+
+void glopMultiTexCoord(GLContext *c, GLParam *p)
+{
+    int i = p[1].i-GL_TEXTURE0;
+    if(i < 0 || i >= MAX_TEXTURE_UNITS)
+        gl_fatal_error("invalid texture unit");
+    c->texunit[i].coord = gl_V4_New(p[2].f, p[3].f, p[4].f, p[5].f);
 }
 
 void glopEdgeFlag(GLContext * c, GLParam * p)
@@ -41,7 +49,7 @@ void glopColor(GLContext * c, GLParam * p)
 
 void glopBegin(GLContext * c, GLParam * p)
 {
-    int type;
+    int type, eye, i, j;
     M4 tmp;
 
     assert(c->in_begin == 0);
@@ -53,9 +61,16 @@ void glopBegin(GLContext * c, GLParam * p)
     c->vertex_n = 0;
     c->vertex_cnt = 0;
 
+    eye = c->lighting_enabled || type == GL_POINTS;
+    for(i=0; i<MAX_TEXTURE_UNITS; i++)
+        for(j=0; j<4; j++)
+            if(c->texunit[i].enabled && c->texunit[i].gen[j]) eye=1;
+    if(eye != c->need_eye) c->matrix_model_projection_updated=1;
+    c->need_eye=eye;
+
     if (c->matrix_model_projection_updated) {
 
-	if (c->lighting_enabled) {
+	if (c->need_eye) {
 	    /* precompute inverse modelview */
 	    gl_M4_Inv(&tmp, c->matrix_stack_ptr[0]);
 	    gl_M4_Transpose(&c->matrix_model_view_inv, &tmp);
@@ -82,7 +97,7 @@ static void gl_vertex_transform(GLContext * c, GLVertex * v)
     float *m;
     V4 *n;
 
-    if (c->lighting_enabled) {
+    if (c->need_eye) {
 	/* eye coordinates needed for lighting */
 
 	m = &c->matrix_stack_ptr[0]->m[0][0];
@@ -164,12 +179,20 @@ void glopVertex(GLContext * c, GLParam * p)
     /* color */
 
     if (c->lighting_enabled) {
-	gl_shade_vertex(c, v);
+	gl_shade_vertex(c, v, 0, &v->color);
+        if(c->light_model_two_side)
+            gl_shade_vertex(c, v, 1, &v->back_color);
+        else
+            v->back_color=v->color;
     } else {
 	v->color = c->current_color;
+        v->back_color = v->color;
     }
 
+    gl_texcoord(c,v);
+
     c->flat_color = v->color;
+    c->flat_back_color = v->back_color;
 
     switch (c->begin_type) {
     case GL_POINTS:
@@ -219,8 +242,10 @@ void glopVertex(GLContext * c, GLParam * p)
     case GL_POLYGON:
     case GL_TRIANGLE_FAN:
 	if (n == 3) {
-            if (c->begin_type == GL_POLYGON)
+            if (c->begin_type == GL_POLYGON) {
                 c->flat_color = c->vertex[0].color;
+                c->flat_back_color = c->vertex[0].back_color;
+            }
 	    gl_draw_triangle(c, &c->vertex[0], &c->vertex[1], &c->vertex[2]);
 	    c->vertex[1] = c->vertex[2];
 	    n = 2;
@@ -258,6 +283,7 @@ void glopEnd(GLContext * c, GLParam*)
     if (c->begin_type == GL_LINE_LOOP) {
 	if (c->vertex_cnt >= 2) {
             c->flat_color = c->vertex[2].color;
+            c->flat_back_color = c->vertex[2].back_color;
 	    gl_draw_line(c, &c->vertex[0], &c->vertex[2]);
 	}
     }

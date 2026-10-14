@@ -16,8 +16,7 @@ Local adaptations:
   and vertex lighting run on the guest CPU; clipping, interpolation,
   rasterization and depth testing run through host VirGL. Frame readback
   returns top-down XRGB32 bytes; libdraw window policy stays in the app.
-- Explicit rejection of unsupported textures, selection, polygon offset,
-  non-fill polygon modes and two-sided lighting; this is not conformant GL.
+- Explicit rejection of unsupported operations; this is not conformant GL.
 - Correct homogeneous transforms, matrix invalidation when lighting changes,
   general-axis rotation and frustum validation, flat provoking colors for
   assembled primitives, polygon winding, default normal/light/depth state,
@@ -27,8 +26,15 @@ Local adaptations:
   glDeleteLists, and validation of operations inside glBegin/glEnd. New lists
   remain private until glEndList; calls and deletion see the old definition.
   Reserved names are distinct from defined lists.
-- Float client arrays use byte strides and copy values into display lists;
-  corrected normal components and removed integer-color overreads.
+- Typed client arrays, indexed draws and buffer objects use byte strides
+  and copy values into display lists; buffers remain in guest memory.
+- Four texture units with owned images, pixel unpacking, mipmaps, filtering,
+  texture matrices, coordinate generation and fixed-function combiners.
+  Generated TGSI programs and sampler descriptors are cached per context.
+  GPU texture copies are evicted by least recent use under resource pressure;
+  retained CPU images allow transparent reupload and target resizing.
+- Alpha testing/blending, depth masks/functions, polygon offset, two-sided
+  materials, point size/attenuation and point sprites use VirGL state.
 - Correct scalar/vector argument lengths, material-list parameter ownership,
   linked light removal, local-viewer vector components and color-material
   tracking when enabled or reconfigured.

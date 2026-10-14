@@ -38,6 +38,7 @@ static void delete_list(GLContext *c,int list)
 {
   GLParamBuffer *pb,*pb1;
   GLList *l;
+  GLImage *image, *next;
 
   l=find_list(c,list);
   assert(l != NULL);
@@ -50,6 +51,10 @@ static void delete_list(GLContext *c,int list)
     pb=pb1;
   }
 
+  for(image=l->images; image!=nil; image=next) {
+    next=image->next;
+    free(image);
+  }
   gl_free(l);
   c->shared_state.lists[list]=NULL;
 }
@@ -123,7 +128,7 @@ static void execute_op(GLContext *c,GLParam *p)
 {
   if (c->in_begin) {
     switch(p[0].op) {
-    case OP_Vertex: case OP_Color: case OP_Normal: case OP_TexCoord:
+    case OP_Vertex: case OP_Color: case OP_Normal: case OP_TexCoord: case OP_MultiTexCoord:
     case OP_EdgeFlag: case OP_Material: case OP_CallList: case OP_End:
       break;
     default:

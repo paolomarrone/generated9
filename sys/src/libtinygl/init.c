@@ -95,11 +95,6 @@ void glInit(int width, int height)
 
   c->current_edge_flag=1;
 
-  c->current_tex_coord.X=0;
-  c->current_tex_coord.Y=0;
-  c->current_tex_coord.Z=0;
-  c->current_tex_coord.W=1;
-
   c->polygon_mode_front=GL_FILL;
   c->polygon_mode_back=GL_FILL;
 
@@ -120,11 +115,13 @@ void glInit(int width, int height)
 
   c->matrix_stack_depth_max[0]=MAX_MODELVIEW_STACK_DEPTH;
   c->matrix_stack_depth_max[1]=MAX_PROJECTION_STACK_DEPTH;
-  c->matrix_stack_depth_max[2]=MAX_TEXTURE_STACK_DEPTH;
+  for(i=2;i<NMATRIX;i++)
+    c->matrix_stack_depth_max[i]=MAX_TEXTURE_STACK_DEPTH;
 
-  for(i=0;i<3;i++) {
+  for(i=0;i<NMATRIX;i++) {
     c->matrix_stack[i]=gl_zalloc(c->matrix_stack_depth_max[i] * sizeof(M4));
     c->matrix_stack_ptr[i]=c->matrix_stack[i];
+    gl_M4_Id(c->matrix_stack_ptr[i]);
   }
 
   glMatrixMode(GL_PROJECTION);
@@ -136,8 +133,12 @@ void glInit(int width, int height)
 
   c->matrix_model_projection_updated=1;
 
-  /* opengl 1.1 arrays */
-  c->client_states = 0;
+  for(i=0;i<Narray;i++) {
+    c->array[i].size=i == ArrayNormal ? 3 : 4;
+    c->array[i].type=GL_FLOAT;
+  }
+
+  gl_init_textures(c);
 
   /* specular buffer */
   c->specbuf_first = NULL;
@@ -146,6 +147,13 @@ void glInit(int width, int height)
 
   /* depth test */
   c->depth_test = 0;
+  c->depth_func = GL_LESS;
+  c->depth_mask = 1;
+  c->blend_src = GL_ONE;
+  c->blend_dst = GL_ZERO;
+  c->alpha_func = GL_ALWAYS;
+  c->point_size = c->point_fade = c->point_atten[0] = 1;
+  c->point_max = 64;
 }
 
 void glClose(void)
@@ -155,7 +163,9 @@ void glClose(void)
   int i;
 
   endSharedState(c);
-  for(i=0;i<3;i++) gl_free(c->matrix_stack[i]);
+  gl_free_buffers(c);
+  gl_free_textures(c);
+  for(i=0;i<NMATRIX;i++) gl_free(c->matrix_stack[i]);
   for(s=c->specbuf_first;s;s=next) {
     next=s->next;
     gl_free(s);

@@ -14,6 +14,7 @@ OFILES=\
 	matrix.$O\
 	misc.$O\
 	specbuf.$O\
+	texture.$O\
 	vertex.$O\
 	zmath.$O\
 	native.$O\

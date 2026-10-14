@@ -30,6 +30,10 @@ enum {
 #define MAX_MODELVIEW_STACK_DEPTH  32
 #define MAX_PROJECTION_STACK_DEPTH 8
 #define MAX_TEXTURE_STACK_DEPTH    8
+#define MAX_TEXTURE_UNITS          4
+#define MAX_TEXTURE_SIZE           2048
+#define MAX_TEXTURE_LEVELS         12
+#define NMATRIX (2+MAX_TEXTURE_UNITS)
 #define MAX_LIGHTS                 16
 
 
@@ -91,15 +95,50 @@ typedef struct GLParamBuffer {
   struct GLParamBuffer *next;
 } GLParamBuffer;
 
+typedef struct GLImage GLImage;
+struct GLImage {
+  GLImage *next;
+  int width, height, format;
+  uchar pixels[1];
+};
+
+typedef struct GLTexture GLTexture;
+struct GLTexture {
+  GLTexture *next;
+  GLuint name;
+  int defined, min, mag, wrap[2], generate;
+  GLImage *image[MAX_TEXTURE_LEVELS];
+  u32int resource, view;
+  uvlong used;
+};
+
+typedef struct GLTexenv GLTexenv;
+struct GLTexenv {
+  int mode, combine[2], source[2][3], operand[2][3], scale[2];
+  V4 color;
+};
+
+typedef struct GLTexunit GLTexunit;
+struct GLTexunit {
+  int enabled, replace, gen[4], genmode[4];
+  V4 objectplane[4], eyeplane[4];
+  GLTexture *texture;
+  V4 coord;
+  GLTexenv env;
+};
+
 typedef struct GLList {
   GLParamBuffer *first_op_buffer;
+  GLImage *images;
   /* TODO: extensions for an hash table or a better allocating scheme */
 } GLList;
 
 typedef struct GLVertex {
   V3 normal;
   V4 coord;
-  V4 color;
+  V4 color, back_color;
+  float point_size;
+  V4 texcoord[MAX_TEXTURE_UNITS];
 
   /* computed values */
   V4 ec;                /* eye coordinates */
@@ -111,6 +150,24 @@ typedef struct GLVertex {
 typedef struct GLSharedState {
   GLList **lists;
 } GLSharedState;
+
+/* Client storage is retained on the CPU while transforms run there. */
+typedef struct GLBuffer GLBuffer;
+struct GLBuffer {
+  GLBuffer *next;
+  GLuint name;
+  int defined, usage;
+  uintptr size;
+  uchar *data;
+};
+
+enum { ArrayVertex, ArrayColor, ArrayNormal, ArrayTexcoord, Narray=ArrayTexcoord+MAX_TEXTURE_UNITS };
+typedef struct GLArray GLArray;
+struct GLArray {
+  int enabled, size, type, stride;
+  const void *pointer;
+  GLBuffer *buffer;
+};
 
 /* display context */
 
@@ -143,9 +200,9 @@ typedef struct GLContext {
   /* matrix */
 
   int matrix_mode;
-  M4 *matrix_stack[3];
-  M4 *matrix_stack_ptr[3];
-  int matrix_stack_depth_max[3];
+  M4 *matrix_stack[NMATRIX];
+  M4 *matrix_stack_ptr[NMATRIX];
+  int matrix_stack_depth_max[NMATRIX];
 
   M4 matrix_model_view_inv;
   M4 matrix_model_projection;
@@ -171,9 +228,12 @@ typedef struct GLContext {
 
   /* current vertex state */
   V4 current_color;
-  V4 flat_color;
+  V4 flat_color, flat_back_color;
   V4 current_normal;
-  V4 current_tex_coord;
+  GLTexture *textures;
+  GLTexunit texunit[MAX_TEXTURE_UNITS];
+  int active_texture, client_texture;
+  int unpack_alignment, unpack_row_length, unpack_skip_rows, unpack_skip_pixels;
   int current_edge_flag;
 
   /* glBegin / glEnd */
@@ -182,19 +242,8 @@ typedef struct GLContext {
   int vertex_n,vertex_cnt;
   GLVertex vertex[4];
 
-  /* opengl 1.1 arrays  */
-  float *vertex_array;
-  int vertex_array_size;
-  int vertex_array_stride;
-  float *normal_array;
-  int normal_array_stride;
-  float *color_array;
-  int color_array_size;
-  int color_array_stride;
-  float *texcoord_array;
-  int texcoord_array_size;
-  int texcoord_array_stride;
-  int client_states;
+  GLArray array[Narray];
+  GLBuffer *buffers, *array_buffer, *element_buffer;
 
   /* specular buffer. could probably be shared between contexts,
     but that wouldn't be 100% thread safe */
@@ -205,7 +254,12 @@ typedef struct GLContext {
   /* native rasterizer */
   void *opaque;
   /* depth test */
-  int depth_test;
+  int depth_test, depth_func, depth_mask;
+  int blend_enabled, blend_src, blend_dst, alpha_enabled, alpha_func;
+  float alpha_ref, offset_factor, offset_units;
+  int offset_fill, need_eye;
+  int point_sprite;
+  float point_size, point_min, point_max, point_fade, point_atten[3];
 } GLContext;
 
 extern GLContext *gl_ctx;
@@ -223,7 +277,8 @@ void gl_print_matrix(const float *m);
 /* light.c */
 void gl_color_material(GLContext *c);
 void gl_enable_disable_light(GLContext *c,int light,int v);
-void gl_shade_vertex(GLContext *c,GLVertex *v);
+void gl_shade_vertex(GLContext*, GLVertex*, int, V4*);
+void gl_texcoord(GLContext*, GLVertex*);
 
 GLContext *gl_get_context(void);
 
@@ -231,6 +286,11 @@ void gl_fatal_error(char *format, ...);
 void *gl_malloc(int);
 void *gl_zalloc(int);
 void gl_free(void*);
+void gl_free_buffers(GLContext*);
+void gl_init_textures(GLContext*);
+void gl_free_textures(GLContext*);
+void gl_release_texture(GLContext*, GLTexture*);
+int gl_texture_levels(GLTexture*);
 
 
 /* specular buffer "api" */

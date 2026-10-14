@@ -496,27 +496,6 @@ void glClearDepth(double depth)
 
 /* textures */
 
-void glTexImage2D( int target, int level, int components,
-                   int width, int height, int border,
-                   int format, int type, void *pixels)
-{
-  GLParam p[10];
-
-  p[0].op=OP_TexImage2D;
-  p[1].i=target;
-  p[2].i=level;
-  p[3].i=components;
-  p[4].i=width;
-  p[5].i=height;
-  p[6].i=border;
-  p[7].i=format;
-  p[8].i=type;
-  p[9].p=pixels;
-
-  gl_add_op(p);
-}
-
-
 void glBindTexture(int target,int texture)
 {
   GLParam p[3];
@@ -568,7 +547,7 @@ void glPixelStorei(int pname,int param)
   p[1].i=pname;
   p[2].i=param;
 
-  gl_add_op(p);
+  glopPixelStore(gl_get_context(), p);
 }
 
 /* selection */
@@ -658,4 +637,41 @@ void glDebug(int mode)
 {
   GLContext *c=gl_get_context();
   c->print_flag=mode;
+}
+
+void
+glOrtho(GLdouble left, GLdouble right, GLdouble bottom, GLdouble top,
+	GLdouble near, GLdouble far)
+{
+	float m[16];
+
+	if(left == right || bottom == top || near == far)
+		gl_fatal_error("invalid orthographic projection");
+	memset(m, 0, sizeof(m));
+	m[0] = 2/(right-left);
+	m[5] = 2/(top-bottom);
+	m[10] = -2/(far-near);
+	m[12] = -(right+left)/(right-left);
+	m[13] = -(top+bottom)/(top-bottom);
+	m[14] = -(far+near)/(far-near);
+	m[15] = 1;
+	glMultMatrixf(m);
+}
+
+void
+glColor4ub(GLubyte r, GLubyte g, GLubyte b, GLubyte a)
+{
+	glColor4f(r/255.f, g/255.f, b/255.f, a/255.f);
+}
+
+void
+glLightModelf(GLenum name, GLfloat v)
+{
+	GLParam p[6];
+
+	memset(p, 0, sizeof(p));
+	p[0].op = OP_LightModel;
+	p[1].i = name;
+	p[2].f = v;
+	gl_add_op(p);
 }

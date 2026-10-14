@@ -43,20 +43,36 @@ Both dimensions must be between 1 and 2048.
 The initial viewport covers the target.
 .PP
 The supported GL operations include immediate points, lines, triangles,
-strips, fans, quads and convex polygons; float vertex/color/normal arrays
-through
-.BR glArrayElement ;
-flat and smooth colors; matrix stacks, transformations and perspective;
-face culling; one-sided vertex lighting and materials; display lists;
-and clearing color and depth.
-Depth testing uses LESS and writes depth while enabled.
-Points and lines have size one. Polygons are filled.
+strips, fans, quads and convex polygons; indexed client arrays and buffer
+objects; flat and smooth colors; matrix stacks and projections;
+face culling; one- and two-sided vertex lighting and materials;
+display lists; alpha testing and blending; depth functions and write masks;
+polygon offset; and clearing color and depth.
+Lines have width one. Points support sizes from 1 through 64 pixels,
+distance attenuation and texture sprites. Polygons are filled.
 The header declares the available entry points, not a complete GL API.
 .PP
-Float array strides are byte counts; zero means tightly packed.
-Display lists own the values obtained by
-.BR glArrayElement ,
-not pointers to client arrays.
+Four texture units provide two-dimensional textures up to 2048 by 2048,
+nearest and linear filtering, mipmaps, repeat/clamp wrapping, texture
+matrices and object-linear, eye-linear and sphere-map coordinate generation.
+Images accept unsigned-byte RGB, RGBA, alpha, luminance and
+luminance-alpha pixels, with configurable unpack alignment, row length
+and skipped rows/pixels. Texture borders must be zero.
+Mipmaps may be supplied as individual levels or generated on image replacement
+with
+.BR GL_GENERATE_MIPMAP_SGIS .
+Fixed-function texture environments include modulate, replace, decal, add,
+blend and combine (replace, modulate, add, signed add and interpolate).
+.PP
+Array strides are byte counts; zero means tightly packed.
+Texture images are retained in guest memory. Under resource pressure,
+unused GPU copies are evicted in order of least recent use and uploaded
+again when needed. Currently enabled textures are kept resident during a draw.
+.PP
+Buffer objects store array and index data in guest memory; transformation
+and lighting still run on the CPU.
+Display lists own the array values and texture images obtained during
+compilation, independently of subsequent buffer or image changes.
 List names are in the range 1 through 1023 and nesting is limited to 64.
 Generated names are reserved but remain undefined until
 .BR glEndList .
@@ -118,8 +134,8 @@ As in TinyGL, invalid or unsupported operations are fatal.
 There is no recoverable GL error queue.
 .SH BUGS
 This is an experimental subset, not a conformant OpenGL implementation.
-There are no textures, blending, stencil, scissor, fog, programmable shaders,
-selection, polygon offset, non-fill polygon modes or two-sided lighting.
+There is no stencil, scissor, fog, multisampling, programmable shader API,
+selection, texture subimage update or non-fill polygon mode.
 Unsupported operations are rejected; functions absent from the header are
 not provided. Lighting retains TinyGL's approximations.
 .PP

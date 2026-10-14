@@ -42,6 +42,148 @@ clear(void)
 }
 
 static void
+texquad(void)
+{
+	glBegin(GL_QUADS);
+	glTexCoord2f(0, 0); glVertex2f(-1, -1);
+	glTexCoord2f(1, 0); glVertex2f(1, -1);
+	glTexCoord2f(1, 1); glVertex2f(1, 1);
+	glTexCoord2f(0, 1); glVertex2f(-1, 1);
+	glEnd();
+}
+
+static void
+texturepressure(int count, int size)
+{
+	GLuint tex[320];
+	uchar *data;
+	int i, pass;
+
+	data = malloc(size*size*4);
+	if(data == nil) sysfatal("texture test allocation: %r");
+	glEnable(GL_TEXTURE_2D);
+	glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
+	glGenTextures(count, tex);
+	for(pass=0; pass<2; pass++){
+		if(pass == 1 && size > 1){
+			tglresize(2048, 2048);
+			tglresize(W, H);
+		}
+		for(i=0; i<count; i++){
+			glBindTexture(GL_TEXTURE_2D, tex[i]);
+			if(pass == 0){
+				memset(data, i%80*3, size*size*4);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, size, size, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+			}
+			texquad();
+			readback();
+			pixel(32, 32, i%80*3, i%80*3, i%80*3, "texture residency and reupload");
+		}
+	}
+	glDeleteTextures(count, tex);
+	free(data);
+	glDisable(GL_TEXTURE_2D);
+	glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+	print("PASS: texture residency for %d images of %d by %d\n", count, size, size);
+}
+
+static void
+textures(void)
+{
+	uchar rgb[16] = {255,0,0, 0,255,0, 99,99, 0,0,255, 255,255,255, 99,99};
+	uchar green[4] = {0,255,0,255};
+	GLuint t[2], list;
+
+	glGenTextures(2, t);
+	if(glIsTexture(t[0])) sysfatal("reserved texture is already defined");
+	glBindTexture(GL_TEXTURE_2D, t[0]);
+	if(!glIsTexture(t[0])) sysfatal("bound texture is not defined");
+	glEnable(GL_TEXTURE_2D);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 2, 2, 0, GL_RGB, GL_UNSIGNED_BYTE, rgb);
+	glColor4f(1,1,1,1);
+	texquad();
+	readback();
+	pixel(16,48,255,0,0,"texture bottom left");
+	pixel(48,48,0,255,0,"texture bottom right");
+	pixel(16,16,0,0,255,"texture top left");
+	pixel(48,16,255,255,255,"texture top right");
+
+	/* A texture replacement must first finish the old batch. */
+	glViewport(0,0,W/2,H);
+	texquad();
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, green);
+	glViewport(W/2,0,W/2,H);
+	texquad();
+	readback();
+	pixel(8,48,255,0,0,"texture update preserves old draw");
+	pixel(48,48,0,255,0,"texture update new draw");
+	glViewport(0,0,W,H);
+
+	list = glGenLists(1);
+	glNewList(list,GL_COMPILE);
+	glTexImage2D(GL_TEXTURE_2D,0,GL_RGB,2,2,0,GL_RGB,GL_UNSIGNED_BYTE,rgb);
+	glEndList();
+	memset(rgb,0,sizeof(rgb));
+	glCallList(list);
+	glDeleteLists(list,1);
+	texquad();
+	readback();
+	pixel(16,48,255,0,0,"display list owns texture pixels");
+
+	/* Independent matrices, bindings and combiner state on a second unit. */
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D,t[1]);
+	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST);
+	glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,1,1,0,GL_RGBA,GL_UNSIGNED_BYTE,green);
+	glEnable(GL_TEXTURE_2D);
+	glTexEnvi(GL_TEXTURE_ENV,GL_TEXTURE_ENV_MODE,GL_COMBINE);
+	glTexEnvi(GL_TEXTURE_ENV,GL_COMBINE_RGB,GL_ADD);
+	glMultiTexCoord4f(GL_TEXTURE1,0,0,0,1);
+	glMatrixMode(GL_TEXTURE);
+	glTranslatef(.5,.5,0);
+	glActiveTexture(GL_TEXTURE0);
+	glLoadIdentity();
+	glTranslatef(.5,0,0);
+	glMatrixMode(GL_MODELVIEW);
+	texquad();
+	readback();
+	pixel(16,48,0,255,0,"texture matrices are per unit");
+	pixel(48,48,255,255,0,"texture combiner add");
+	glActiveTexture(GL_TEXTURE1);
+	glDisable(GL_TEXTURE_2D);
+	glActiveTexture(GL_TEXTURE0);
+	glMatrixMode(GL_TEXTURE);
+	glLoadIdentity();
+	glMatrixMode(GL_MODELVIEW);
+
+	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR_MIPMAP_LINEAR);
+	texquad();
+	readback();
+	pixel(16,48,0,0,0,"incomplete mipmap texture");
+	glTexParameteri(GL_TEXTURE_2D,GL_GENERATE_MIPMAP_SGIS,1);
+	/* Four pixels reduce to a single exact green texel. */
+	memset(rgb,0,sizeof(rgb));
+	rgb[1]=rgb[4]=rgb[9]=rgb[12]=255;
+	glTexImage2D(GL_TEXTURE_2D,0,GL_RGB,2,2,0,GL_RGB,GL_UNSIGNED_BYTE,rgb);
+	glMatrixMode(GL_TEXTURE);
+	glScalef(128,128,1);
+	glMatrixMode(GL_MODELVIEW);
+	texquad();
+	readback();
+	pixel(16,48,0,255,0,"generated mipmap");
+	glMatrixMode(GL_TEXTURE);
+	glLoadIdentity();
+	glMatrixMode(GL_MODELVIEW);
+	glDeleteTextures(2,t);
+	if(glIsTexture(t[0])) sysfatal("texture not deleted");
+	glDisable(GL_TEXTURE_2D);
+	print("PASS: textures, unpack alignment, updates, list ownership, multitexture and mipmaps\n");
+}
+
+static void
 matrices(void)
 {
 	float m[16];
@@ -57,6 +199,147 @@ matrices(void)
 	if(m[0] != 1 || m[5] != 1 || m[10] != 1 || m[15] != 1)
 		sysfatal("matrix stack restore");
 	print("PASS: general axis rotation and matrix stack\n");
+}
+
+static void
+fragmentstate(void)
+{
+	uchar *p;
+
+	clear();
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	glColor4f(1,0,0,.5);
+	triangle(0);
+	readback();
+	p = pixels+4*(32*W+32);
+	if(p[2] < 127 || p[2] > 128 || p[1] != 0 || p[0] < 127 || p[0] > 128)
+		sysfatal("alpha blending: %d %d %d",p[2],p[1],p[0]);
+	glDisable(GL_BLEND);
+	clear();
+	glEnable(GL_ALPHA_TEST);
+	glAlphaFunc(GL_GREATER,.5);
+	triangle(0);
+	readback();
+	pixel(32,32,0,0,255,"alpha rejected");
+	glColor4f(1,0,0,.75);
+	triangle(0);
+	readback();
+	pixel(32,32,255,0,0,"alpha accepted");
+	glDisable(GL_ALPHA_TEST);
+	glEnable(GL_DEPTH_TEST);
+	glDepthFunc(GL_LEQUAL);
+	clear();
+	glDepthMask(GL_FALSE);
+	triangle(-.5);
+	glColor3f(0,1,0);
+	triangle(.5);
+	readback();
+	pixel(32,32,0,255,0,"depth writes disabled");
+	glDepthMask(GL_TRUE);
+	clear();
+	glColor3f(1,0,0);
+	triangle(0);
+	glColor3f(0,1,0);
+	triangle(0);
+	readback();
+	pixel(32,32,0,255,0,"equal depth accepted");
+	glDepthFunc(GL_LESS);
+	glColor3f(1,0,0);
+	triangle(0);
+	readback();
+	pixel(32,32,0,255,0,"equal depth rejected");
+	glEnable(GL_POLYGON_OFFSET_FILL);
+	glPolygonOffset(0,-1);
+	triangle(0);
+	readback();
+	pixel(32,32,255,0,0,"polygon offset");
+	glDisable(GL_POLYGON_OFFSET_FILL);
+	glDisable(GL_DEPTH_TEST);
+	print("PASS: alpha blending and testing, depth mask/function and polygon offset\n");
+}
+
+static void
+texgenpoints(void)
+{
+	GLuint t;
+	uchar rgb[16] = {255,0,0,255, 0,255,0,255, 0,0,255,255, 255,255,255,255};
+	float s[4] = {.5,0,0,.5}, tplane[4] = {0,.5,0,.5};
+	float atten[3] = {4,0,0};
+
+	glGenTextures(1,&t);
+	glBindTexture(GL_TEXTURE_2D,t);
+	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
+	glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,2,2,0,GL_RGBA,GL_UNSIGNED_BYTE,rgb);
+	glEnable(GL_TEXTURE_2D);
+	glColor4f(1,1,1,1);
+	glTexGeni(GL_S,GL_TEXTURE_GEN_MODE,GL_OBJECT_LINEAR);
+	glTexGeni(GL_T,GL_TEXTURE_GEN_MODE,GL_OBJECT_LINEAR);
+	glTexGenfv(GL_S,GL_OBJECT_PLANE,s);
+	glTexGenfv(GL_T,GL_OBJECT_PLANE,tplane);
+	glEnable(GL_TEXTURE_GEN_S);
+	glEnable(GL_TEXTURE_GEN_T);
+	texquad();
+	readback();
+	pixel(16,48,255,0,0,"object texgen bottom left");
+	pixel(48,16,255,255,255,"object texgen top right");
+	glPushMatrix();
+	glTranslatef(.5,0,0);
+	glTexGenfv(GL_S,GL_EYE_PLANE,s);
+	glTexGenfv(GL_T,GL_EYE_PLANE,tplane);
+	glPopMatrix();
+	glTexGeni(GL_S,GL_TEXTURE_GEN_MODE,GL_EYE_LINEAR);
+	glTexGeni(GL_T,GL_TEXTURE_GEN_MODE,GL_EYE_LINEAR);
+	texquad();
+	readback();
+	pixel(40,48,255,0,0,"eye plane captures specification matrix");
+	pixel(56,48,0,255,0,"eye plane transformed coordinates");
+	glTexGeni(GL_S,GL_TEXTURE_GEN_MODE,GL_SPHERE_MAP);
+	glTexGeni(GL_T,GL_TEXTURE_GEN_MODE,GL_SPHERE_MAP);
+	glMatrixMode(GL_PROJECTION);
+	glPushMatrix();
+	glOrtho(-1,1,-1,1,1,3);
+	glMatrixMode(GL_MODELVIEW);
+	glPushMatrix();
+	glTranslatef(0,0,-2);
+	glNormal3f(0,0,1);
+	texquad();
+	readback();
+	pixel(16,48,255,0,0,"sphere map bottom left");
+	pixel(48,16,255,255,255,"sphere map top right");
+	glPopMatrix();
+	glMatrixMode(GL_PROJECTION);
+	glPopMatrix();
+	glMatrixMode(GL_MODELVIEW);
+	glDisable(GL_TEXTURE_GEN_S);
+	glDisable(GL_TEXTURE_GEN_T);
+	clear();
+	glPointSize(32);
+	glEnable(GL_POINT_SPRITE);
+	glTexEnvi(GL_POINT_SPRITE,GL_COORD_REPLACE,GL_TRUE);
+	glBegin(GL_POINTS);
+	glVertex2f(0,0);
+	glEnd();
+	readback();
+	pixel(24,40,255,0,0,"point sprite bottom left");
+	pixel(40,24,255,255,255,"point sprite top right");
+	pixel(8,32,0,0,255,"point size bounds");
+	clear();
+	glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION,atten);
+	glBegin(GL_POINTS);
+	glVertex2f(0,0);
+	glEnd();
+	readback();
+	pixel(20,32,0,0,255,"attenuated point bounds");
+	pixel(28,36,255,0,0,"attenuated point sprite");
+	atten[0] = 1;
+	glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION,atten);
+	glPointSize(1);
+	glDisable(GL_POINT_SPRITE);
+	glDisable(GL_TEXTURE_2D);
+	glDeleteTextures(1,&t);
+	print("PASS: generated texture coordinates, point sprites, size and attenuation\n");
 }
 
 static void
@@ -218,6 +501,7 @@ polygons(void)
 static void
 arrays(void)
 {
+	schar signedcolor[4] = {0,63,-128,127};
 	float v[3][7] = {
 		{-.75, -.75, 0, 1, 0, 0, 99},
 		{.75, -.75, 0, 1, 0, 0, 99},
@@ -245,7 +529,73 @@ arrays(void)
 	readback();
 	pixel(32, 32, 255, 0, 0, "interleaved arrays and list snapshot");
 	glDeleteLists(list, 1);
+	glColorPointer(4,GL_BYTE,0,signedcolor);
+	glEnableClientState(GL_COLOR_ARRAY);
+	glArrayElement(0);
+	glDisableClientState(GL_COLOR_ARRAY);
+	triangle(0);
+	readback();
+	pixel(32,32,1,127,0,"classic signed color normalization");
 	print("PASS: byte strides, color arrays and display list ownership\n");
+}
+
+static void
+buffers(void)
+{
+	struct { uchar color[4]; short pos[2]; } v[] = {
+		{{255, 0, 0, 255}, {-3, -3}},
+		{{255, 0, 0, 255}, {3, -3}},
+		{{255, 0, 0, 255}, {0, 3}},
+	};
+	ushort indices[] = {99, 2, 0, 1};
+	uchar green[4] = {0, 255, 0, 255};
+	GLuint b[2], list;
+	int i, size;
+
+	clear();
+	glGenBuffers(2, b);
+	if(b[0] == 0 || b[0] == b[1] || glIsBuffer(b[0]))
+		sysfatal("buffer name reservation");
+	glBindBuffer(GL_ARRAY_BUFFER, b[0]);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(v), v, GL_DYNAMIC_DRAW);
+	glGetBufferParameteriv(GL_ARRAY_BUFFER, GL_BUFFER_SIZE, &size);
+	if(!glIsBuffer(b[0]) || size != sizeof(v)) sysfatal("buffer definition");
+	glVertexPointer(2, GL_SHORT, sizeof(v[0]), (void*)4);
+	glColorPointer(4, GL_UNSIGNED_BYTE, sizeof(v[0]), nil);
+	glEnableClientState(GL_VERTEX_ARRAY);
+	glEnableClientState(GL_COLOR_ARRAY);
+	/* Array pointers capture the binding, not the current buffer slot. */
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, b[1]);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+	glPushMatrix();
+	glScalef(.25, .25, 1);
+	glDrawElements(GL_TRIANGLES, 3, GL_UNSIGNED_SHORT, (void*)2);
+	readback();
+	pixel(32, 32, 255, 0, 0, "interleaved byte color and short vertex buffers");
+
+	glBindBuffer(GL_ARRAY_BUFFER, b[0]);
+	for(i=0; i<3; i++)
+		glBufferSubData(GL_ARRAY_BUFFER, i*sizeof(v[0]), sizeof(green), green);
+	clear();
+	glDrawArrays(GL_TRIANGLES, 0, 3);
+	readback();
+	pixel(32, 32, 0, 255, 0, "buffer partial update");
+	list = glGenLists(1);
+	glNewList(list, GL_COMPILE);
+	glDrawElements(GL_TRIANGLES, 3, GL_UNSIGNED_SHORT, (void*)2);
+	glEndList();
+	glDeleteBuffers(2, b);
+	if(glIsBuffer(b[0]) || glIsBuffer(b[1])) sysfatal("buffer deletion");
+	glDisableClientState(GL_VERTEX_ARRAY);
+	glDisableClientState(GL_COLOR_ARRAY);
+	clear();
+	glCallList(list);
+	readback();
+	pixel(32, 32, 0, 255, 0, "display list owns deleted buffer contents");
+	glDeleteLists(list, 1);
+	glPopMatrix();
+	print("PASS: indexed buffers, mixed array types, updates and display list ownership\n");
 }
 
 static void
@@ -294,6 +644,33 @@ lighting(void)
 	readback();
 	pixel(32, 32, 0, 0, 255, "color material new mode");
 	glDisable(GL_COLOR_MATERIAL);
+	glLightModelf(GL_LIGHT_MODEL_TWO_SIDE,1);
+	glMaterialfv(GL_FRONT,GL_EMISSION,diffuse);
+	diffuse[0]=0; diffuse[1]=1;
+	glMaterialfv(GL_BACK,GL_EMISSION,diffuse);
+	clear();
+	triangle(0);
+	readback();
+	pixel(32,32,255,0,0,"front material");
+	glFrontFace(GL_CW);
+	triangle(0);
+	readback();
+	pixel(32,32,0,255,0,"back material");
+	glMaterialfv(GL_FRONT_AND_BACK,GL_EMISSION,ambient);
+	glMaterialfv(GL_FRONT_AND_BACK,GL_DIFFUSE,diffuse);
+	glEnable(GL_LIGHT0);
+	glNormal3f(0,0,-1);
+	clear();
+	triangle(0);
+	readback();
+	pixel(32,32,0,255,0,"back normal is reversed");
+	glFrontFace(GL_CCW);
+	triangle(0);
+	readback();
+	pixel(32,32,0,0,0,"front normal is preserved");
+	glNormal3f(0,0,1);
+	glDisable(GL_LIGHT0);
+	glLightModelf(GL_LIGHT_MODEL_TWO_SIDE,0);
 	glDisable(GL_LIGHTING);
 	print("PASS: material lighting, color tracking, normal arrays and light lifetime\n");
 }
@@ -353,10 +730,12 @@ errors(void)
 {
 	Waitmsg *w;
 	int i, pid, fd;
+	GLuint buffer;
 	char *expected[] = {
 		"unsupported capability", "readback buffer too small",
 		"target size must", "bad display list id", "invalid viewport",
 		"invalid operation inside glBegin", "display list nesting too deep",
+		"buffer access out of bounds", "buffer access out of bounds",
 	};
 
 	for(i=0; i<nelem(expected); i++){
@@ -366,7 +745,7 @@ errors(void)
 			fd = open("/dev/null", OWRITE);
 			if(fd >= 0){ dup(fd, 2); close(fd); }
 			switch(i){
-			case 0: glEnable(GL_TEXTURE_2D); break;
+			case 0: glEnable(GL_TEXTURE_1D); break;
 			case 1: tglread(pixels, 1); break;
 			case 2: tglresize(0, 64); break;
 			case 3: glNewList(0xFFFFFFFFU, GL_COMPILE); break;
@@ -377,6 +756,19 @@ errors(void)
 				glCallList(1);
 				glEndList();
 				glCallList(1);
+				break;
+			case 7:
+				glBindBuffer(GL_ARRAY_BUFFER, 1);
+				glBufferData(GL_ARRAY_BUFFER, 16, nil, GL_STATIC_DRAW);
+				glBufferSubData(GL_ARRAY_BUFFER, 15, 4, pixels);
+				break;
+			case 8:
+				glGenBuffers(1, &buffer);
+				glBindBuffer(GL_ARRAY_BUFFER, buffer);
+				glBufferData(GL_ARRAY_BUFFER, 4, nil, GL_STATIC_DRAW);
+				glVertexPointer(3, GL_FLOAT, 0, nil);
+				glEnableClientState(GL_VERTEX_ARRAY);
+				glDrawArrays(GL_TRIANGLES, 0, 3);
 				break;
 			}
 			exits("invalid input accepted");
@@ -499,6 +891,12 @@ main(int argc, char **argv)
 	lists();
 	polygons();
 	arrays();
+	buffers();
+	textures();
+	texturepressure(320, 1);
+	texturepressure(20, 1024);
+	fragmentstate();
+	texgenpoints();
 	lighting();
 	primitives();
 	errors();

@@ -43,6 +43,17 @@ enum {
 	GL_POLYGON			= 0x0009,
 	GL_EDGE_FLAG			= 0x0B43,
 
+	/* Buffer objects */
+	GL_ARRAY_BUFFER = 0x8892,
+	GL_ELEMENT_ARRAY_BUFFER = 0x8893,
+	GL_ARRAY_BUFFER_BINDING = 0x8894,
+	GL_ELEMENT_ARRAY_BUFFER_BINDING = 0x8895,
+	GL_STREAM_DRAW = 0x88E0,
+	GL_STATIC_DRAW = 0x88E4,
+	GL_DYNAMIC_DRAW = 0x88E8,
+	GL_BUFFER_SIZE = 0x8764,
+	GL_BUFFER_USAGE = 0x8765,
+
 	/* Vertex Arrays */
 	GL_VERTEX_ARRAY			= 0x8074,
 	GL_NORMAL_ARRAY			= 0x8075,
@@ -483,6 +494,19 @@ enum {
 	GL_ZOOM_X			= 0x0D16,
 	GL_ZOOM_Y			= 0x0D17,
 
+	/* Texture units and fixed-function combiners. */
+	GL_TEXTURE0 = 0x84C0, GL_TEXTURE1 = 0x84C1,
+	GL_TEXTURE2 = 0x84C2, GL_TEXTURE3 = 0x84C3,
+	GL_ACTIVE_TEXTURE = 0x84E0, GL_CLIENT_ACTIVE_TEXTURE = 0x84E1,
+	GL_MAX_TEXTURE_UNITS = 0x84E2, GL_CLAMP_TO_EDGE = 0x812F,
+	GL_COMBINE = 0x8570, GL_COMBINE_RGB = 0x8571, GL_COMBINE_ALPHA = 0x8572,
+	GL_RGB_SCALE = 0x8573, GL_ADD_SIGNED = 0x8574, GL_INTERPOLATE = 0x8575,
+	GL_CONSTANT = 0x8576, GL_PRIMARY_COLOR = 0x8577, GL_PREVIOUS = 0x8578,
+	GL_SRC0_RGB = 0x8580, GL_SRC1_RGB = 0x8581, GL_SRC2_RGB = 0x8582,
+	GL_SRC0_ALPHA = 0x8588, GL_SRC1_ALPHA = 0x8589, GL_SRC2_ALPHA = 0x858A,
+	GL_OPERAND0_RGB = 0x8590, GL_OPERAND1_RGB = 0x8591, GL_OPERAND2_RGB = 0x8592,
+	GL_OPERAND0_ALPHA = 0x8598, GL_OPERAND1_ALPHA = 0x8599, GL_OPERAND2_ALPHA = 0x859A,
+
 	/* Texture mapping */
 	GL_TEXTURE_ENV			= 0x2300,
 	GL_TEXTURE_ENV_MODE		= 0x2200,
@@ -672,7 +696,11 @@ typedef unsigned short	GLushort;	/* 2-byte unsigned */
 typedef unsigned int	GLuint;		/* 4-byte unsigned */
 typedef float		GLfloat;	/* single precision float */
 typedef double		GLdouble;	/* double precision float */
+typedef float GLclampf;
+typedef double GLclampd;
 typedef int GLsizei;
+typedef intptr GLintptr;
+typedef intptr GLsizeiptr;
 
 /* functions */
 
@@ -727,6 +755,24 @@ void glCallList(unsigned int list);
 /* clear */
 void glClear(int mask);
 void glClearColor(float r,float g,float b,float a);
+enum {
+    GL_POINT_SPRITE = 0x8861, GL_COORD_REPLACE = 0x8862,
+    GL_POINT_SIZE_MIN = 0x8126, GL_POINT_SIZE_MAX = 0x8127,
+    GL_POINT_FADE_THRESHOLD_SIZE = 0x8128, GL_POINT_DISTANCE_ATTENUATION = 0x8129,
+};
+void glOrtho(GLdouble, GLdouble, GLdouble, GLdouble, GLdouble, GLdouble);
+void glPointSize(GLfloat);
+void glPointParameterf(GLenum, GLfloat);
+void glPointParameterfv(GLenum, const GLfloat*);
+void glTexGeni(GLenum, GLenum, GLint);
+void glTexGenfv(GLenum, GLenum, const GLfloat*);
+void glLightModelf(GLenum, GLfloat);
+void glColor4ub(GLubyte, GLubyte, GLubyte, GLubyte);
+void glDepthFunc(GLenum);
+void glDepthMask(GLboolean);
+void glBlendFunc(GLenum, GLenum);
+void glAlphaFunc(GLenum, GLclampf);
+GLboolean glIsEnabled(GLenum);
 void glClearDepth(double depth);
 
 /* selection */
@@ -739,6 +785,14 @@ void glPopName(void);
 void glLoadName(unsigned int name);
 
 /* textures */
+#define GL_GENERATE_MIPMAP_SGIS 0x8191
+
+void glActiveTexture(GLenum);
+void glClientActiveTexture(GLenum);
+void glMultiTexCoord4f(GLenum, GLfloat, GLfloat, GLfloat, GLfloat);
+GLboolean glIsTexture(GLuint);
+void glTexEnvfv(GLenum, GLenum, const GLfloat*);
+const GLubyte *glGetString(GLenum);
 void glGenTextures(int n, unsigned int *textures);
 void glDeleteTextures(int n, const unsigned int *textures);
 void glBindTexture(int target,int texture);
@@ -768,7 +822,17 @@ void glGetIntegerv(int pname,int *params);
 void glGetFloatv(int pname, float *v);
 void glFrontFace(int mode);
 
-/* opengl 1.2 arrays */
+void glGenBuffers(GLsizei, GLuint*);
+void glDeleteBuffers(GLsizei, const GLuint*);
+void glBindBuffer(GLenum, GLuint);
+GLboolean glIsBuffer(GLuint);
+void glBufferData(GLenum, GLsizeiptr, const GLvoid*, GLenum);
+void glBufferSubData(GLenum, GLintptr, GLsizeiptr, const GLvoid*);
+void glGetBufferParameteriv(GLenum, GLenum, GLint*);
+void glDrawArrays(GLenum, GLint, GLsizei);
+void glDrawElements(GLenum, GLsizei, GLenum, const GLvoid*);
+
+/* client arrays */
 void glEnableClientState(GLenum array);
 void glDisableClientState(GLenum array);
 void glArrayElement(GLint i);

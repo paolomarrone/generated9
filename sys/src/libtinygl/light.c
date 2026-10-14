@@ -157,7 +157,7 @@ void glopLightModel(GLContext *c,GLParam *p)
     c->local_light_model=(int)p[2].f;
     break;
   case GL_LIGHT_MODEL_TWO_SIDE:
-    if (p[2].f != 0) gl_fatal_error("two-sided lighting is not supported");
+    c->light_model_two_side = p[2].f != 0;
     break;
   default:
     gl_fatal_error("invalid light model %x", pname);
@@ -191,20 +191,20 @@ void gl_enable_disable_light(GLContext *c,int light,int v)
 }
 
 /* non optimized lightening model */
-void gl_shade_vertex(GLContext *c,GLVertex *v)
+void gl_shade_vertex(GLContext *c,GLVertex *v,int back,V4 *color)
 {
   float R,G,B,A;
   GLMaterial *m;
   GLLight *l;
   V3 n,s,d;
   float dist,tmp,att,dot,dot_spot,dot_spec;
-  int twoside = c->light_model_two_side;
 
-  m=&c->materials[0];
 
-  n.X=v->normal.X;
-  n.Y=v->normal.Y;
-  n.Z=v->normal.Z;
+  m=&c->materials[back];
+
+  n.X=back ? -v->normal.X : v->normal.X;
+  n.Y=back ? -v->normal.Y : v->normal.Y;
+  n.Z=back ? -v->normal.Z : v->normal.Z;
 
   R=m->emission.v[0]+m->ambient.v[0]*c->ambient_light_model.v[0];
   G=m->emission.v[1]+m->ambient.v[1]*c->ambient_light_model.v[1];
@@ -241,7 +241,6 @@ void gl_shade_vertex(GLContext *c,GLVertex *v)
 				     dist*l->attenuation[2]));
     }
     dot=d.X*n.X+d.Y*n.Y+d.Z*n.Z;
-    if (twoside && dot < 0) dot = -dot;
     if (dot>0) {
       /* diffuse light */
       lR+=dot * l->diffuse.v[0] * m->diffuse.v[0];
@@ -253,7 +252,6 @@ void gl_shade_vertex(GLContext *c,GLVertex *v)
         dot_spot=-(d.X*l->norm_spot_direction.v[0]+
                    d.Y*l->norm_spot_direction.v[1]+
                    d.Z*l->norm_spot_direction.v[2]);
-        if (twoside && dot_spot < 0) dot_spot = -dot_spot;
         if (dot_spot < l->cos_spot_cutoff) {
           /* no contribution */
           continue;
@@ -282,7 +280,6 @@ void gl_shade_vertex(GLContext *c,GLVertex *v)
         s.Z=d.Z+1.0;
       }
       dot_spec=n.X*s.X+n.Y*s.Y+n.Z*s.Z;
-      if (twoside && dot_spec < 0) dot_spec = -dot_spec;
       if (dot_spec>0) {
         GLSpecBuf *specbuf;
         int idx;
@@ -309,8 +306,8 @@ void gl_shade_vertex(GLContext *c,GLVertex *v)
     B+=att * lB;
   }
 
-  v->color.v[0]=clampf(R,0,1);
-  v->color.v[1]=clampf(G,0,1);
-  v->color.v[2]=clampf(B,0,1);
-  v->color.v[3]=A;
+  color->v[0]=clampf(R,0,1);
+  color->v[1]=clampf(G,0,1);
+  color->v[2]=clampf(B,0,1);
+  color->v[3]=A;
 }
