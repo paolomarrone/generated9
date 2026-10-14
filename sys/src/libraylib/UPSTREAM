@@ -35,6 +35,14 @@ Port changes:
   success result and supports rename within one directory.
 - Model/material validity checks honor the classic renderer, which does not
   use shader IDs or vertex buffer objects.
+- CPU animation updates also work without vertex buffer objects; the classic
+  renderer reads the animated vertex arrays directly. UnloadModel releases
+  the current pose and bone matrices together with the skeleton.
+- VOX colors and vectors have packed component layouts. Large voxel models
+  split on quad boundaries with indices rebased within each 16-bit mesh.
+  The RGBA chunk consumes all 256 palette entries, including the unused one.
+- M3D's 8/16-bit index sentinels are explicitly promoted to int before the
+  conditional expression, preserving negative values under Plan 9 rules.
 
 Public raylib.h, raymath.h and rlgl.h are installed in /sys/include.
 raymath9.h supplies native float-math adapters shared with the port.

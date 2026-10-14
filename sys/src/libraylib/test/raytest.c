@@ -126,6 +126,167 @@ files(void)
 }
 
 static void
+le32(uchar *p, ulong n)
+{
+	p[0] = n; p[1] = n>>8; p[2] = n>>16; p[3] = n>>24;
+}
+
+static void
+savevox(char *name, uchar *data, int size)
+{
+	uchar *file, *palette;
+
+	file = mallocz(size+12+1024,1);
+	if(file == nil) sysfatal("voxel fixture allocation");
+	memmove(file,data,size);
+	le32(file+16,size+12+1024-20);
+	palette = file+size;
+	memmove(palette,"RGBA",4);
+	le32(palette+4,1024);
+	palette[12] = 0x12; palette[13] = 0x34; palette[14] = 0x56; palette[15] = 255;
+	if(!SaveFileData(name,file,size+12+1024)) sysfatal("write voxel fixture");
+	free(file);
+}
+
+/* Minimal authored wire fixtures: one voxel, and one triangle with a root bone. */
+static void
+loaders(void)
+{
+	static uchar voxel[] = {
+		0x56,0x4f,0x58,0x20,0x96,0x00,0x00,0x00,0x4d,0x41,0x49,0x4e,0x00,0x00,0x00,0x00,
+		0x2c,0x00,0x00,0x00,0x53,0x49,0x5a,0x45,0x0c,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+		0x01,0x00,0x00,0x00,0x01,0x00,0x00,0x00,0x01,0x00,0x00,0x00,0x58,0x59,0x5a,0x49,
+		0x08,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x01,0x00,0x00,0x00,0x00,0x00,0x00,0x01,
+	};
+	static uchar bone8[] = {
+		0x33,0x44,0x4d,0x4f,0x5a,0x00,0x00,0x00,0x48,0x45,0x41,0x44,0x1d,0x00,0x00,0x00,
+		0x00,0x00,0x80,0x3f,0xc0,0xc3,0x3f,0x00,0x74,0x65,0x73,0x74,0x00,0x00,0x00,0x00,
+		0x72,0x6f,0x6f,0x74,0x00,0x56,0x52,0x54,0x53,0x18,0x00,0x00,0x00,0x00,0x00,0x00,
+		0x00,0x7f,0x00,0x00,0x00,0x00,0x7f,0x00,0x00,0x00,0x00,0x00,0x7f,0x42,0x4f,0x4e,
+		0x45,0x0d,0x00,0x00,0x00,0x01,0xff,0x08,0x00,0x03,0x4d,0x45,0x53,0x48,0x0c,0x00,
+		0x00,0x00,0x30,0x00,0x01,0x02,0x4f,0x4d,0x44,0x33,
+	};
+	static uchar bone16[] = {
+		0x33,0x44,0x4d,0x4f,0x5c,0x00,0x00,0x00,0x48,0x45,0x41,0x44,0x1d,0x00,0x00,0x00,
+		0x00,0x00,0x80,0x3f,0xc0,0xc7,0x3f,0x00,0x74,0x65,0x73,0x74,0x00,0x00,0x00,0x00,
+		0x72,0x6f,0x6f,0x74,0x00,0x56,0x52,0x54,0x53,0x18,0x00,0x00,0x00,0x00,0x00,0x00,
+		0x00,0x7f,0x00,0x00,0x00,0x00,0x7f,0x00,0x00,0x00,0x00,0x00,0x7f,0x42,0x4f,0x4e,
+		0x45,0x0f,0x00,0x00,0x00,0x01,0x00,0xff,0xff,0x08,0x00,0x03,0x4d,0x45,0x53,0x48,
+		0x0c,0x00,0x00,0x00,0x30,0x00,0x01,0x02,0x4f,0x4d,0x44,0x33,
+	};
+	Model model;
+	Mesh mesh;
+	BoundingBox box;
+	float low[3];
+	uchar *many;
+	int i, j, pass, total;
+	float n;
+
+	savevox("one.vox",voxel,sizeof voxel);
+	model = LoadModel("one.vox");
+	if(!IsModelValid(model) || model.meshCount != 1) sysfatal("load voxel fixture");
+	mesh = model.meshes[0];
+	if(mesh.vertexCount != 24 || mesh.triangleCount != 12) sysfatal("voxel geometry");
+	box = GetModelBoundingBox(model);
+	low[0] = box.min.x; low[1] = box.min.y; low[2] = box.min.z;
+	if(fabs(box.max.x-box.min.x-.25) > 1e-6 || fabs(box.max.y-box.min.y-.25) > 1e-6
+	|| fabs(box.max.z-box.min.z-.25) > 1e-6) sysfatal("voxel bounds");
+	for(i=0; i<mesh.vertexCount; i++){
+		n = 0;
+		for(j=0; j<3; j++){
+			if(fabs(mesh.vertices[3*i+j]-low[j]) > 1e-6 && fabs(mesh.vertices[3*i+j]-low[j]-.25) > 1e-6)
+				sysfatal("voxel vertex stride");
+			n += mesh.normals[3*i+j]*mesh.normals[3*i+j];
+		}
+		if(n != 1 || mesh.colors[4*i] != 0x12 || mesh.colors[4*i+1] != 0x34
+		|| mesh.colors[4*i+2] != 0x56 || mesh.colors[4*i+3] != 255)
+			sysfatal("voxel normal/color stride");
+	}
+	UnloadModel(model);
+	/* Disconnected voxels cross the loader's 16-bit mesh index boundary. */
+	many = malloc(60+4096*4);
+	if(many == nil) sysfatal("allocate voxel fixture");
+	memmove(many,voxel,60);
+	le32(many+16,40+4096*4);
+	le32(many+32,32); le32(many+36,32); le32(many+40,32);
+	le32(many+48,4+4096*4); le32(many+56,4096);
+	for(i=0; i<4096; i++){
+		many[60+4*i] = 2*(i%16);
+		many[61+4*i] = 2*(i/16%16);
+		many[62+4*i] = 2*(i/256);
+		many[63+4*i] = 1;
+	}
+	savevox("many.vox",many,60+4096*4);
+	free(many);
+	model = LoadModel("many.vox");
+	if(!IsModelValid(model) || model.meshCount != 2) sysfatal("split voxel meshes");
+	total = 0;
+	for(i=0; i<model.meshCount; i++){
+		mesh = model.meshes[i];
+		total += mesh.vertexCount;
+		for(j=0; j<mesh.triangleCount*3; j++)
+			if(mesh.indices[j] >= mesh.vertexCount || mesh.indices[j]/4 != j/6)
+				sysfatal("voxel mesh index rebasing");
+	}
+	if(total != 4096*24) sysfatal("voxel mesh split lost vertices");
+	UnloadModel(model);
+	for(pass=0; pass<2; pass++){
+		if(!SaveFileData("root.m3d",pass ? bone16 : bone8,pass ? sizeof bone16 : sizeof bone8))
+			sysfatal("write skeleton fixture");
+		model = LoadModel("root.m3d");
+		if(!IsModelValid(model) || model.skeleton.boneCount != 2
+		|| model.skeleton.bones[0].parent != -1 || model.skeleton.bindPose[0].rotation.w != 1)
+			sysfatal("M3D %d-bit root sentinel",pass ? 16 : 8);
+		UnloadModel(model);
+	}
+	print("PASS: VOX layout and mesh splitting, M3D 8/16-bit root bone indices\n");
+}
+
+static void
+skinning(void)
+{
+	Model model;
+	Mesh *mesh;
+	ModelAnimation anim = {0};
+	Transform pose[2], *poses[2];
+	int i;
+
+	model = LoadModelFromMesh(GenMeshCube(1,1,1));
+	mesh = &model.meshes[0];
+	mesh->boneCount = model.skeleton.boneCount = 1;
+	model.skeleton.bones = calloc(1,sizeof(BoneInfo));
+	model.skeleton.bones[0].parent = -1;
+	model.skeleton.bindPose = calloc(1,sizeof(Transform));
+	model.skeleton.bindPose[0].rotation.w = 1;
+	model.skeleton.bindPose[0].scale = (Vector3){1,1,1};
+	model.currentPose = calloc(1,sizeof(Transform));
+	model.boneMatrices = calloc(1,sizeof(Matrix));
+	mesh->boneIndices = calloc(mesh->vertexCount,4);
+	mesh->boneWeights = calloc(mesh->vertexCount,4*sizeof(float));
+	mesh->animVertices = calloc(mesh->vertexCount,3*sizeof(float));
+	mesh->animNormals = calloc(mesh->vertexCount,3*sizeof(float));
+	for(i=0; i<mesh->vertexCount; i++) mesh->boneWeights[4*i] = 1;
+	pose[0] = pose[1] = model.skeleton.bindPose[0];
+	pose[1].translation.x = 2;
+	poses[0] = &pose[0]; poses[1] = &pose[1];
+	anim.boneCount = 1;
+	anim.keyframeCount = 2;
+	anim.keyframePoses = poses;
+	UpdateModelAnimation(model,anim,.5);
+	for(i=0; i<mesh->vertexCount; i++){
+		if(fabs(mesh->animVertices[3*i]-mesh->vertices[3*i]-1) > .0001
+		|| fabs(mesh->animVertices[3*i+1]-mesh->vertices[3*i+1]) > .0001
+		|| fabs(mesh->animVertices[3*i+2]-mesh->vertices[3*i+2]) > .0001)
+			sysfatal("classic CPU skinning interpolation");
+	}
+	UpdateModelAnimation(model,anim,0);
+	if(memcmp(mesh->animVertices,mesh->vertices,mesh->vertexCount*3*sizeof(float)))
+		sysfatal("classic CPU skinning bind pose");
+	UnloadModel(model);
+	print("PASS: CPU skinning and animation interpolation without GPU buffers\n");
+}
+
+static void
 graphics(void)
 {
 	Image image, readback;
@@ -167,6 +328,8 @@ graphics(void)
 		UnloadModel(model);
 		UnloadTexture(texture);
 		if(pass == 0){
+			loaders();
+			skinning();
 			windowerrors();
 			characters();
 		}

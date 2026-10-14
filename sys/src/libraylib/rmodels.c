@@ -1230,6 +1230,8 @@ void UnloadModel(Model model)
     // Unload animation data
     RL_FREE(model.skeleton.bones);
     RL_FREE(model.skeleton.bindPose);
+    RL_FREE(model.currentPose);
+    RL_FREE(model.boneMatrices);
 
     TRACELOG(LOG_INFO, "MODEL: Unloaded model (and meshes) from RAM and VRAM");
 }
@@ -2541,12 +2543,14 @@ static void UpdateModelAnimationVertexBuffers(Model model)
             }
         }
 
+#if !defined(GRAPHICS_API_OPENGL_11)
         if (bufferUpdateRequired)
         {
             // Update GPU vertex buffers with updated data (position + normals)
             rlUpdateVertexBuffer(mesh.vboId[SHADER_LOC_VERTEX_POSITION], mesh.animVertices, mesh.vertexCount*3*sizeof(float), 0);
             if (mesh.normals != NULL) rlUpdateVertexBuffer(mesh.vboId[SHADER_LOC_VERTEX_NORMAL], mesh.animNormals, mesh.vertexCount*3*sizeof(float), 0);
         }
+#endif
     }
 }
 
@@ -6692,6 +6696,7 @@ static Model LoadVOX(const char *fileName)
 
     int nbvertices = 0;
     int meshescount = 0;
+    int verticesMax = 65532; // Split on quad boundaries within 16-bit indices
 
     // Read vox file into buffer
     int dataSize = 0;
@@ -6719,7 +6724,7 @@ static Model LoadVOX(const char *fileName)
     {
         // Success: Compute meshes count
         nbvertices = voxarray.vertices.used;
-        meshescount = 1 + (nbvertices/65536);
+        meshescount = (nbvertices + verticesMax - 1)/verticesMax;
 
         TRACELOG(LOG_INFO, "MODEL: [%s] VOX data loaded successfully : %i vertices/%i meshes", fileName, nbvertices, meshescount);
     }
@@ -6738,7 +6743,6 @@ static Model LoadVOX(const char *fileName)
 
     // Init model meshes
     int verticesRemain = voxarray.vertices.used;
-    int verticesMax = 65532; // 5461 voxels x 12 vertices per voxel -> 65532 (must be inf 65536)
 
     // 6*4 = 12 vertices per voxel
     Vector3 *pvertices = (Vector3 *)voxarray.vertices.array;
@@ -6766,11 +6770,11 @@ static Model LoadVOX(const char *fileName)
         memcpy(pmesh->normals, pnormals, size);
 
         // Copy indices
-        size = voxarray.indices.used*sizeof(unsigned short);
-        pmesh->indices = (unsigned short *)RL_MALLOC(size);
-        memcpy(pmesh->indices, pindices, size);
-
         pmesh->triangleCount = (pmesh->vertexCount/4)*2;
+        size = pmesh->triangleCount*3*sizeof(unsigned short);
+        pmesh->indices = (unsigned short *)RL_MALLOC(size);
+        for (int j = 0; j < pmesh->triangleCount*3; j++)
+            pmesh->indices[j] = pindices[j] - (nbvertices - verticesRemain);
 
         // Copy colors
         size = pmesh->vertexCount*sizeof(Color);
@@ -6780,10 +6784,11 @@ static Model LoadVOX(const char *fileName)
         // First material index
         model.meshMaterial[i] = 0;
 
-        verticesRemain -= verticesMax;
-        pvertices += verticesMax;
-        pnormals += verticesMax;
-        pcolors += verticesMax;
+        verticesRemain -= pmesh->vertexCount;
+        pvertices += pmesh->vertexCount;
+        pnormals += pmesh->vertexCount;
+        pcolors += pmesh->vertexCount;
+        pindices += pmesh->triangleCount*3;
     }
 
     // Free buffers

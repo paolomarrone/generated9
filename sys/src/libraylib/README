@@ -62,7 +62,9 @@ playback, stream pause/resume and device recreation. The default tests check
 file operations, packed component layouts, images, texture updates, screen
 capture and repeated window/context creation. They also inject Unicode
 keyboard records through a pipe and check failed window control requests
-in a private namespace. A separate clock test uses ramfs to simulate clock
+in a private namespace. Model tests cover CPU skinning, interpolation, VOX
+component layout and mesh splitting, and M3D root-bone index sentinels.
+A separate clock test uses ramfs to simulate clock
 adjustments, checking that elapsed time follows uptime instead of civil time.
 The example needs no assets.
 
@@ -71,3 +73,5 @@ IQM guy, glTF robot, M3D Suzanne, VOX fez, the PixAntiqua TrueType font, and
 WAV/OGG/MP3/QOA/XM audio. These downloadable assets are not installed or
 vendored. Rendering and PCM delivery were exercised; the automated VM used
 QEMU's silent audio backend. Other architectures have not been tested.
+The modelview client additionally exercises animated glTF robot and M3D
+Cesium Man models, textured OBJ, and VOX knight geometry.

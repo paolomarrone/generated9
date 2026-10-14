@@ -71,6 +71,7 @@ revision history:
 #define VOX_ERROR_FILE_VERSION_NOT_MATCH (-3)
 
 // VoxColor, 4 components, R8G8B8A8 (32bit)
+#pragma pack on
 typedef struct {
     unsigned char r, g, b, a;
 } VoxColor;
@@ -79,6 +80,7 @@ typedef struct {
 typedef struct {
     float x, y, z;
 } VoxVector3;
+#pragma pack off
 
 typedef struct {
     VoxVector3* array;
@@ -647,14 +649,14 @@ int Vox_LoadFromMemory(unsigned char* pvoxData, unsigned int voxDataSize, VoxArr
 			VoxColor col;
 
 			//(each pixel: 1 byte x 4 : r, g, b, a ) x 256
-			for (int i = 0; i < 256 - 1; i++)
+			for (int i = 0; i < 256; i++)
 			{
 				col.r = *((unsigned char*)fileDataPtr++);
 				col.g = *((unsigned char*)fileDataPtr++);
 				col.b = *((unsigned char*)fileDataPtr++);
 				col.a = *((unsigned char*)fileDataPtr++);
 
-				pvoxarray->palette[i + 1] = col;
+				pvoxarray->palette[(i + 1) & 255] = col;
 			}
 
 		}

@@ -2312,8 +2312,8 @@ void _m3d_getpr(m3d_t *model, _unused m3dread_t readfilecb, _unused  m3dfree_t f
 _inline static unsigned char *_m3d_getidx(unsigned char *data, char type, M3D_INDEX *idx)
 {
     switch(type) {
-        case 1: *idx = data[0] > 253 ? (int8_t)data[0] : data[0]; data++; break;
-        case 2: *idx = *((uint16_t*)data) > 65533 ? *((int16_t*)data) : *((uint16_t*)data); data += 2; break;
+        case 1: *idx = data[0] > 253 ? (int)(int8_t)data[0] : (int)data[0]; data++; break;
+        case 2: *idx = *((uint16_t*)data) > 65533 ? (int)*((int16_t*)data) : (int)*((uint16_t*)data); data += 2; break;
         case 4: *idx = *((int32_t*)data); data += 4; break;
     }
     return data;
