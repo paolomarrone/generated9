@@ -25,6 +25,7 @@ struct Shader {
 typedef struct State State;
 typedef struct Render Render;
 struct State {
+	M4 transform;
 	int mode;
 	u32int depth, blend, alpha, offset[2];
 	int x, y, w, h;
@@ -361,6 +362,8 @@ gl_flush(GLContext *c)
 	samplers(c);
 	fragment(c);
 	s = &r->state;
+	p = gpuemit(g, GpuConstants, 0, 18);
+	memmove(p+2, s->transform.m, sizeof(s->transform));
 	if(memcmp(r->element, s->element, sizeof(r->element)) != 0){
 		/* COLOR always starts at float 4; zero means no element object yet. */
 		if(r->element[1] != 0){
@@ -473,6 +476,7 @@ gl_begin(GLContext *c)
 
 	r = c->opaque;
 	memset(&s, 0, sizeof(s));
+	s.transform = c->matrix_model_projection;
 	mode = c->begin_type == GL_POINTS ? 0 : c->begin_type < GL_TRIANGLES ? 1 : 4;
 	s.mode = mode;
 	s.depth = c->depth_test | c->depth_mask<<1 | (c->depth_func-GL_NEVER)<<2
@@ -550,7 +554,7 @@ gl_primitive(GLContext *c, GLVertex **v, int n)
 		p = r->vertex+r->nvertex++*s->stride;
 		color = c->current_shade_model == GL_FLAT ? &c->flat_color : &v[i]->color;
 		back = c->current_shade_model == GL_FLAT ? &c->flat_back_color : &v[i]->back_color;
-		memmove(p, v[i]->pc.v, 4*sizeof(float));
+		memmove(p, v[i]->coord.v, 4*sizeof(float));
 		for(j=0; j<4; j++){
 			f = color->v[j];
 			p[j+4] = f < 0 ? 0 : f > 1 ? 1 : f;
@@ -579,6 +583,7 @@ clearrect(GLContext *c, int mask)
 
 	r = c->opaque;
 	clear = *c;
+	gl_M4_Id(&clear.matrix_model_projection);
 	clear.viewport.xmin = clear.viewport.ymin = 0;
 	clear.viewport.xsize = r->width;
 	clear.viewport.ysize = r->height;
@@ -594,10 +599,10 @@ clearrect(GLContext *c, int mask)
 	for(i=0; i<MAX_TEXTURE_UNITS; i++) clear.texunit[i].enabled = 0;
 	memset(v, 0, sizeof v);
 	for(i=0; i<4; i++){
-		v[i].pc.X = i&1 ? 1 : -1;
-		v[i].pc.Y = i&2 ? 1 : -1;
-		v[i].pc.Z = 2*c->clear_depth-1;
-		v[i].pc.W = 1;
+		v[i].coord.X = i&1 ? 1 : -1;
+		v[i].coord.Y = i&2 ? 1 : -1;
+		v[i].coord.Z = 2*c->clear_depth-1;
+		v[i].coord.W = 1;
 		v[i].color = v[i].back_color = c->clear_color;
 	}
 	gl_begin(&clear);
@@ -722,7 +727,10 @@ tglinit(char *device, int width, int height)
 	for(i=0; i<MAX_TEXTURE_UNITS; i++)
 		v = seprint(v, end, "DCL OUT[%d], GENERIC[%d]\n", Texcoord+i, i+1);
 	v = seprint(v, end, "DCL OUT[%d], PSIZE\n", Pointsize);
-	for(i=0; i<Nelement; i++)
+	v = seprint(v, end, "DCL CONST[0..3]\n");
+	for(i=0; i<4; i++)
+		v = seprint(v, end, "DP4 OUT[0].%c, IN[0], CONST[%d]\n", "xyzw"[i], i);
+	for(i=1; i<Nelement; i++)
 		v = seprint(v, end, "MOV OUT[%d], IN[%d]\n", i, i);
 	seprint(v, end, "END\n");
 	gpushader(g, 4, 0, vs);

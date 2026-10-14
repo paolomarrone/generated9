@@ -69,30 +69,18 @@ void glopBegin(GLContext * c, GLParam * p)
     c->need_eye=eye;
 
     if (c->matrix_model_projection_updated) {
-
-	if (c->need_eye) {
-	    /* precompute inverse modelview */
-	    gl_M4_Inv(&tmp, c->matrix_stack_ptr[0]);
-	    gl_M4_Transpose(&c->matrix_model_view_inv, &tmp);
-	} else {
-	    float *m = &c->matrix_model_projection.m[0][0];
-	    /* precompute projection matrix */
-	    gl_M4_Mul(&c->matrix_model_projection,
-		      c->matrix_stack_ptr[1],
-		      c->matrix_stack_ptr[0]);
-	    /* test to accelerate computation */
-	    c->matrix_model_projection_no_w_transform = 0;
-	    if (m[12] == 0.0 && m[13] == 0.0 && m[14] == 0.0)
-		c->matrix_model_projection_no_w_transform = 1;
-	}
-
-
-	c->matrix_model_projection_updated = 0;
+        if (c->need_eye) {
+            gl_M4_Inv(&tmp, c->matrix_stack_ptr[0]);
+            gl_M4_Transpose(&c->matrix_model_view_inv, &tmp);
+        }
+        gl_M4_Mul(&c->matrix_model_projection,
+                  c->matrix_stack_ptr[1], c->matrix_stack_ptr[0]);
+        c->matrix_model_projection_updated = 0;
     }
     gl_begin(c);
 }
 
-/* Transform to eye and clip coordinates; VirGL clips and rasterizes. */
+/* Eye coordinates serve lighting, texgen and user clipping; the GPU projects. */
 static void gl_vertex_transform(GLContext * c, GLVertex * v)
 {
     float *m;
@@ -111,17 +99,6 @@ static void gl_vertex_transform(GLContext * c, GLVertex * v)
 	v->ec.W = (v->coord.X * m[12] + v->coord.Y * m[13] +
 		   v->coord.Z * m[14] + v->coord.W * m[15]);
 
-	/* projection coordinates */
-	m = &c->matrix_stack_ptr[1]->m[0][0];
-	v->pc.X = (v->ec.X * m[0] + v->ec.Y * m[1] +
-		   v->ec.Z * m[2] + v->ec.W * m[3]);
-	v->pc.Y = (v->ec.X * m[4] + v->ec.Y * m[5] +
-		   v->ec.Z * m[6] + v->ec.W * m[7]);
-	v->pc.Z = (v->ec.X * m[8] + v->ec.Y * m[9] +
-		   v->ec.Z * m[10] + v->ec.W * m[11]);
-	v->pc.W = (v->ec.X * m[12] + v->ec.Y * m[13] +
-		   v->ec.Z * m[14] + v->ec.W * m[15]);
-
 	m = &c->matrix_model_view_inv.m[0][0];
 	n = &c->current_normal;
 
@@ -132,26 +109,7 @@ static void gl_vertex_transform(GLContext * c, GLVertex * v)
 	if (c->normalize_enabled) {
 	    gl_V3_Norm(&v->normal);
 	}
-    } else {
-	/* no eye coordinates needed, no normal */
-
-	m = &c->matrix_model_projection.m[0][0];
-
-	v->pc.X = (v->coord.X * m[0] + v->coord.Y * m[1] +
-		   v->coord.Z * m[2] + v->coord.W * m[3]);
-	v->pc.Y = (v->coord.X * m[4] + v->coord.Y * m[5] +
-		   v->coord.Z * m[6] + v->coord.W * m[7]);
-	v->pc.Z = (v->coord.X * m[8] + v->coord.Y * m[9] +
-		   v->coord.Z * m[10] + v->coord.W * m[11]);
-	if (c->matrix_model_projection_no_w_transform) {
-	    v->pc.W = v->coord.W * m[15];
-	} else {
-	    v->pc.W = (v->coord.X * m[12] + v->coord.Y * m[13] +
-		       v->coord.Z * m[14] + v->coord.W * m[15]);
-	}
     }
-
-
 }
 
 void glopVertex(GLContext * c, GLParam * p)

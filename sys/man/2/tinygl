@@ -23,8 +23,10 @@ void tglread(void *pixels, int bytes)
 void tglclose(void)
 .SH DESCRIPTION
 TinyGL implements a subset of classic OpenGL using native Plan 9 C.
-Matrix transformations and vertex lighting run on the CPU.
-Clipping, interpolation, rasterization and depth testing use VirGL through
+Vertex positions are transformed and projected on the GPU.
+Vertex lighting, texture-coordinate generation and the eye coordinates they
+need remain on the CPU. Clipping, interpolation, rasterization and depth
+testing use VirGL through
 .IR gpu (3).
 Six additional user clip planes are evaluated on the CPU.
 .PP
@@ -85,8 +87,8 @@ Texture images are retained in guest memory. Under resource pressure,
 unused GPU copies are evicted in order of least recent use and uploaded
 again when needed. Currently enabled textures are kept resident during a draw.
 .PP
-Buffer objects store array and index data in guest memory; transformation
-and lighting still run on the CPU.
+Buffer objects store array and index data in guest memory for array capture,
+lighting and user clipping.
 Display lists own the array values and texture images obtained during
 compilation, independently of subsequent buffer or image changes.
 List names are in the range 1 through 1023 and nesting is limited to 64.

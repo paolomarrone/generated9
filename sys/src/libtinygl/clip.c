@@ -71,7 +71,7 @@ intersect(GLVertex *a, GLVertex *b, float da, float db)
 	t = da/(da-db);
 	v = *a;
 	v.ec = lerp(a->ec,b->ec,t);
-	v.pc = lerp(a->pc,b->pc,t);
+	v.coord = lerp(a->coord,b->coord,t);
 	v.color = lerp(a->color,b->color,t);
 	v.back_color = lerp(a->back_color,b->back_color,t);
 	for(i=0; i<MAX_TEXTURE_UNITS; i++)

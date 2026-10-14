@@ -12,10 +12,10 @@ Local adaptations:
 - Native Plan 9 libc, memory and fatal-error handling; mk and 6c -p.
   The -p option uses Plan 9's own ANSI preprocessor for the opcode table.
 - No GLX, operating-system toolkit, software rasterizer or z-buffer code.
-- virgl.c batches transformed vertices through libgpu and gpu(3). Matrices
-  and vertex lighting run on the guest CPU; clipping, interpolation,
-  rasterization and depth testing run through host VirGL. Frame readback
-  returns top-down XRGB32 bytes; libdraw window policy stays in the app.
+- virgl.c batches object-space vertices and projection matrices through
+  libgpu and gpu(3). Vertex transformation, clipping, interpolation,
+  rasterization and depth testing use VirGL; lighting remains on the CPU.
+  Frame readback returns top-down XRGB32 bytes; window policy stays in the app.
 - Inline vertex writes share the buffered command stream with draws. Batches
   occupy disjoint buffer ranges until submission completes; explicit flush,
   readback and resource release preserve command ordering.

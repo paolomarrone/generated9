@@ -558,6 +558,21 @@ geometry(void)
 	glViewport(0, 0, W, H);
 
 	clear();
+	glTranslatef(-.5,0,0);
+	glScalef(.4,.4,1);
+	glColor3f(1,0,0);
+	triangle(0);
+	glLoadIdentity();
+	glTranslatef(.5,0,0);
+	glScalef(.4,.4,1);
+	glColor3f(0,1,0);
+	triangle(0);
+	glLoadIdentity();
+	readback();
+	pixel(16,32,255,0,0,"queued vertex matrix");
+	pixel(48,32,0,255,0,"changed vertex matrix");
+
+	clear();
 	for(i=0; i<3000; i++) triangle(0);
 	glColor3f(1, 0, 0);
 	triangle(0);

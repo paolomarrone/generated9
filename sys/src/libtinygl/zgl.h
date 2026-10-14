@@ -149,7 +149,6 @@ typedef struct GLVertex {
 
   /* computed values */
   V4 ec;                /* eye coordinates */
-  V4 pc;                /* coordinates in the normalized volume */
 } GLVertex;
 
 /* shared state */
@@ -158,7 +157,7 @@ typedef struct GLSharedState {
   GLList **lists;
 } GLSharedState;
 
-/* Client storage is retained on the CPU while transforms run there. */
+/* Client storage remains accessible to lighting, clipping and array capture. */
 typedef struct GLBuffer GLBuffer;
 struct GLBuffer {
   GLBuffer *next;
@@ -214,7 +213,6 @@ typedef struct GLContext {
   M4 matrix_model_view_inv;
   M4 matrix_model_projection;
   int matrix_model_projection_updated;
-  int matrix_model_projection_no_w_transform;
 
   /* viewport */
   GLViewport viewport;
