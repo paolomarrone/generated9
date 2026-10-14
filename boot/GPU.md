@@ -340,3 +340,50 @@ These are elapsed measurements of specific scenes, including scheduling,
 copies and GPU waits. They do not establish a maximum rendering rate or
 guarantee 60 fps in other levels. CPU vertex transforms, pixel readback and
 software window composition remain in the path.
+
+## Vertex transport review
+
+A later pass compared the libraries at `015e4cf17` with compact TinyGL
+vertex batches. The four-CPU, 4 GiB KVM guest used the same 1920 by 1080
+VirtIO desktop, EGL headless display and an 800 by 450 Neverputt window.
+Temporary instrumented native builds ran `-h map-paxed/a.sol -n 900`, with
+the animation timer removed and simulation advancing by 1/60 second per
+frame. Each run omitted 60 warm-up frames. Three before/after pairs ran
+alternately, without other rendering clients; the table reports medians.
+
+| Per frame | Before | After |
+| --- | ---: | ---: |
+| Elapsed time | 6.37 ms | 5.14 ms |
+| Vertex payload | 2136.0 KiB | 832.5 KiB |
+| Command submissions | 11 | 4 |
+
+This is about 19% less elapsed time, or 24% higher unpaced throughput, for
+this scene. Framebuffer download and desktop transfers are additional to
+the command submissions counted above. These measurements include guest
+CPU work, copies and GPU waits; they are not GPU-only timings or paced
+gameplay FPS.
+
+TinyGL now prepares raster state once per `glBegin`, and sends only vertex
+attributes used by that batch. All active attributes retain float precision.
+The command encoder skips clearing inline payload bytes that it immediately
+overwrites, while preserving zeroed headers and padding. The kernel reuses
+one lazily allocated 256 KiB command buffer plus its 32-byte header under
+the existing lock and completion fence, instead of allocating and clearing
+a buffer on every write. Both sides of the comparison used this updated
+kernel, so the table isolates the library changes.
+
+Native tests cover device ownership and resource limits, multi-buffer inline
+writes, partial words, clipping, texture residency, sparse texture units,
+vertex layout changes, lighting, masked clears, readback and context reuse.
+The raylib graphics, model, animation and timing tests and raygui interaction
+tests also pass. Concurrent command clients exercise the shared staging
+buffer. Neverball, modelview with an animated GLB robot, and the three raylib
+games completed a simultaneous 1,200-frame run. Separate checks exercised
+Neverball gameplay, modelview resizing and device resource reuse after all
+clients exited. The file protocol and public library interfaces are unchanged.
+
+The remaining path still transforms vertices on the CPU, reads rendered
+pixels back to the guest, and uses software window composition. The display
+process holds the draw lock during its synchronous transfer. Removing these
+costs would require a larger design change than reducing redundant state
+work and unused vertex data.
