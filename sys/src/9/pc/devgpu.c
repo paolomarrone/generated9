@@ -115,6 +115,7 @@ static struct {
 	u32int nextid;
 	uchar *caps;
 	ulong ncaps;
+	u32int *command;
 	Resource fb;
 	int width, height;
 	Context ctx[Maxctx];
@@ -877,20 +878,19 @@ gpuwrite(Chan *c, void *a, long n, vlong off)
 	}else if(f == Qcmd){
 		if(n <= 0 || (n&3) != 0 || n > Maxcmd)
 			error(Ebadarg);
-		req = malloc(32+n);
-		if(req == nil)
-			error(Enomem);
-		if(waserror()){
-			free(req);
-			nexterror();
+		/* gpulock and the fence keep this single staging buffer private. */
+		if(gpu.command == nil){
+			gpu.command = mallocz(32+Maxcmd, 0);
+			if(gpu.command == nil)
+				error(Enomem);
 		}
+		req = gpu.command;
+		memset(req, 0, 32);
 		req[0] = Submit;
 		req[4] = ctx->id;
 		req[6] = n;
 		memmove(req+8, a, n);
 		command(req, 32+n);
-		free(req);
-		poperror();
 	}else if(f >= Qres){
 		r = &ctx->res[f-Qres];
 		if(off < 0 || off > r->size || n > r->size-off)
