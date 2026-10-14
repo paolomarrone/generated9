@@ -25,6 +25,7 @@ gpuinit(Gpu *g, char *root)
 	char *path;
 
 	memset(g, 0, sizeof(*g));
+	g->submit = g->wait = -1;
 	g->root = strdup(root == nil ? "#∇" : root);
 	if(g->root == nil)
 		sysfatal("gpu path: %r");
@@ -48,11 +49,51 @@ gpuinit(Gpu *g, char *root)
 void
 gpufini(Gpu *g)
 {
+	if(g->submit >= 0){
+		gpuwait(g);
+		close(g->submit);
+		close(g->wait);
+		g->submit = g->wait = -1;
+	}
 	close(g->cmd);
 	close(g->ctl);
 	g->cmd = g->ctl = -1;
 	free(g->root);
 	g->root = nil;
+}
+
+/* The original cmd file remains synchronous for existing clients. */
+void
+gpuflush(Gpu *g)
+{
+	char *path;
+
+	if(g->ncommand == 0)
+		return;
+	if(g->submit < 0){
+		path = smprint("%s/%d/submit", g->root, g->slot);
+		if(path == nil) sysfatal("gpu path: %r");
+		g->submit = open(path, OWRITE);
+		free(path);
+		path = smprint("%s/%d/wait", g->root, g->slot);
+		if(path == nil) sysfatal("gpu path: %r");
+		g->wait = open(path, OREAD);
+		free(path);
+		if(g->submit < 0 || g->wait < 0)
+			sysfatal("open asynchronous gpu commands: %r");
+	}
+	if(write(g->submit, g->command, g->ncommand*4) != g->ncommand*4)
+		sysfatal("gpu submit: %r");
+	g->ncommand = 0;
+}
+
+void
+gpuwait(Gpu *g)
+{
+	char buf[32];
+
+	if(g->wait >= 0 && pread(g->wait, buf, sizeof(buf), 0) <= 0)
+		sysfatal("gpu wait: %r");
 }
 
 u32int
@@ -128,8 +169,8 @@ void
 gpusubmit(Gpu *g)
 {
 	if(g->ncommand == 0)
-		return;
-	if(write(g->cmd, g->command, g->ncommand*4) != g->ncommand*4)
+		gpuwait(g);
+	else if(write(g->cmd, g->command, g->ncommand*4) != g->ncommand*4)
 		sysfatal("gpu submit: %r");
 	g->ncommand = 0;
 }

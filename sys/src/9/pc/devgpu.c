@@ -79,8 +79,11 @@ enum {
 	Qdir = 0,
 	Qclone,
 	Qcaps,
+	Qstats,
 	Qctl,
 	Qcmd,
+	Qsubmit,
+	Qwait,
 	Qres,
 };
 
@@ -105,6 +108,8 @@ struct Context {
 	u32int id;
 	u32int last;
 	ulong bytes;
+	uvlong fence;
+	char error[ERRMAX];
 	Attachment res[Maxres];
 };
 
@@ -123,11 +128,20 @@ static struct {
 	u32int nextid;
 	uchar *caps;
 	ulong ncaps;
-	u32int *command;
+	u32int *command, response[6];
+	u32int *req, *resp, expected;
+	int nresp, pending;
+	ulong started;
+	Context *owner;
 	Resource fb;
 	int width, height;
 	Context ctx[Maxctx];
 } gpu;
+
+/* Cumulative timings in fast ticks; protected by gpulock. */
+static struct {
+	uvlong requests, wait, frames, bytes, copy, draw;
+} perf;
 
 #define SLOT(q) ((int)((q).path >> 16)-1)
 #define FILE(q) ((int)((q).path & 0xffff))
@@ -158,29 +172,28 @@ gpufail(void)
 		delay(1);
 }
 
-/* All wire words are little endian; this driver is PC-only. */
+/* gpulock protects the single in-flight request and its DMA buffers. */
 static void
-request(u32int *req, int nreq, u32int *resp, int nresp, u32int expected)
+complete(void)
 {
-	ulong len, start;
+	ulong len;
+	uvlong t;
 	char err[ERRMAX];
 
-	if(gpu.failed)
-		error("gpu unavailable after device failure");
-	memset(resp, 0, nresp);
-	req[1] = 1;		/* fence: completion includes GPU execution */
-	req[2] = ++gpu.fence;
-	req[3] = gpu.fence >> 32;
-	gpu.desc[0] = (Vdesc){PADDR(req), nreq, 1, 1};
-	gpu.desc[1] = (Vdesc){PADDR(resp), nresp, 2, 0};
-	gpu.availent[gpu.avail->idx & 1] = 0;
-	coherence();
-	gpu.avail->idx++;
-	coherence();
-	vout16(&gpu.notify, 0, 0);
+	if(!gpu.pending)
+		return;
+	if(waserror()){
+		gpu.pending = 0;
+		if(gpu.owner != nil){
+			kstrcpy(gpu.owner->error, up->errstr, sizeof(gpu.owner->error));
+			gpu.owner = nil;
+			return;
+		}
+		nexterror();
+	}
+	t = fastticks(nil);
 	/* A note cannot release memory still owned by the device. */
-	start = MACHP(0)->ticks;
-	while(!done(nil) && TK2MS(MACHP(0)->ticks-start) < 10000){
+	while(!done(nil) && TK2MS(MACHP(0)->ticks-gpu.started) < 10000){
 		if(!waserror()){
 			tsleep(&gpu.wait, done, nil, 100);
 			poperror();
@@ -190,24 +203,65 @@ request(u32int *req, int nreq, u32int *resp, int nresp, u32int expected)
 		gpufail();
 		error("gpu command timed out");
 	}
+	perf.requests++;
+	perf.wait += fastticks(nil)-t;
 	coherence();
 	len = gpu.usedent[gpu.usedidx & 1].len;
-	if(gpu.usedent[gpu.usedidx++ & 1].id != 0 || len < 24 || len > nresp){
+	if(gpu.usedent[gpu.usedidx++ & 1].id != 0 || len < 24 || len > gpu.nresp){
 		gpufail();
 		error("gpu invalid queue response");
 	}
-	if((resp[1]&1) == 0 || resp[2] != req[2] || resp[3] != req[3]){
+	if((gpu.resp[1]&1) == 0 || gpu.resp[2] != gpu.req[2] || gpu.resp[3] != gpu.req[3]){
 		gpufail();
 		error("gpu invalid fence response");
 	}
-	if(resp[0] >= 0x1200 && resp[0] <= 0x1205){
-		snprint(err, sizeof(err), "gpu command %#ux: response %#ux", req[0], resp[0]);
+	if(gpu.resp[0] >= 0x1200 && gpu.resp[0] <= 0x1205){
+		snprint(err, sizeof(err), "gpu command %#ux: response %#ux", gpu.req[0], gpu.resp[0]);
 		error(err);
 	}
-	if(resp[0] != expected || len != nresp){
+	if(gpu.resp[0] != gpu.expected || len != gpu.nresp){
 		gpufail();
 		error("gpu unexpected response");
 	}
+	gpu.pending = 0;
+	gpu.owner = nil;
+	poperror();
+}
+
+static void
+submit(u32int *req, int nreq, u32int *resp, int nresp, u32int expected, Context *owner)
+{
+	if(gpu.failed)
+		error("gpu unavailable after device failure");
+	assert(!gpu.pending);
+	memset(resp, 0, nresp);
+	req[1] = 1;	/* fence: completion includes GPU execution */
+	req[2] = ++gpu.fence;
+	req[3] = gpu.fence >> 32;
+	gpu.req = req;
+	gpu.resp = resp;
+	gpu.nresp = nresp;
+	gpu.expected = expected;
+	gpu.owner = owner;
+	gpu.started = MACHP(0)->ticks;
+	gpu.pending = 1;
+	if(owner != nil)
+		owner->fence = gpu.fence;
+	gpu.desc[0] = (Vdesc){PADDR(req), nreq, 1, 1};
+	gpu.desc[1] = (Vdesc){PADDR(resp), nresp, 2, 0};
+	gpu.availent[gpu.avail->idx & 1] = 0;
+	coherence();
+	gpu.avail->idx++;
+	coherence();
+	vout16(&gpu.notify, 0, 0);
+}
+
+static void
+request(u32int *req, int nreq, u32int *resp, int nresp, u32int expected)
+{
+	complete();
+	submit(req, nreq, resp, nresp, expected, nil);
+	complete();
 }
 
 static void
@@ -404,13 +458,56 @@ freefb(void)
 	memset(&gpu.fb, 0, sizeof(gpu.fb));
 }
 
-/* Called by the display process with drawlock held; no interrupt-time DMA. */
+/* Copy while draw owns the screen; no GPU operation may hold drawlock. */
+static int
+displaycopy(VGAscr *scr, Rectangle *r, int *w, int *h)
+{
+	Memimage *m;
+	uchar *src, *dst;
+	uvlong start, t;
+	int y, ready;
+
+	qlock(&drawlock);
+	start = fastticks(nil);
+	if(waserror()){
+		qunlock(&drawlock);
+		nexterror();
+	}
+	m = scr->gscreen;
+	if(m == nil)
+		error("virtio display has no screen");
+	*w = Dx(m->r);
+	*h = Dy(m->r);
+	if(m->chan != XRGB32 || !eqpt(m->r.min, ZP)
+	|| *w <= 0 || *h <= 0 || *w > 4096 || *h > 4096)
+		error("virtio display requires x8r8g8b8, at most 4096x4096");
+	ready = gpu.fb.id != 0 && gpu.width == *w && gpu.height == *h;
+	if(ready && rectclip(r, m->r)){
+		src = byteaddr(m, r->min);
+		dst = gpu.fb.data+(r->min.y * *w+r->min.x)*4;
+		t = fastticks(nil);
+		for(y=r->min.y; y<r->max.y; y++){
+			memmove(dst, src, Dx(*r)*4);
+			src += m->width*sizeof(ulong);
+			dst += *w*4;
+		}
+		perf.frames++;
+		perf.bytes += Dx(*r)*Dy(*r)*4;
+		perf.copy += fastticks(nil)-t;
+	}else if(ready)
+		*r = ZR;
+	perf.draw += fastticks(nil)-start;
+	qunlock(&drawlock);
+	poperror();
+	return ready;
+}
+
+/* The display process owns the staging buffer until both commands finish. */
 void
-gpudisplay(Memimage *m, Rectangle r)
+gpudisplay(VGAscr *scr, Rectangle r)
 {
 	u32int req[14], id;
-	uchar *src, *dst;
-	int w, h, y, n;
+	int w, h;
 
 	qlock(&gpulock);
 	if(waserror()){
@@ -418,16 +515,11 @@ gpudisplay(Memimage *m, Rectangle r)
 		nexterror();
 	}
 	gpuprobe();
-	if(m == nil){
+	if(scr == nil){
 		freefb();
 		goto Out;
 	}
-	w = Dx(m->r);
-	h = Dy(m->r);
-	if(m->chan != XRGB32 || !eqpt(m->r.min, ZP)
-	|| w <= 0 || h <= 0 || w > 4096 || h > 4096)
-		error("virtio display requires x8r8g8b8, at most 4096x4096");
-	if(gpu.fb.id == 0 || gpu.width != w || gpu.height != h){
+	while(!displaycopy(scr, &r, &w, &h)){
 		freefb();
 		gpu.width = w;
 		gpu.height = h;
@@ -458,26 +550,19 @@ gpudisplay(Memimage *m, Rectangle r)
 		req[9] = h;
 		req[11] = gpu.fb.id;
 		command(req, 48);
-		r = m->r;
+		r = Rect(0, 0, w, h);
 		poperror();
+		/* The screen may have changed during allocation; reacquire it. */
 	}
-	if(!rectclip(&r, m->r))
+	if(Dx(r) == 0 || Dy(r) == 0)
 		goto Out;
-	n = (r.min.y*w+r.min.x)*4;
-	src = byteaddr(m, r.min);
-	dst = gpu.fb.data+n;
-	for(y=r.min.y; y<r.max.y; y++){
-		memmove(dst, src, Dx(r)*4);
-		src += m->width*sizeof(ulong);
-		dst += w*4;
-	}
 	memset(req, 0, sizeof(req));
 	req[0] = Transfer;
 	req[6] = r.min.x;
 	req[7] = r.min.y;
 	req[8] = Dx(r);
 	req[9] = Dy(r);
-	req[10] = n;
+	req[10] = (r.min.y*w+r.min.x)*4;
 	req[12] = gpu.fb.id;
 	command(req, sizeof(req));
 	req[0] = Flush;
@@ -560,6 +645,7 @@ gpugen(Chan *c, char*, Dirtab*, int, int s, Dir *dp)
 	Resource *r;
 	Qid q;
 	int slot;
+	static char *names[] = {"ctl", "cmd", "submit", "wait"};
 
 	slot = SLOT(c->qid);
 	if(s == DEVDOTDOT){
@@ -575,7 +661,11 @@ gpugen(Chan *c, char*, Dirtab*, int, int s, Dir *dp)
 			devdir(c, (Qid){Qcaps, 0, 0}, "caps", gpu.ncaps, eve, 0444, dp);
 			return 1;
 		}
-		slot = s-2;
+		if(s == 2){
+			devdir(c, (Qid){Qstats, 0, 0}, "stats", 0, eve, 0444, dp);
+			return 1;
+		}
+		slot = s-3;
 		if(slot >= Maxctx)
 			return -1;
 		ctx = &gpu.ctx[slot];
@@ -587,16 +677,16 @@ gpugen(Chan *c, char*, Dirtab*, int, int s, Dir *dp)
 	}
 	ctx = context(c->qid);
 	q = (Qid){PATH(slot, Qctl+s), ctx->id, 0};
-	if(s < 2){
-		devdir(c, q, s == 0 ? "ctl" : "cmd", 0, eve, s == 0 ? 0660 : 0220, dp);
+	if(s < nelem(names)){
+		devdir(c, q, names[s], 0, eve, s == 0 ? 0660 : s == 3 ? 0440 : 0220, dp);
 		return 1;
 	}
-	if(s-2 >= Maxres)
+	if(s-nelem(names) >= Maxres)
 		return -1;
-	r = ctx->res[s-2].r;
+	r = ctx->res[s-nelem(names)].r;
 	if(r == nil)
 		return 0;
-	q.vers = ctx->res[s-2].vers;
+	q.vers = ctx->res[s-nelem(names)].vers;
 	snprint(up->genbuf, sizeof(up->genbuf), "%ud", r->id);
 	devdir(c, q, up->genbuf, r->size, eve, 0660, dp);
 	return 1;
@@ -644,7 +734,7 @@ gpuopen(Chan *c, int mode)
 		qunlock(&gpulock);
 		nexterror();
 	}
-	if(!(c->qid.type&QTDIR) && FILE(c->qid) != Qcaps && !iseve())
+	if(!(c->qid.type&QTDIR) && c->qid.path != Qcaps && c->qid.path != Qstats && !iseve())
 		error(Eperm);
 	if(c->qid.path == Qclone){
 		if(gpu.caps == nil)
@@ -693,6 +783,7 @@ gpuclose(Chan *c)
 	if((c->flag&COPEN) == 0 || c->aux == nil)
 		return;
 	qlock(&gpulock);
+	complete();
 	ctx = c->aux;
 	c->aux = nil;
 	if(--ctx->ref == 0){
@@ -740,7 +831,7 @@ gpuread(Chan *c, void *a, long n, vlong off)
 {
 	Context *ctx;
 	Resource *r;
-	char buf[64];
+	char buf[384];
 
 	eqlock(&gpulock);
 	if(waserror()){
@@ -751,12 +842,27 @@ gpuread(Chan *c, void *a, long n, vlong off)
 		n = devdirread(c, a, n, nil, 0, gpugen);
 	else if(c->qid.path == Qcaps)
 		n = readmem(off, a, n, gpu.caps, gpu.ncaps);
+	else if(c->qid.path == Qstats){
+		snprint(buf, sizeof(buf), "requests %llud\nwaitns %llud\nframes %llud\nbytes %llud\ncopyns %llud\ndrawlockns %llud\n",
+			perf.requests, fastticks2ns(perf.wait), perf.frames, perf.bytes,
+			fastticks2ns(perf.copy), fastticks2ns(perf.draw));
+		n = readstr(off, a, n, buf);
+	}
 	else{
 		ctx = context(c->qid);
 		if(FILE(c->qid) == Qctl){
 			snprint(buf, sizeof(buf), "%d %ud %ud\n", SLOT(c->qid), ctx->id, ctx->last);
 			n = readstr(off, a, n, buf);
+		}else if(FILE(c->qid) == Qwait){
+			complete();
+			if(ctx->error[0] != 0)
+				error(ctx->error);
+			snprint(buf, sizeof(buf), "%llud\n", ctx->fence);
+			n = readstr(off, a, n, buf);
 		}else if(FILE(c->qid) >= Qres){
+			complete();
+			if(ctx->error[0] != 0)
+				error(ctx->error);
 			r = ctx->res[FILE(c->qid)-Qres].r;
 			n = readmem(off, a, n, r->data, r->size);
 		}else
@@ -910,6 +1016,9 @@ gpuwrite(Chan *c, void *a, long n, vlong off)
 	}
 	ctx = context(c->qid);
 	f = FILE(c->qid);
+	complete();
+	if(ctx->error[0] != 0)
+		error(ctx->error);
 	if(f == Qctl){
 		if(n > 512)
 			error(Etoobig);
@@ -921,10 +1030,10 @@ gpuwrite(Chan *c, void *a, long n, vlong off)
 		control(ctx, cb);
 		free(cb);
 		poperror();
-	}else if(f == Qcmd){
+	}else if(f == Qcmd || f == Qsubmit){
 		if(n <= 0 || (n&3) != 0 || n > Maxcmd)
 			error(Ebadarg);
-		/* gpulock and the fence keep this single staging buffer private. */
+		/* The previous request has released this kernel-owned DMA buffer. */
 		if(gpu.command == nil){
 			gpu.command = mallocz(32+Maxcmd, 0);
 			if(gpu.command == nil)
@@ -936,7 +1045,12 @@ gpuwrite(Chan *c, void *a, long n, vlong off)
 		req[4] = ctx->id;
 		req[6] = n;
 		memmove(req+8, a, n);
-		command(req, 32+n);
+		submit(req, 32+n, gpu.response, sizeof(gpu.response), Ok, ctx);
+		if(f == Qcmd){
+			complete();
+			if(ctx->error[0] != 0)
+				error(ctx->error);
+		}
 	}else if(f >= Qres){
 		r = ctx->res[f-Qres].r;
 		if(off < 0 || off > r->size || n > r->size-off)

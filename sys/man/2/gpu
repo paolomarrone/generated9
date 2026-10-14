@@ -1,6 +1,6 @@
 .TH GPU 2
 .SH NAME
-gpuinit, gpufini, gpuresource, gputryresource, gpuopen, gpuemit, gpusubmit, gpuwrite, gpubind, gpushader, gpufloat \- VirGL file client
+gpuinit, gpufini, gpuresource, gputryresource, gpuopen, gpuemit, gpusubmit, gpuflush, gpuwait, gpuwrite, gpubind, gpushader, gpufloat \- VirGL file client
 .SH SYNOPSIS
 .B #include <u.h>
 .br
@@ -21,6 +21,10 @@ gpuinit, gpufini, gpuresource, gputryresource, gpuopen, gpuemit, gpusubmit, gpuw
 .B u32int *gpuemit(Gpu *g, int op, int object, int words)
 .PP
 .B void gpusubmit(Gpu *g)
+.PP
+.B void gpuflush(Gpu *g)
+.PP
+.B void gpuwait(Gpu *g)
 .PP
 .B void gpuwrite(Gpu *g, u32int id, ulong offset, void *data, int bytes)
 .PP
@@ -45,7 +49,8 @@ The resulting control descriptor and context slot are available as
 and
 .BR g->slot .
 .I Gpufini
-closes the command and control files and frees the copied path.
+waits for submitted work, closes the context files and frees the copied path.
+Commands still in the client buffer are discarded.
 The caller must close resource descriptors separately.
 Closing all context files releases its host resources.
 .PP
@@ -70,6 +75,15 @@ Fill the returned payload before appending another command.
 .I Gpusubmit
 writes the accumulated commands and waits for device completion.
 The buffer is then reusable.
+.I Gpuflush
+also submits the buffer, but returns before GPU completion. The kernel owns
+its copy of the commands; the client can immediately prepare the next batch.
+There is one request in flight across all contexts, so the next submission
+may wait for the previous one.
+.I Gpuwait
+waits for submitted work without submitting the client buffer.
+.I Gpusubmit
+waits even when that buffer is empty.
 .PP
 .I Gpuwrite
 copies bytes into inline writes to a buffer resource at the given byte offset,
@@ -101,7 +115,7 @@ returns a float's 32-bit wire representation.
 .SH DIAGNOSTICS
 Errors are fatal except for allocation failure in
 .IR gputryresource .
-The client is synchronous and not thread-safe.
+The client is not thread-safe.
 .SH BUGS
 The interface is experimental and exposes a subset of VirGL v1 encoding.
 It assumes little-endian 32-bit words and IEEE floating-point values and

@@ -14,6 +14,8 @@
 
 extern VGAdev vgavirtiodev;
 
+static QLock displaylock;	/* serialize presentation with enable/disable */
+
 static struct {
 	Lock;
 	Rendez wait;
@@ -38,7 +40,7 @@ virtioproc(void*)
 	scr = &vgascreen[0];
 	for(;;){
 		sleep(&fb.wait, pending, nil);
-		qlock(&drawlock);
+		qlock(&displaylock);
 		ilock(&fb);
 		r = fb.dirty;
 		fb.dirty = ZR;
@@ -50,15 +52,15 @@ virtioproc(void*)
 			ilock(&fb);
 			fb.enabled = 0;
 			iunlock(&fb);
-			qunlock(&drawlock);
+			qunlock(&displaylock);
 			print("virtio display: %s\n", err);
 			continue;
 		}
 		if(enabled && scr->dev == &vgavirtiodev)
-			gpudisplay(scr->gscreen, r);
+			gpudisplay(scr, r);
 		else
 			gpudisplay(nil, ZR);
-		qunlock(&drawlock);
+		qunlock(&displaylock);
 		poperror();
 	}
 }
@@ -94,6 +96,7 @@ virtioenable(VGAscr *scr)
 {
 	int start;
 
+	qlock(&displaylock);
 	qlock(&drawlock);
 	scr->softscreen = 1;
 	ilock(&fb);
@@ -103,6 +106,7 @@ virtioenable(VGAscr *scr)
 	iunlock(&fb);
 	virtiodrawinit(scr);
 	qunlock(&drawlock);
+	qunlock(&displaylock);
 	if(start)
 		kproc("virtiodisplay", virtioproc, nil);
 }
@@ -110,12 +114,14 @@ virtioenable(VGAscr *scr)
 static void
 virtiodisable(VGAscr*)
 {
+	qlock(&displaylock);
 	qlock(&drawlock);
 	ilock(&fb);
 	fb.enabled = 0;
 	fb.pending = 1;
 	iunlock(&fb);
 	qunlock(&drawlock);
+	qunlock(&displaylock);
 	wakeup(&fb.wait);
 }
 

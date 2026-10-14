@@ -23,5 +23,5 @@ The device tests and generated9 integration use the root LICENSE.
 
 Inline buffer writes reserve payload space without clearing bytes that are
 immediately copied over. Headers and final-word padding remain initialized;
-gpuemit still returns zeroed parameter words. Command boundaries, submission
-ordering and fence semantics are unchanged.
+gpuemit still returns zeroed parameter words. The cmd path remains synchronous;
+gpuflush/gpuwait use the submit/wait files with one kernel-owned request in flight.

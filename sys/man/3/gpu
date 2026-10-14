@@ -7,8 +7,11 @@ gpu \- VirtIO GPU display and VirGL command transport
 
 .BI /mnt/gpu/ clone
 .BI /mnt/gpu/ caps
+.BI /mnt/gpu/ stats
 .BI /mnt/gpu/ n /ctl
 .BI /mnt/gpu/ n /cmd
+.BI /mnt/gpu/ n /submit
+.BI /mnt/gpu/ n /wait
 .BI /mnt/gpu/ n /resource
 .fi
 .SH DESCRIPTION
@@ -48,6 +51,19 @@ It must be nonempty, a multiple of four bytes, and no larger than 256 KiB.
 The kernel supplies the context identifier and waits for a GPU fence
 before returning.
 Shader translation and VirGL command validation are performed by the host.
+.PP
+.B submit
+accepts the same stream but returns after copying it into kernel memory and
+notifying the device. Reading
+.B wait
+waits for submitted work and returns this context's latest submitted fence
+as a decimal number, or zero before the first submission.
+Use a read at offset zero for each wait.
+There is one outstanding request for the device. The next submission,
+control operation, backing access or context close completes it first.
+Waiting may therefore also wait for another context's work.
+Asynchronous errors are retained by the owning context and reported by
+subsequent writes, backing reads and waits; closing still releases resources.
 .PP
 The following text commands are accepted by
 .BR ctl .
@@ -94,7 +110,7 @@ Detach a resource from this context, freeing it on the last attachment.
 Existing descriptors for that resource become invalid, even if its table
 slot is later reused or the same resource is attached again.
 .PP
-Control operations, command submission and backing access are serialized.
+Control operations, command submission and backing access are ordered.
 All device requests are fenced.
 A command timeout resets and disables the device before releasing DMA memory;
 subsequent rendering requires rebooting the guest.
@@ -110,7 +126,8 @@ with no rotation, at most 4096 by 4096 pixels.
 Use the software cursor.
 Screen damage is collected by a kernel process, which copies changed
 rectangles into private backing memory and completes each transfer before
-reusing it. Screen updates are asynchronous and may be combined.
+reusing it. The draw lock covers the copy, not GPU allocation or fence waits.
+Screen updates are asynchronous and may be combined.
 The framebuffer is recreated when the screen dimensions change.
 VirGL is not required for this display path.
 .PP
@@ -119,6 +136,24 @@ Drawing and window composition still use software; 3D clients still read
 their rendered pixels back for libdraw.
 Display errors are reported on the kernel console and stop updates until
 the controller is selected again. Device failure still requires rebooting.
+.SS Measurements
+The read-only
+.B stats
+file contains cumulative decimal counters, one name and value per line:
+.B requests
+(completed device requests),
+.B waitns
+(time spent waiting for completion),
+.B frames
+(display copies),
+.B bytes
+(copied display bytes),
+.B copyns
+(pixel copying time), and
+.B drawlockns
+(time the display process holds the draw lock).
+Times are nanoseconds. Differences between readings measure an interval;
+wait time is not GPU execution time and excludes waiting to acquire locks.
 .SH EXAMPLE
 .EX
 cd /sys/src/libgpu
@@ -151,8 +186,8 @@ echo type virtio > /dev/vgactl
 This is an experimental privileged interface, not an OpenGL implementation.
 It supports one GPU, 32 contexts, 4096 resources and 256 MiB of backing per context.
 Each resource's backing store is limited to 64 MiB.
-There is one synchronous control queue; asynchronous command submission,
-cursor queues, exported DMA buffers and device recovery are not implemented.
+There is one control queue with at most one outstanding request.
+Cursor queues, exported DMA buffers and device recovery are not implemented.
 The display uses a separate backing allocation of up to 64 MiB.
 .PP
 Resource targets are 0 through 8. Buffers are limited to 64 MiB;
@@ -162,4 +197,4 @@ Backing size and transfer layout must match the resource format.
 Guest backing limits do not bound the host GPU memory consumed by a resource.
 .PP
 QEMU does not propagate all VirGL renderer errors to the guest.
-A successful write confirms transport completion, not a valid rendering result.
+A successful fence confirms transport completion, not a valid rendering result.

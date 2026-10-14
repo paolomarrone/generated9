@@ -157,7 +157,7 @@ extern void	drawflush(void);
 extern QLock	drawlock;
 
 /* devgpu.c */
-extern void	gpudisplay(Memimage*, Rectangle);
+extern void	gpudisplay(VGAscr*, Rectangle);
 
 /* vga.c */
 extern void	vgascreenwin(VGAscr*);
