@@ -1547,7 +1547,8 @@ hdainterrupt(Ureg *, void *arg)
 	Ctlr *ctlr;
 	Audio *adev;
 	Ring *r;
-	uint sts;
+	uint sts, pos;
+	long left;
 
 	adev = arg;
 	ctlr = adev->ctlr;
@@ -1559,8 +1560,12 @@ hdainterrupt(Ureg *, void *arg)
 		csr8(ctlr, Sdsts+ctlr->sout.sdctl) |= Scompl;
 
 		r = &ctlr->sout.ring;
-		r->ri = streampos(ctlr, &ctlr->sout);
-		if(ctlr->sout.active && buffered(r) < Blocksize){
+		pos = streampos(ctlr, &ctlr->sout);
+		/* DMA can overtake the writer before a delayed interrupt arrives. */
+		left = (pos + r->nbuf - r->ri) % r->nbuf;
+		left = buffered(r) - left;
+		r->ri = pos;
+		if(ctlr->sout.active && left < Blocksize){
 			streamstop(ctlr, &ctlr->sout);
 			r->ri = r->wi = streampos(ctlr, &ctlr->sout);
 		}
