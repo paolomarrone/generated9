@@ -28,7 +28,7 @@ static QLock audiolock;
 static Sound *sounds;
 static Voice voices[Nvoice];
 static Music *music, *queued;
-static int audiofd=-1, audiopid=-1, audioquit;
+static int audiofd=-1, audioowner, audioquit;
 static char audioerror[ERRMAX];
 static float effectvol=1, musicvol=1;
 
@@ -174,40 +174,41 @@ audio_init(void)
 {
 	int pid;
 
+	if(audioowner != 0) return;
 	audiofd = open("/dev/audio",OWRITE);
 	if(audiofd < 0){
 		fprint(2,"Neverputt: audio unavailable: %r\n");
 		return;
 	}
+	audioquit = 0;
+	audioerror[0] = 0;
 	audio_volume(config_get_d(CONFIG_SOUND_VOLUME),config_get_d(CONFIG_MUSIC_VOLUME));
-	pid = rfork(RFPROC|RFMEM);
+	pid = rfork(RFPROC|RFMEM|RFNOWAIT);
 	if(pid < 0) sysfatal("audio process: %r");
 	if(pid == 0){
 		mixaudio();
+		while(rendezvous(&audiolock,nil) == (void*)~(uintptr)0) {}
 		_exits(nil);
 	}
-	audiopid = pid;
+	audioowner = getpid();
 	atexit(audio_free);
 }
 
 void
 audio_free(void)
 {
-	Waitmsg *w;
 	Sound *s;
 
-	if(audiopid < 0) return;
+	if(audioowner == 0 || audioowner != getpid()) return;
 	qlock(&audiolock);
 	audioquit = 1;
 	qunlock(&audiolock);
-	while((w=wait()) != nil){
-		int done = w->pid == audiopid;
-		free(w);
-		if(done) break;
-	}
-	audiopid = -1;
+	/* Join only the mixer; wait messages belong to the caller. */
+	while(rendezvous(&audiolock,nil) == (void*)~(uintptr)0) {}
+	audioowner = 0;
 	close(audiofd);
 	audiofd = -1;
+	memset(voices,0,sizeof voices);
 	freemusic(music);
 	freemusic(queued);
 	music = queued = nil;
@@ -217,6 +218,7 @@ audio_free(void)
 		free(s->name);
 		free(s);
 	}
+	atexitdont(audio_free);
 }
 
 void
@@ -327,7 +329,7 @@ audio_music_fade_to(float seconds, const char *name)
 	if(audiofd < 0) return;
 	qlock(&audiolock);
 	playing = music != nil;
-	same = playing && strcmp(music->name,name) == 0;
+	same = playing && name != nil && strcmp(music->name,name) == 0;
 	if(same){
 		freemusic(queued);
 		queued = nil;

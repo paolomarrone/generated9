@@ -58,3 +58,12 @@ test averaged 27.3 fps over 180 frames, including initial texture uploads.
 These are measurements of this development VM, not hardware guarantees.
 The GPU device, teapot and TinyGL pixel/lifetime tests passed, including
 texture eviction beyond the resource count and backing-memory limits.
+
+The mixer has a separate regression test, requiring /dev/audio but no assets:
+
+    cd /sys/src/games/neverputt/test
+    mk test
+
+It checks shutdown with another child process, repeated initialization and
+cleanup, and transitions to holes without background music. The mixer joins
+its own process without consuming the application's wait messages.

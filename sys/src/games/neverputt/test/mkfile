@@ -1,0 +1,13 @@
+</$objtype/mkfile
+
+TARG=audiotest
+OFILES=audiotest.$O ../audio.$O
+CFLAGS=$CFLAGS -p -I.. -I../share
+
+</sys/src/cmd/mkone
+
+../audio.$O: ../audio.c ../port.h ../share/audio.h
+	$CC $CFLAGS -o $target ../audio.c
+
+test:V: $O.out
+	./$O.out
