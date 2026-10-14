@@ -17,3 +17,6 @@
 # Host u9fs build products.
 /sys/src/cmd/unix/u9fs/*.o
 /sys/src/cmd/unix/u9fs/u9fs
+
+# Downloaded Neverputt data and compiled maps.
+/sys/games/lib/neverputt/

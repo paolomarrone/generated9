@@ -1,0 +1,60 @@
+Neverputt for generated9
+
+Native C port of the Neverball 1.6.0 minigolf game. See UPSTREAM,
+LICENSE.md and the preserved notices for attribution and licensing.
+
+The platform code uses libdraw/libevent for a rio window and input,
+libttf for text, the system PNG/JPEG readers for images, and /dev/audio
+for a small PCM mixer. The original game, physics and level formats are
+preserved. Graphics use the classic GL subset in libtinygl and VirGL.
+There is no SDL, C++, Mesa or foreign compiler in the guest.
+
+Prepare data on the host:
+
+    ./boot/getneverputt
+
+Then inside generated9:
+
+    cd /sys/src/libgpu
+    mk install
+    cd /sys/src/libtinygl
+    mk install
+    cd /sys/src/games/neverputt
+    mk install
+    mk data
+    games/neverputt
+
+Data installation verifies the pinned original archive and keeps its
+asset licenses. mk data compiles maps with the native mapc and decodes
+Ogg tracks with audio/oggdec. It skips existing generated files; remove
+an affected .sol or .pcm file to rebuild it after changing its source.
+The build needs no game data; playing does.
+
+Boot the current pc64 kernel with a VirGL device as described in boot/GPU.md.
+Its 256 resource slots let menus keep their small textures resident; the
+64 MiB backing budget is unchanged. TinyGL evicts cached GPU texture copies
+if either limit is reached, retaining their contents in guest memory. For
+sound, also provide a supported sound device, for example QEMU intel-hda
+with hda-duplex and a host audio backend. /dev/audio uses 44.1 kHz stereo,
+signed 16-bit little-endian PCM. The game reports when audio is unavailable.
+
+See neverputt(1) for controls and command-line options. Native options
+omit display modes owned by rio and unsupported graphics features.
+Translations, gamepads, HMD, reflections and multisampling are not ported.
+
+The source archive references a missing mtrl/dirt-tan image in Spinaround.
+mapc reports missing images and uses unit texture coordinates; the original
+material loader already supplies its default material when one is absent.
+The native compiler also clamps rounded normal dot products before acos,
+so valid near-parallel normals stay inside its mathematical domain.
+
+Development validation used an amd64 QEMU/KVM guest with two CPUs, 3 GiB
+RAM and VirGL. All original Neverputt maps and PCM assets were prepared
+natively. Interactive play covered a completed first hole, scoring and the
+second hole, keyboard and mouse input, pause, resizing and clean exit.
+A session of 11,304 frames averaged 61.2 fps at 800 by 600, including
+readback and window presentation. An 18-hole, four-player score screen
+test averaged 27.3 fps over 180 frames, including initial texture uploads.
+These are measurements of this development VM, not hardware guarantees.
+The GPU device, teapot and TinyGL pixel/lifetime tests passed, including
+texture eviction beyond the resource count and backing-memory limits.

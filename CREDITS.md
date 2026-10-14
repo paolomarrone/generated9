@@ -205,3 +205,17 @@ by `go version -m`; the recipe in [boot/README.md](boot/README.md) saves that
 output and archives the downloaded GitHub sources with all original license
 and notice files under `/usr/glenda/lib/gojq`. These local build artifacts
 are ignored by Git. Preserve their notices when distributing the binary.
+
+## Neverputt
+
+`sys/src/games/neverputt` imports the Neverputt game and selected shared C
+modules from [Neverball 1.6.0](https://neverball.org/neverball-1.6.0.tar.gz),
+by Robert Kooima and the Neverball contributors, under GPL version 2 or later.
+The exact archive digest, port details, and original notices are recorded in
+its `UPSTREAM`, `LICENSE.md`, and `license-GPL-2.0.txt` files.
+
+`boot/getneverputt` installs original assets separately, preserving the full
+upstream `doc/legal` notices, including those for DejaVu and WenQuanYi fonts.
+Downloaded data, compiled maps, and decoded audio are excluded from commits.
+The native port uses the existing Plan 9 PNG/JPEG readers, libttf, and audio
+filters; their original licenses continue to apply.

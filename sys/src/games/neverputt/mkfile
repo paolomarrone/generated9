@@ -1,0 +1,80 @@
+</$objtype/mkfile
+
+CFLAGS=$CFLAGS -p -I. -Ishare -Iputt
+TARG=neverputt
+OFILES=\
+	audio.$O\
+	main.$O\
+	platform.$O\
+	glext.$O\
+	readpng.$O\
+	readjpg.$O\
+	writepng.$O\
+	video.$O\
+	share/video.$O\
+	font.$O\
+	share/image.$O\
+	share/base_image.$O\
+	share/lang.$O\
+	share/st_common.$O\
+	share/vec3.$O\
+	share/solid_base.$O\
+	share/solid_vary.$O\
+	share/solid_draw.$O\
+	share/solid_all.$O\
+	share/solid_sim_sol.$O\
+	share/mtrl.$O\
+	share/part.$O\
+	share/geom.$O\
+	share/ball.$O\
+	share/base_config.$O\
+	share/config.$O\
+	share/binary.$O\
+	share/state.$O\
+	share/gui.$O\
+	share/theme.$O\
+	share/text.$O\
+	share/common.$O\
+	share/list.$O\
+	share/fs_common.$O\
+	share/fs_stdio.$O\
+	share/dir.$O\
+	share/array.$O\
+	share/log.$O\
+	share/hmd_null.$O\
+	putt/hud.$O\
+	putt/game.$O\
+	putt/hole.$O\
+	putt/course.$O\
+	putt/st_all.$O\
+	putt/st_conf.$O
+HFILES=port.h /sys/include/GL/gl.h `{ls share/*.h putt/*.h}
+LIB=/$objtype/lib/libtinygl.a /$objtype/lib/libgpu.a
+BIN=/$objtype/bin/games
+CLEANFILES=share/*.[$OS] putt/*.[$OS] [$OS].mapc
+
+</sys/src/cmd/mkone
+
+%.$O: %.c
+	$CC $CFLAGS -o $target $stem.c
+
+readpng.$O: /sys/src/cmd/jpg/readpng.c /sys/src/cmd/jpg/imagefile.h
+	$CC $CFLAGS -I/sys/src/cmd/jpg -o $target /sys/src/cmd/jpg/readpng.c
+readjpg.$O: /sys/src/cmd/jpg/readjpg.c /sys/src/cmd/jpg/imagefile.h
+	$CC $CFLAGS -I/sys/src/cmd/jpg -o $target /sys/src/cmd/jpg/readjpg.c
+
+writepng.$O: /sys/src/cmd/jpg/writepng.c /sys/src/cmd/jpg/imagefile.h
+	$CC $CFLAGS -I/sys/src/cmd/jpg -o $target /sys/src/cmd/jpg/writepng.c
+
+MAPOFILES=share/mapc.$O share/vec3.$O share/base_image.$O\
+	share/solid_base.$O share/binary.$O share/base_config.$O\
+	share/common.$O share/fs_common.$O share/fs_stdio.$O\
+	share/dir.$O share/array.$O share/list.$O readpng.$O readjpg.$O
+
+$O.mapc: $MAPOFILES
+	$LD -o $target $prereq
+
+mapc:V: $O.mapc
+
+data:V: $O.mapc
+	rc data

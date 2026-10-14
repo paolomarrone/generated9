@@ -69,13 +69,14 @@ matrix transformations, vertex lighting, primitive assembly and display lists.
 The new backend batches clip-space vertices; VirGL clips, interpolates,
 rasterizes and depth-tests them. The library opens `clone`, `cmd` and resource
 files through `libgpu`. Passing a device directory to `tglinit` allows normal
-namespace bindings; nil uses `#∇`. No kernel changes or new kernel GL API are
-needed. Window presentation stays in the application and uses libdraw.
+namespace bindings; nil uses `#∇`. No kernel GL API is needed.
+Window presentation stays in the application and uses libdraw.
 
-This is a classic GL **subset**, not full or conformant OpenGL. The first
-backend supports geometry, flat/smooth colors, float client arrays, matrices,
-one-sided lighting, culling, display lists and LESS depth testing. It has no
-textures, blending, stencil, GLSL, EGL or GLX. Unsupported operations fail
+This is a classic GL **subset**, not full or conformant OpenGL. The
+backend supports geometry, typed arrays and buffer objects, matrices,
+vertex lighting, culling, display lists, depth testing, textures with mipmaps
+and four texture units, alpha testing/blending, polygon offset and point sprites.
+It has no stencil, GLSL, EGL or GLX. Unsupported operations fail
 explicitly. There is one current context per process and errors are fatal,
 following TinyGL's model. See [tinygl(2)](../sys/man/2/tinygl) for exact limits.
 
@@ -85,6 +86,11 @@ smooth colors, points, lines, array strides, list replacement and ownership,
 large convex polygons, lighting and color-material tracking,
 invalid operations and repeated target/context recreation. Existing triangle
 and teapot tests also exercise the shared `libgpu` encoder.
+Texture tests also exceed both the device's resource count and backing budget,
+then check reupload and resizing. TinyGL retains CPU images and evicts unused
+GPU copies under pressure. The current driver allows 256 resources per context
+within the same 64 MiB backing budget, so applications can keep many small
+textures resident.
 
 Validation on the development amd64 QEMU guest also passed with the GPU bound
 at another namespace path and with the window resized while animating.
@@ -92,6 +98,29 @@ A 300-frame `glgears -n 300` run at 808×608 measured about 58 fps including
 readback and libdraw presentation, with the VirtIO desktop active. The demo's
 17 ms event timer limits the window rate to about 59 fps; this is not a GPU
 throughput measurement. Pixel readback and desktop composition remain copies.
+
+## Neverputt
+
+The native Neverputt port uses this classic GL interface, libdraw, libttf,
+the system image readers and a PCM mixer over `/dev/audio`. It preserves the
+original physics and level formats. The game and map compiler build with
+the Plan 9 C toolchain.
+
+Install the pinned original assets on the host with `./boot/getneverputt`.
+In the guest, build the current kernel and graphics libraries above, then:
+
+```rc
+cd /sys/src/games/neverputt
+mk install
+mk data
+games/neverputt
+```
+
+Boot the newly built kernel before playing. For sound, QEMU also needs an
+emulated sound device, for example `intel-hda` and `hda-duplex` connected to
+a host audio backend. `mk data` compiles maps and decodes music and effects
+once, using native tools. See the [port README](../sys/src/games/neverputt/README)
+and [neverputt(1)](../sys/man/1/neverputt) for setup, controls and limitations.
 
 ## Presenting the desktop through VirtIO
 

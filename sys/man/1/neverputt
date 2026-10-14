@@ -1,0 +1,69 @@
+.TH NEVERPUTT 1
+.SH NAME
+neverputt \- three-dimensional miniature golf
+.SH SYNOPSIS
+.B games/neverputt
+[
+.B -d
+.I directory
+]
+[
+.B -h
+.I hole.sol
+]
+[
+.B -n
+.I frames
+]
+.SH DESCRIPTION
+.I Neverputt
+runs the miniature golf game from Neverball 1.6.0 in a rio window.
+It uses the native C toolchain, TinyGL through VirtIO GPU files,
+Plan 9 image and font readers, and PCM audio.
+.PP
+Select a course and one through four players from the menus.
+Players take turns on the same machine.
+Mouse movement aims and sets shot strength; button 1 advances the shot.
+Escape returns to the menu or pauses play.
+Enter activates the selected menu item and the arrow keys navigate menus.
+While aiming, the arrow keys adjust direction and strength; Enter plays the shot.
+F9 toggles the frame counter. F12 saves a PNG screenshot.
+.PP
+The window can be resized during play. Its contents retain their aspect ratio.
+The graphics menu sets the logical resolution, background and ball shadow.
+Rio controls the window and its placement.
+.PP
+.B -d
+selects the original game data directory.
+.B -h
+loads a single compiled hole directly.
+.B -n
+exits after the specified number of displayed frames and reports the average
+frame rate, including rendering, readback and window presentation.
+.PP
+Original maps and audio must be prepared before running the game.
+In the source directory,
+.B mk data
+compiles missing maps and decodes Ogg audio into 44.1 kHz stereo PCM using
+.IR audio (1).
+This is done once; generated files remain alongside the original data.
+.SH FILES
+.TF /sys/games/lib/neverputt
+.TP
+.B /sys/games/lib/neverputt
+Original data and generated maps/audio.
+.TP
+.B $home/lib/neverputt
+Settings, log and Screenshots directory.
+.SH SOURCE
+.B /sys/src/games/neverputt
+.SH SEE ALSO
+.IR games (1),
+.IR audio (1),
+.IR tinygl (2),
+.IR gpu (3)
+.SH BUGS
+Requires a VirtIO GPU with VirGL and its host-owner access.
+The native port supports mouse and keyboard, English menus and a rio window;
+fullscreen display modes, gamepads, VR, reflections and multisampling are
+not provided. It is not a port of SDL.

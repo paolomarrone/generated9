@@ -46,6 +46,7 @@ DIRS=\
 	mix\
 	md\
 	nes\
+	neverputt\
 	opl3\
 	snes\
 	sokoban\

@@ -1,0 +1,31 @@
+#!/bin/rc
+# Compile original map sources and decode audio using native tools.
+rfork e
+root=/sys/games/lib/neverputt
+if(! test -d $root){
+	echo 'install the original data with boot/getneverputt on the host' >[1=2]
+	exit 'missing data'
+}
+for(map in `{walk -f $root/ball $root/geom $root/item | grep '\.map$'}){
+	sol=`{echo $map | sed 's/\.map$/.sol/'}
+	if(! test -f $sol){
+		if(! ./$O.mapc $map $root) exit 'map compiler failed'
+	}
+}
+for(map in `{cat $root/holes-*.txt | sed -n 's/ .*//p' | grep '\.sol$' | sort -u}){
+	source=$root/`{echo $map | sed 's/\.sol$/.map/'}
+	if(! test -f $root/$map){
+		if(! ./$O.mapc $source $root) exit 'map compiler failed'
+	}
+}
+for(ogg in `{walk -f $root/snd $root/bgm | grep '\.ogg$'}){
+	pcm=`{echo $ogg | sed 's/\.ogg$/.pcm/'}
+	if(! test -f $pcm){
+		if(! audio/oggdec < $ogg > $pcm^.tmp){
+			rm -f $pcm^.tmp
+			exit 'audio decode failed'
+		}
+		mv $pcm^.tmp $pcm
+	}
+}
+exit ''
