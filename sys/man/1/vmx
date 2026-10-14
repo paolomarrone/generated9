@@ -58,7 +58,7 @@ The
 option selects between 1 and 64 virtual CPUs.
 With more than one CPU,
 .I vmx
-provides local xAPICs, an I/O APIC and Intel MP 1.4 tables.
+provides local xAPICs with an x2APIC MSR interface, an I/O APIC and Intel MP 1.4 tables.
 The CPUs execute concurrently and share guest memory and devices.
 The host kernel must support the
 .B init
@@ -187,7 +187,7 @@ The first boot module is passed as the \fIinitrd\fR; any further boot modules ar
 .I Vmx
 can and will crash your kernel.
 .PP
-Multiprocessor guests must support Intel MP tables; ACPI and x2APIC are not provided.
+Multiprocessor guests must support Intel MP tables; ACPI is not provided.
 The local APIC and I/O APIC addresses are fixed at
 .B 0xfee00000
 and

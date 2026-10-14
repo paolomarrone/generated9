@@ -25,10 +25,15 @@ The cache keeps a snapshot of the kernel's text register file and converts
 values only when requested. Resuming a CPU invalidates the whole snapshot,
 including values that have not yet been converted.
 
-The monitor implements xAPIC physical and logical destinations, fixed and
+The monitor implements xAPIC and x2APIC physical and logical destinations, fixed and
 lowest-priority interrupts, INIT/SIPI, NMIs, local timers, and an I/O APIC
 with 24 pins. Intel MP 1.4 tables describe the CPUs and interrupt routes.
-Guest CPU count is limited to 64. There is no ACPI, x2APIC, SMI delivery or
+Both APIC interfaces share the same interrupt and timer state. x2APIC accesses
+use MSRs, avoiding instruction decoding and extra register reads for APIC MMIO.
+The kernel includes MSR operands and HLT flags in exit messages. Kernels without
+these optional fields use the register-file fallback. Guests can still select
+xAPIC (for example, Linux with nox2apic).
+Guest CPU count is limited to 64. There is no ACPI, SMI delivery or
 APIC address relocation. The 9P debugger continues to select CPU 0.
 
 The host kernel adds INIT and NMI control messages, chooses a supported
@@ -37,6 +42,8 @@ virtual CPUs. Invalidation and guest entry cannot be interrupted by another
 context switch. An IPI wakes the processor handling a queued VM command,
 instead of waiting for its next clock interrupt. This is necessary to keep
 guest timer handlers from consuming all execution time on an SMP host.
+Before reentering a guest, the kernel yields to runnable processes, allowing
+the monitor awakened by a command to continue without waiting for preemption.
 When virtual CPUs share a host CPU, PAUSE exits yield to other processes so
 a guest spinning on a lock does not keep its holder from running. The kernel
 then executes PAUSE in hardware with a monitor trap, preserving instruction
@@ -109,6 +116,9 @@ and 32-bit addressing, and on amd64 also REX prefix ordering, RIP-relative,
 address-size and segment overrides.
 Register-cache tests check snapshot invalidation, partial writes, clean exit
 values, flushing pending writes before a read, and isolation between CPUs.
+HLT and MSR exits exercise the supplied register values without a register read.
+x2APIC tests cover 32-bit physical and logical destinations, broadcast, SELF IPI,
+read-only and reserved registers, reserved bits, mode transitions and INIT.
 The VirtIO tests negotiate modern features, validate queue alignment and size,
 keep enabled queue addresses fixed, transfer data through a real split queue,
 reject invalid descriptor heads and cycles, and return an outstanding buffer
@@ -130,7 +140,7 @@ test/run is a Linux-host integration test. It boots generated9 with nested
 Intel VMX, builds the native monitor, and runs Linux inside vmx. It requires
 the rebuilt generated9 kernel, KVM with nested VMX enabled, a static Linux C
 toolchain, and Python 3. A Linux bzImage must have SMP, Intel MP table parsing,
-initramfs, devtmpfs, CPU hotplug, Magic SysRq and a serial console enabled.
+initramfs, devtmpfs, x2APIC, CPU hotplug, Magic SysRq and a serial console enabled.
 Virtio PCI and block support must be built in or supplied as matching host
 modules. Zstd-compressed modules require Python 3.14.
 
@@ -143,6 +153,7 @@ If virtio is built in, omit --modules. --cpus selects the test matrix
 --host-cpus 2 --cpus 4 exercises more virtual CPUs than host CPUs; with TSC
 enabled it also checks that scheduling delays do not cause Linux soft lockups.
 --timeout sets the limit in seconds per guest (default: 900).
+--xapic selects Linux's nox2apic boot option to test the legacy APIC interface.
 
 Each guest must report exactly the requested number of online CPUs. Threads
 are pinned to separate CPUs and check shared atomic operations, floating
@@ -164,7 +175,8 @@ including when virtual CPUs share a host CPU. The lifetime checks cover
 32 allocation/removal cycles with 64 MiB mappings, ORCLOSE, explicit quit and
 remove, failed opens, concurrent register reads, blocked waits, and stale open
 descriptors and bound directories after slot reuse. It verifies that guest
-pages are released even while old descriptors remain open. To run it alone:
+pages are released even while old descriptors remain open. RDMSR, WRMSR and HLT
+instructions also check the register values carried by exit messages. To run it alone:
 
 	mk test/6.device
 	test/6.device
@@ -187,6 +199,7 @@ when investigating a failure; recognizing multiple CPUs alone is not a pass.
 Validated on an amd64 generated9 host under Intel nested KVM:
 
 	Linux 6.18.56: 1, 2, 4 and 8 CPUs on 4 host CPUs; 4 CPUs on 2 host CPUs.
+	SMP uses x2APIC; the xAPIC fallback also passes with 4 CPUs on 4 host CPUs.
 	generated9: boot to rc and the native process test, with 2 and 4 CPUs
 	            on 2 host CPUs.
 
@@ -194,6 +207,10 @@ The limit of 64 CPUs is not a claim of testing all sizes. The 386 sources
 compile with 8c; runtime tests above used amd64.
 
 Architecture references
+
+Intel 64 Architecture x2APIC Specification, 318148-004 (March 2010):
+sections 2.3, 2.4 and 2.7 cover the MSR interface, destinations and mode transitions.
+https://courses.cs.washington.edu/courses/cse451/21wi/readings/x2apic.pdf
 
 Intel 64 and IA-32 Architectures Software Developer's Manual:
 Volume 2, section 2.2.1: REX prefixes and instruction encoding.

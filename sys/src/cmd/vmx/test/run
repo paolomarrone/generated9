@@ -53,8 +53,10 @@ def main():
     parser.add_argument("--cpus", type=int, nargs="+", default=[1, 2, 4, 8])
     parser.add_argument("--timeout", type=int, default=900, help="seconds per guest")
     parser.add_argument("--host-cpus", type=int, default=4)
+    parser.add_argument("--xapic", action="store_true", help="test Linux with nox2apic")
     parser.add_argument("--host-kernel", type=pathlib.Path, default=ROOT / "sys/src/9/pc64/9pc64")
     args = parser.parse_args()
+    apic = " nox2apic" if args.xapic else ""
     if any(n < 1 or n > 64 for n in args.cpus) or args.host_cpus < 1:
         parser.error("CPU counts must be positive; vmx supports at most 64")
     if args.timeout <= 0:
@@ -149,7 +151,7 @@ def main():
                 f"cd /sys/src/cmd/vmx\n"
                 f"./6.out -P {count} -M 256M -d {guest}/{disk.name} "
                 f"-c ,{guest}/{logfile.name} -m {guest}/initramfs {guest}/linux "
-                f"'console=ttyS0 loglevel=7 rdinit=/init panic=-1 -- {count}' "
+                f"'console=ttyS0 loglevel=7 rdinit=/init panic=-1{apic} -- {count}' "
                 f">{guest}/{monitor.name} >[2=1] &\n"
                 f"echo $apid >{guest}/pid\n"
             )
@@ -174,6 +176,8 @@ def main():
                     raise RuntimeError(f"guest timed out: {logfile}")
                 read_console(0.25)
             if count > 1:
+                if ("x2apic enabled" in log) == args.xapic:
+                    raise RuntimeError(f"unexpected APIC mode: {logfile}")
                 if clockstart is None or clockend is None or not 4 <= clockend-clockstart <= 7:
                     raise RuntimeError(f"guest clock rate differs from host: {logfile}")
                 print(f"Guest sleep(5): {clockend-clockstart:.2f}s on host", flush=True)

@@ -1709,8 +1709,12 @@ cmdwait(VmCmd *cp, va_list va)
 		p = seprint(p, e, " va %#ullx", vmcsread(VM_GUESTVA));
 	if(rno == 48 || rno == 49)
 		p = seprint(p, e, " pa %#ullx", vmcsread(VM_GUESTPA));
-	if(rno == 30)
+	if(rno == 30 || rno == 31 || rno == 32)
 		p = seprint(p, e, " ax %#ullx", (uvlong)vmx->ureg.ax);
+	if(rno == 31 || rno == 32)
+		p = seprint(p, e, " cx %#ullx dx %#ullx", (uvlong)vmx->ureg.cx, (uvlong)vmx->ureg.dx);
+	if(rno == 12)
+		p = seprint(p, e, " flags %#ullx", vmcsread(GUEST_RFLAGS));
 	p = seprint(p, e, "\n");
 	return p - p0;
 }
@@ -1938,6 +1942,8 @@ vmxproc(void *vmxp)
 		}
 		runcmd(vmx);
 		if(vmx->state == VMXRUNNING){
+			/* Let the awakened monitor run before reentering a busy guest. */
+			yield();
 			procbctls = defprocbctls;
 			/* Retire PAUSE in hardware, preserving flags and interrupt shadows. */
 			if(vmxmach->vms == 1 || (vmx->onentry & PAUSING) != 0)

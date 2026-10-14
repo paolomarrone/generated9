@@ -182,6 +182,32 @@ decoder(void)
 }
 
 static void
+halted(void)
+{
+	Vcpu *saved, *c;
+	char *s, *expected = "pc=0x101;";
+	int i;
+
+	saved = cpu;
+	c = emalloc(sizeof(Vcpu));
+	c->regsfd = -1;
+	cpu = c;
+	for(i = 0; i < 2; i++){
+		c->state = VMRUNNING;
+		c->irqactive = 0x51;
+		processexit(i ? ".hlt 0 pc 0x100 ilen 1 flags 0x202" :
+			".hlt 0 pc 0x100 ilen 1 flags 2");
+		assert(c->state == (i ? VMRUNNING : VMHALT));
+		assert(rget(RFLAGS) == (i ? 0x202 : 2));
+		s = rcflush(1);
+		assert(s != nil && strcmp(s, expected) == 0);
+	}
+	free(c);
+	cpu = saved;
+	print("PASS: HLT interrupt state without a register snapshot\n");
+}
+
+static void
 msrs(void)
 {
 	uvlong pat;
@@ -235,6 +261,109 @@ interrupts(void)
 	apicreset(cpu);
 	assert(readreg(0x390) == 0 && readreg(0x380) == 0);
 	assert(readreg(0x320) == 1<<16 && readreg(0xf0) == 255);
+}
+
+static uvlong
+getmsr(int reg)
+{
+	uvlong v;
+
+	assert(apicmsr(1, reg, &v) == 1);
+	return v;
+}
+
+static void
+putmsr(int reg, uvlong v)
+{
+	assert(apicmsr(0, reg, &v) == 1);
+}
+
+static void
+x2apic(void)
+{
+	uvlong v;
+	int i;
+	static int readonly[] = {0x802, 0x803, 0x80a, 0x80d, 0x810, 0x827, 0x839};
+	static int reserved[] = {0x800, 0x804, 0x809, 0x80e, 0x829, 0x831, 0x840, 0xbff};
+
+	assert(apicmsr(1, 0x802, &v) == -1);
+	for(i = 0; i < ncpu; i++){
+		cpu = cpus + i;
+		apicreset(cpu);
+		cpu->irqactive = -1;
+		putmsr(0x1b, (uvlong)Lapicbase | 0xc00);
+		assert(getmsr(0x802) == i && getmsr(0x80d) == 1U<<i);
+		putmsr(0x80f, 0x1ff);
+	}
+	cpu = cpus;
+	/* A real MSR exit supplies all its operands, without a register read. */
+	rcflush(1);
+	processexit(".wrmsr 0 pc 0x100 ilen 2 cx 0x830 dx 1 ax 0x61");
+	assert(rget(RPC) == 0x102 && cpus[1].irqactive == 0x61);
+	assert(getmsr(0x830) == (1ULL<<32 | 0x61));
+	cpu++;
+	apicack(cpu, 0x61); putmsr(0x80b, 0);
+	/* Neither physical nor logical destinations may lose their high bits. */
+	cpu = cpus;
+	putmsr(0x830, 0x100000100000061ULL);
+	assert(cpus[1].irqactive == -1);
+	cpus[1].id = 17;
+	putmsr(0x830, 0x1000200000861ULL);
+	assert(cpus[1].irqactive == 0x61);
+	cpu++;
+	assert(getmsr(0x802) == 17 && getmsr(0x80d) == 0x10002);
+	apicack(cpu, 0x61); putmsr(0x80b, 0);
+	putmsr(0x83f, 0x62);
+	assert(cpu->irqactive == 0x62);
+	apicack(cpu, 0x62); putmsr(0x80b, 0);
+	putmsr(0x830, 0xffffffff00000063ULL);
+	assert(cpus[0].irqactive == 0x63 && cpus[1].irqactive == 0x63);
+	for(i = 0; i < ncpu; i++){
+		cpu = cpus + i;
+		apicack(cpu, 0x63); putmsr(0x80b, 0);
+	}
+	assert(readreg(0x30) == ~0U);
+	writereg(0x80, 0xff);
+	assert(getmsr(0x808) == 0);
+	for(i = 0; i < nelem(readonly); i++){
+		v = 0;
+		assert(apicmsr(0, readonly[i], &v) == -1);
+	}
+	for(i = 0; i < nelem(reserved); i++){
+		v = 0;
+		assert(apicmsr(0, reserved[i], &v) == -1);
+		assert(apicmsr(1, reserved[i], &v) == -1);
+	}
+	assert(apicmsr(1, 0x80b, &v) == -1 && apicmsr(1, 0x83f, &v) == -1);
+	v = 1; assert(apicmsr(0, 0x80b, &v) == -1);
+	v = 0x100; assert(apicmsr(0, 0x808, &v) == -1);
+	v = 1ULL<<32; assert(apicmsr(0, 0x838, &v) == -1);
+	v = 1<<20; assert(apicmsr(0, 0x830, &v) == -1);
+	putmsr(0x832, 0x1000 | 0x52);
+	assert(getmsr(0x832) == 0x52);
+	putmsr(0x835, 0x5000 | 0x53);
+	assert(getmsr(0x835) == 0x53);
+	putmsr(0x83f, 15);
+	assert(getmsr(0x828) == 1<<5 && cpu->irqactive == -1);
+	putmsr(0x828, 0);
+	assert(getmsr(0x828) == 0);
+	/* INIT keeps x2APIC mode and the derived IDs, while resetting the LVT. */
+	apicreset(cpu);
+	assert(getmsr(0x802) == 17 && getmsr(0x80d) == 0x10002);
+	assert(getmsr(0x80f) == 0xff && getmsr(0x832) == 1<<16);
+	for(i = 0; i < ncpu; i++){
+		cpu = cpus + i;
+		v = (uvlong)Lapicbase | 0x800;
+		assert(apicmsr(0, 0x1b, &v) == -1);
+		putmsr(0x1b, Lapicbase);
+		assert(apicmsr(1, 0x802, &v) == -1);
+		v = (uvlong)Lapicbase | 0xc00;
+		assert(apicmsr(0, 0x1b, &v) == -1);
+		cpu->id = i;
+		putmsr(0x1b, (uvlong)Lapicbase | 0x800);
+		assert(readreg(0x20) == i<<24 && readreg(0xd0) == 0);
+	}
+	print("PASS: x2APIC MSRs, destinations, broadcast, SELF IPI, faults and INIT\n");
 }
 
 static u32int
@@ -388,6 +517,7 @@ threadmain(int, char **)
 	}
 	cpu = cpus + 1;
 	registers();
+	halted();
 	apicinit();
 	lapic = regptr(Lapicbase);
 	code = mkregion(0x80001000, 0x80002000, REGRWX);
@@ -397,6 +527,7 @@ threadmain(int, char **)
 	msrs();
 	interrupts();
 	iointerrupts();
+	x2apic();
 	virtiotransport();
 	print("PASS: MMIO decoding, MSRs, APIC priority, timers, IPI and I/O APIC\n");
 	threadexitsall(nil);

@@ -211,6 +211,7 @@ cpuid(ExitInfo *ei)
 		if(ncpu > 1) bx |= ncpu<<16 | cpu->id<<24;
 		/* some features removed, hypervisor added */
 		cx = cp.cx & 0x76de3217 | 0x80000000UL;
+		if(ncpu > 1) cx |= 1<<21; /* x2APIC */
 		dx = cp.dx & 0x0f8aa579;
 		if(ncpu > 1) dx |= 1<<9 | 1<<28;
 		if(leaf1.cx & 1<<27){
@@ -570,6 +571,12 @@ processexit(char *msg)
 			rpoke(RSP, strtoull(f[i+1], nil, 0), 1);
 		else if(strcmp(f[i], "ax") == 0)
 			rpoke(RAX, strtoull(f[i+1], nil, 0), 1);
+		else if(strcmp(f[i], "flags") == 0)
+			rpoke(RFLAGS, strtoull(f[i+1], nil, 0), 1);
+		else if(strcmp(f[i], "cx") == 0)
+			rpoke(RCX, strtoull(f[i+1], nil, 0), 1);
+		else if(strcmp(f[i], "dx") == 0)
+			rpoke(RDX, strtoull(f[i+1], nil, 0), 1);
 		else if(strcmp(f[i], "ilen") == 0)
 			ei.ilen = strtoul(f[i+1], nil, 0);
 		else if(strcmp(f[i], "iinfo") == 0)

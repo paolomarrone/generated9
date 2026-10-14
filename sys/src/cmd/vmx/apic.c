@@ -3,15 +3,16 @@
 #include "dat.h"
 #include "fns.h"
 
-/* xAPIC registers, indexed by their 16-byte MMIO slots. */
+/* APIC registers, indexed by their 16-byte MMIO slots or x2APIC MSRs. */
 enum {
 	Id = 0x02, Version = 0x03, Tpr = 0x08, Ppr = 0x0a,
 	Eoi = 0x0b, Ldr = 0x0d, Dfr = 0x0e, Svr = 0x0f,
 	Isr = 0x10, Tmr = 0x18, Irr = 0x20, Esr = 0x28,
 	Icrlo = 0x30, Icrhi = 0x31, Timer = 0x32,
 	Thermal = 0x33, Perf = 0x34, Lint0 = 0x35, Lint1 = 0x36,
-	Error = 0x37, Initial = 0x38, Current = 0x39, Divide = 0x3e,
+	Error = 0x37, Initial = 0x38, Current = 0x39, Divide = 0x3e, Self = 0x3f,
 	Mask = 1<<16, Periodic = 1<<17, Enabled = 1<<8,
+	X2 = 1<<10, Global = 1<<11,
 	Npin = 24,
 	Nmipending = 1, Nmiactive = 2,
 	/* 100 MHz local APIC clock, before the programmable divider. */
@@ -144,12 +145,16 @@ apicack(Vcpu *c, int v)
 }
 
 static int
-matches(Vcpu *c, int dest, int logical)
+matches(Vcpu *c, u32int dest, int logical)
 {
 	int l;
 
+	if(dest == ~0U)
+		return 1;
 	if(!logical)
-		return dest == 255 || dest == c->id;
+		return dest == c->id;
+	if((c->apic.base & X2) != 0)
+		return dest >> 16 == c->id >> 4 && (dest & 1U<<(c->id&15)) != 0;
 	l = c->apic.reg[Ldr] >> 24;
 	if(c->apic.reg[Dfr] >> 28 == 15)
 		return (l & dest) != 0;
@@ -164,20 +169,20 @@ apicnmiack(Vcpu *c)
 }
 
 static int
-deliver(uvlong icr, Vcpu *sender)
+deliver(u32int icr, u32int dest, Vcpu *sender)
 {
 	Vcpu *c, *best;
 	int mode, shorthand, match, n;
 
 	mode = icr >> 8 & 7;
 	if(mode == 5 || mode == 6)
-		vmdebug("apic: cpu%d ICR %#ullx", sender == nil ? -1 : sender->id, icr);
+		vmdebug("apic: cpu%d ICR %#ux dest %#ux", sender == nil ? -1 : sender->id, icr, dest);
 	shorthand = icr >> 18 & 3;
 	best = nil;
 	n = 0;
 	for(c = cpus; c < cpus + ncpu; c++){
 		switch(shorthand){
-		default: match = matches(c, icr >> 56, icr & 1<<11); break;
+		default: match = matches(c, dest, icr & 1<<11); break;
 		case 1: match = c == sender; break;
 		case 2: match = 1; break;
 		case 3: match = c != sender; break;
@@ -229,7 +234,8 @@ ioapicdeliver(int pin)
 	r = ioapic.redir[pin];
 	if((r & Mask) != 0 || (r & (1<<15|1<<14)) == (1<<15|1<<14))
 		return;
-	if(deliver(r, nil) != 0 && (r & 1<<15) != 0 && (r >> 8 & 7) <= 1)
+	if(deliver(r, r >> 56 == 255 ? ~0U : (u32int)(r >> 56), nil) != 0 &&
+	   (r & 1<<15) != 0 && (r >> 8 & 7) <= 1)
 		ioapic.redir[pin] |= 1<<14;
 }
 
@@ -339,32 +345,31 @@ apictpr(u32int value)
 	apicupdate(cpu);
 }
 
-static int
-lapicmmio(uintptr pa, void *p, int n, int wr)
+static u32int
+lapicread(int r)
 {
 	Lapic *a;
-	u32int v;
-	int r, i;
+
+	a = &cpu->apic;
+	if((a->base & X2) != 0){
+		if(r == Id) return cpu->id;
+		if(r == Ldr) return (cpu->id >> 4)<<16 | 1U<<(cpu->id&15);
+		if(r == Svr) return a->reg[r] & 0x1ff;
+	}
+	if(r == Ppr) return priority(cpu);
+	if(r == Current) return current(a, nanosec());
+	return a->reg[r];
+}
+
+static void
+lapicwrite(int r, u32int v)
+{
+	Lapic *a;
+	u32int dest;
+	int i;
 	uvlong now;
 
-	if(n != 4 || (pa & 15) != 0)
-		return -1;
 	a = &cpu->apic;
-	if((a->base & 1<<11) == 0){
-		if(!wr) PUT32(p, 0, -1);
-		return 0;
-	}
-	r = (pa & 4095) >> 4;
-	if(r >= nelem(a->reg))
-		return -1;
-	if(!wr){
-		v = a->reg[r];
-		if(r == Ppr) v = priority(cpu);
-		if(r == Current) v = current(a, nanosec());
-		PUT32(p, 0, v);
-		return 0;
-	}
-	v = GET32(p, 0);
 	if(r == Timer || r == Initial || r == Divide)
 		apicadvance();
 	switch(r){
@@ -383,7 +388,20 @@ lapicmmio(uintptr pa, void *p, int n, int wr)
 	case Icrhi: a->reg[r] = v & 0xff000000; break;
 	case Icrlo:
 		a->reg[r] = v & ~0x1000;
-		deliver((uvlong)a->reg[Icrhi]<<32 | v, cpu);
+		if((v >> 8 & 7) == 0 && (v & 255) < 16){
+			a->reg[Esr] |= 1<<5;
+			break;
+		}
+		dest = a->reg[Icrhi];
+		if((a->base & X2) == 0){
+			dest >>= 24;
+			if(dest == 255) dest = ~0U;
+		}
+		deliver(v, dest, cpu);
+		break;
+	case Self:
+		if(v < 16) a->reg[Esr] |= 1<<5;
+		else deliver(1<<18 | v, 0, cpu);
 		break;
 	case Timer: case Thermal: case Perf: case Lint0: case Lint1: case Error:
 		a->reg[r] = v;
@@ -405,6 +423,26 @@ lapicmmio(uintptr pa, void *p, int n, int wr)
 		apicadvance();
 		break;
 	}
+}
+
+static int
+lapicmmio(uintptr pa, void *p, int n, int wr)
+{
+	int r;
+
+	if(n != 4 || (pa & 15) != 0)
+		return -1;
+	if((cpu->apic.base & (Global|X2)) != Global){
+		if(!wr) PUT32(p, 0, -1);
+		return 0;
+	}
+	r = (pa & 4095) >> 4;
+	if(r >= Self)
+		return -1;
+	if(wr)
+		lapicwrite(r, GET32(p, 0));
+	else
+		PUT32(p, 0, lapicread(r));
 	return 0;
 }
 
@@ -452,18 +490,77 @@ ioapicmmio(uintptr pa, void *p, int n, int wr)
 int
 apicmsr(int rd, u32int msr, u64int *value)
 {
-	if(msr != 0x1b || ncpu == 1)
+	Lapic *a;
+	u32int mask;
+	int r, old, mode;
+
+	if(ncpu == 1)
 		return 0;
-	if(rd)
-		*value = cpu->apic.base;
-	else if((*value & ~0x900ULL) != Lapicbase){
-		postexc("#gp", 0);
-		return -1;
+	a = &cpu->apic;
+	if(msr == 0x1b){
+		if(rd)
+			*value = a->base;
+		else{
+			old = a->base & (Global|X2);
+			mode = *value & (Global|X2);
+			if((*value & ~0xd00ULL) != Lapicbase || mode == X2 ||
+			   old == 0 && mode == (Global|X2) || old == (Global|X2) && mode == Global)
+				goto fault;
+			a->base = *value & ~0x100ULL | (cpu->id == 0 ? 0x100 : 0);
+			if(old == 0 && mode == Global)
+				apicreset(cpu);
+			apicupdate(cpu);
+		}
+		return 1;
+	}
+	if(msr < 0x800 || msr > 0xbff)
+		return 0;
+	if((a->base & X2) == 0)
+		goto fault;
+	r = msr - 0x800;
+	/* Reads of write-only/reserved registers and writes to reserved bits fault. */
+	mask = 0;
+	switch(r){
+	case Tpr: case Self: mask = 0xff; break;
+	case Eoi: case Esr: break;
+	case Svr: mask = 0x1ff; break;
+	case Icrlo: mask = 0xcdfff; break;
+	case Timer: mask = 0x310ff; break;
+	case Thermal: case Perf: mask = 0x117ff; break;
+	case Lint0: case Lint1: mask = 0x1f7ff; break;
+	case Error: mask = 0x110ff; break;
+	case Initial: mask = ~0U; break;
+	case Divide: mask = 11; break;
+	default:
+		if(!rd || !(r == Id || r == Version || r == Ppr || r == Ldr ||
+		   r >= Isr && r < Esr || r == Current))
+			goto fault;
+	}
+	if(rd){
+		if(r == Eoi || r == Self)
+			goto fault;
+		*value = lapicread(r);
+		if(r == Icrlo) *value |= (uvlong)a->reg[Icrhi]<<32;
 	}else{
-		cpu->apic.base = *value & ~0x100ULL | (cpu->id == 0 ? 0x100 : 0);
-		apicupdate(cpu);
+		if(((u32int)*value & ~mask) != 0 || r != Icrlo && *value >> 32 != 0)
+			goto fault;
+		if(r == Icrlo){
+			a->reg[Icrhi] = *value >> 32;
+			if((*value >> 8 & 7) == 1){
+				a->reg[Esr] |= 1<<4;
+				return 1;
+			}
+		}
+		/* LVT delivery status and remote IRR are read-only, not reserved. */
+		if(r >= Timer && r <= Error)
+			lapicwrite(r, (u32int)*value & ~0x5000U);
+		else
+			lapicwrite(r, *value);
 	}
 	return 1;
+fault:
+	postexc("#gp", 0);
+	return -1;
 }
 
 void

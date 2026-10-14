@@ -107,6 +107,41 @@ rdtsctest(int ctl, int regs, int waitfd)
 }
 
 static void
+exitregtest(int ctl, int waitfd)
+{
+	char buf[512], *f[32];
+	int i, j, n, seen;
+	static char *cause[] = {".rdmsr", ".wrmsr", ".hlt"};
+
+	for(i = 0; i < nelem(cause); i++){
+		if(fprint(ctl, "go pc=%d;flags=0x202;ax=0x1234;cx=0x800;dx=0x5678;", 7+2*i) < 0)
+			sysfatal("exit registers go: %r");
+		n = read(waitfd, buf, sizeof(buf)-1);
+		if(n <= 0)
+			sysfatal("exit registers wait: %r");
+		buf[n] = 0;
+		n = tokenize(buf, f, nelem(f));
+		assert(n >= 2 && n % 2 == 0);
+		if(strcmp(f[0], cause[i]) != 0)
+			sysfatal("expected %s exit, got %s", cause[i], f[0]);
+		seen = 0;
+		for(j = 2; j < n; j += 2){
+			if(strcmp(f[j], "ax") == 0){
+				assert(strtoull(f[j+1], nil, 0) == 0x1234); seen |= 1;
+			}else if(strcmp(f[j], "cx") == 0){
+				assert(strtoull(f[j+1], nil, 0) == 0x800); seen |= 2;
+			}else if(strcmp(f[j], "dx") == 0){
+				assert(strtoull(f[j+1], nil, 0) == 0x5678); seen |= 4;
+			}else if(strcmp(f[j], "flags") == 0){
+				assert(strtoull(f[j+1], nil, 0) == 0x202); seen |= 8;
+			}
+		}
+		assert(seen == (i == 2 ? 8 : 7));
+	}
+	print("VMX-EXIT-PASS: MSR operands and HLT flags in exit messages\n");
+}
+
+static void
 clocktest(void)
 {
 	char path[2][64], name[64], buf[4096];
@@ -126,6 +161,7 @@ clocktest(void)
 	if(p == (void*)-1)
 		sysfatal("clock segment attach: %r");
 	memmove(p, "\xf3\x90\x0f\x31\x0f\x01\xc1", 7); /* PAUSE; RDTSC; VMCALL */
+	memmove(p+7, "\x0f\x32\x0f\x30\xf4", 5); /* RDMSR; WRMSR; HLT */
 	for(i = 0; i < 2; i++){
 		ctl[i] = clone(path[i], sizeof(path[i]));
 		regs[i] = vmopen(path[i], "regs", ORDWR);
@@ -171,6 +207,7 @@ clocktest(void)
 	a = clockread(regs[0], &adjust);
 	assert(a < 1ULL<<40);
 	rdtsctest(ctl[0], regs[0], waitfd);
+	exitregtest(ctl[0], waitfd);
 	if(write(ctl[0], "init", 4) != 4)
 		sysfatal("init: %r");
 	delta = adjust;
