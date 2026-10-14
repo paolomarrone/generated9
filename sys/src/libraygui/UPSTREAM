@@ -1,0 +1,24 @@
+raygui 5.0 by Ramon Santamaria and contributors
+https://github.com/raysan5/raygui
+Tag: 5.0
+Commit: 020a61bebcbe288b4414de3416e219ef40af847a
+Archive: https://codeload.github.com/raysan5/raygui/tar.gz/refs/tags/5.0
+SHA256: 0f194c4a5e837c0930aca0b6315db45d00f76fa0052d841eea94598d390c39d6
+
+The public single header retains its original zlib license and notices.
+LICENSE is the upstream license file. This is an altered distribution.
+
+Local changes:
+- Native C library includes, raymath9 float adapters and library pragmas.
+  The implementation is compiled once into libraygui.a using 6c and mk.
+- Text boxes drain the character queue each frame, preserving UTF-8 code
+  points, the terminating NUL and the caller's buffer capacity.
+- Clipboard insertion moves only the suffix and its terminating NUL,
+  avoiding reads before the buffer when pasting near its start.
+- Color pickers always draw their hue bar when the color panel changes,
+  preserving the change result from either control. Adapted from upstream
+  raygui.h at 9cb5cfa73290ba920d071f57c1d06a4daee22f52, where the hue call
+  was likewise separated from the conditional color-panel update.
+
+The native build, tests and modelview client use the generated9 root LICENSE.
+Tested with the native raylib 6.0 port and its classic OpenGL backend.

@@ -1,0 +1,12 @@
+</$objtype/mkfile
+
+TARG=guitest
+OFILES=guitest.$O
+HFILES=/sys/include/raygui.h /sys/include/raylib.h
+CFLAGS=$CFLAGS -p
+LIB=/$objtype/lib/libraygui.a /$objtype/lib/libraylib.a /$objtype/lib/libtinygl.a /$objtype/lib/libgpu.a
+
+</sys/src/cmd/mkone
+
+test:V: $O.out
+	./$O.out

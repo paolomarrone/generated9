@@ -246,3 +246,17 @@ The original source headers and zlib/libpng `classics/LICENSE` are preserved.
 File digests and adaptations are recorded in the local `UPSTREAM` file.
 These games use geometry and raylib's built-in font; no additional assets
 are bundled. The native runner and tests use the generated9 root license.
+
+## raygui and model viewer
+
+The native controls library imports [raygui 5.0](https://github.com/raysan5/raygui/tree/020a61bebcbe288b4414de3416e219ef40af847a),
+commit `020a61bebcbe288b4414de3416e219ef40af847a`, by Ramon Santamaria and
+contributors. The zlib license and original notices are preserved in
+`sys/include/raygui.h` and `sys/src/libraygui/LICENSE`. The local
+[UPSTREAM](sys/src/libraygui/UPSTREAM) records the archive digest, native
+changes and color-picker correction adapted from upstream revision
+`9cb5cfa73290ba920d071f57c1d06a4daee22f52`.
+
+The library binding, tests and `sys/src/cmd/modelview` are new generated9
+code under the root license. The viewer uses raylib's existing model loaders;
+it includes no third-party model assets.

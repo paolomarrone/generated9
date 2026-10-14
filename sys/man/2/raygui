@@ -1,0 +1,65 @@
+.TH RAYGUI 2
+.SH NAME
+raygui \- immediate-mode controls for raylib
+.SH SYNOPSIS
+.B #include <u.h>
+.br
+.B #include <libc.h>
+.br
+.B #include <raylib.h>
+.br
+.B #include <raygui.h>
+.SH DESCRIPTION
+Raygui provides buttons, text boxes, check boxes, sliders, lists, dialogs,
+color pickers, styles and embedded icons on top of
+.IR raylib (2).
+The caller owns the control state and layout.
+Controls read raylib's input and draw inside the caller's existing frame;
+there is no additional window or event loop.
+.PP
+Compile with
+.BR -p .
+The header selects
+.B libraygui.a
+at link time. Do not define
+.B RAYGUI_IMPLEMENTATION
+in a client; the implementation is already compiled into the library.
+The header documents the individual controls and their return values.
+.PP
+The style and active control state are global to the process.
+Call controls between
+.B BeginDrawing
+and
+.BR EndDrawing .
+Editable text buffers belong to the caller; pass their capacity in bytes,
+including space for the terminating NUL.
+.SH EXAMPLE
+.EX
+void
+main(void)
+{
+    bool grid = true;
+
+    InitWindow(400, 200, "controls");
+    SetTargetFPS(60);
+    while(!WindowShouldClose()){
+        BeginDrawing();
+        ClearBackground(RAYWHITE);
+        GuiCheckBox((Rectangle){20,20,20,20}, "Grid", &grid);
+        if(GuiButton((Rectangle){20,60,100,30}, "Reset"))
+            grid = true;
+        EndDrawing();
+    }
+    CloseWindow();
+    exits(nil);
+}
+.EE
+.SH SOURCE
+.B /sys/src/libraygui
+.SH SEE ALSO
+.IR modelview (1),
+.IR raylib (2),
+.IR tinygl (2)
+.SH BUGS
+Controls require explicit layout and clipping by the application.
+The library is not thread-safe and inherits raylib's platform limits.

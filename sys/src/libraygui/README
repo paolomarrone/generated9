@@ -1,0 +1,30 @@
+raygui for generated9
+
+The original immediate-mode controls, styles and embedded icons, compiled
+as a native library on top of raylib. No new window system or event loop.
+See UPSTREAM and LICENSE for the pinned source and local changes.
+
+After installing libraylib:
+
+    cd /sys/src/libraygui
+    mk install
+
+Clients include u.h, libc.h, raylib.h and raygui.h, and compile with -p.
+The header selects the library. Do not define RAYGUI_IMPLEMENTATION in a
+client: the implementation is already in libraygui.a.
+
+Call the controls between BeginDrawing and EndDrawing in a rio window.
+The caller owns widget state and layout; raygui uses raylib's input queue.
+modelview(1) is a complete client with a text box, buttons, check boxes,
+slider and status bar. See raygui(2) for a small example.
+
+Native regression test, inside a rio window with VirGL available:
+
+    cd /sys/src/libraygui/test
+    mk test
+
+The test checks rendered styles, several queued UTF-8 characters in one
+frame, capacity limits, Unicode backspace and clipboard insertion, and
+color-picker interaction.
+Only amd64/QEMU VirGL has been tested. Rendering and font limitations are
+those of raylib(2); this is not a replacement for native rio applications.

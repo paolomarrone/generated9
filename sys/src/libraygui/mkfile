@@ -1,0 +1,8 @@
+</$objtype/mkfile
+
+LIB=/$objtype/lib/libraygui.a
+OFILES=raygui.$O
+HFILES=/sys/include/raygui.h /sys/include/raylib.h /sys/include/raymath9.h
+CFLAGS=$CFLAGS -p
+
+</sys/src/cmd/mksyslib

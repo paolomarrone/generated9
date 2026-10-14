@@ -40,6 +40,7 @@ LIBS=\
 	libthread\
 	libtinygl\
 	libraylib\
+	libraygui\
 	libttf\
 	libventi\
 	libdtracy\
