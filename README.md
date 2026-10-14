@@ -9,7 +9,7 @@ the cloned `9front/9front` `front` branch, starting our changes at
 `70233ea4a4fe9b905ea8f3a4c4e514a7df5d8b8b` (2026-10-10).
 
 ```sh
-git clone --branch gen git@github.com:paolomarrone/generated9.git
+git clone --branch gen https://github.com/paolomarrone/generated9.git
 cd generated9
 ./boot/getbin
 ./boot/qemu              # serial console; quit with Ctrl-a x
@@ -21,7 +21,7 @@ Host requirements, bootstrap details, and kernel development instructions are
 in [boot/README.md](boot/README.md). Guest writes modify the checkout directly.
 Downloaded binaries, ISO images, and mutable guest state are not committed.
 
-The GitHub repository is an independent private copy. Upstream remains
+The GitHub repository is an independent copy. Upstream remains
 [`9front/9front`](https://github.com/9front/9front), the project's GitHub mirror.
 For a new clone, add the upstream remote with:
 
