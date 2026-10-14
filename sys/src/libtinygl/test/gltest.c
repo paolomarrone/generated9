@@ -808,6 +808,8 @@ pixelops(void)
 {
 	uchar input[16] = {255,0,0,255, 0,255,0,255, 0,0,255,255, 255,255,255,255};
 	uchar patch[8] = {255,255,0,255, 0,255,255,255}, out[64];
+	uchar alpha[16] = {255,255,255,0, 255,255,255,17, 255,255,255,0, 255,255,255,91};
+	uchar luma[16] = {0,0,0,255, 255,255,255,255, 0,0,0,255, 255,255,255,255};
 	ushort packed[4] = {0xf800,0x07e0,0x001f,0xffff}, packedout[4];
 	GLuint t, list;
 	int i;
@@ -873,6 +875,28 @@ pixelops(void)
 	glGetTexImage(GL_TEXTURE_2D,0,GL_LUMINANCE,GL_UNSIGNED_BYTE,out);
 	if(out[0] != 255 || out[1] != 0 || out[2] != 0 || out[3] != 255)
 		sysfatal("texture luminance extraction");
+	/* The same saved pixels must convert to each destination's format. */
+	input[3] = 17;
+	input[7] = 91;
+	glNewList(list=glGenLists(1),GL_COMPILE);
+	glTexSubImage2D(GL_TEXTURE_2D,0,1,0,1,2,GL_RGBA,GL_UNSIGNED_BYTE,input);
+	glTexSubImage2D(GL_TEXTURE_2D,0,2,2,0,0,GL_RGBA,GL_UNSIGNED_BYTE,nil);
+	glEndList();
+	glCallList(list);
+	glGetTexImage(GL_TEXTURE_2D,0,GL_RGBA,GL_UNSIGNED_BYTE,out);
+	if(memcmp(out+4,input,3) || memcmp(out+12,input+4,3) || out[7] != 255 || out[15] != 255)
+		sysfatal("RGB texture subimage conversion");
+	memset(out,0,sizeof out);
+	glTexImage2D(GL_TEXTURE_2D,0,GL_ALPHA,2,2,0,GL_RGBA,GL_UNSIGNED_BYTE,out);
+	glCallList(list);
+	glGetTexImage(GL_TEXTURE_2D,0,GL_RGBA,GL_UNSIGNED_BYTE,out);
+	if(memcmp(out,alpha,sizeof alpha)) sysfatal("alpha texture subimage conversion");
+	memset(out,0,sizeof out);
+	glTexImage2D(GL_TEXTURE_2D,0,GL_LUMINANCE,2,2,0,GL_RGBA,GL_UNSIGNED_BYTE,out);
+	glCallList(list);
+	glGetTexImage(GL_TEXTURE_2D,0,GL_RGBA,GL_UNSIGNED_BYTE,out);
+	if(memcmp(out,luma,sizeof luma)) sysfatal("luminance texture subimage conversion");
+	glDeleteLists(list,1);
 	glDeleteTextures(1,&t);
 	clear();
 	glColor3f(1,0,0);

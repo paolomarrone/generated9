@@ -276,7 +276,7 @@ void gl_add_op(GLParam *p);
 
 GLImage *gl_unpack(GLPixelstore*, int, int, int, int, const void*);
 void gl_pack(GLPixelstore*, int, int, int, int, const uchar*, int, void*);
-void gl_image_format(GLImage*, int);
+void gl_pixel_format(uchar*, int, int);
 
 /* virgl.c */
 void gl_draw_triangle(GLContext*, GLVertex*, GLVertex*, GLVertex*);

@@ -284,7 +284,8 @@ glTexImage2D(int target, int level, int components, int w, int h, int border,
 		gl_fatal_error("invalid texture dimensions");
 	f = format(components);
 	im = gl_unpack(&c->unpack, w, h, fmt, type, pixels);
-	gl_image_format(im, f);
+	im->format = f;
+	gl_pixel_format(im->pixels, w*h, f);
 	p[0].op = OP_TexImage2D;
 	p[1].i = level;
 	p[2].p = im;
@@ -615,7 +616,8 @@ void
 glopTexSubImage2D(GLContext *c, GLParam *p)
 {
 	GLTexture *t;
-	GLImage *im, *src, *row;
+	GLImage *im, *src;
+	uchar *dst;
 	int x, y, i;
 
 	t = c->texunit[c->active_texture].texture;
@@ -626,15 +628,14 @@ glopTexSubImage2D(GLContext *c, GLParam *p)
 	if(im == nil || x > im->width || y > im->height
 	|| src->width > im->width-x || src->height > im->height-y)
 		gl_fatal_error("texture subimage outside image");
+	if(src->width == 0 || src->height == 0) return;
 	gl_flush(c);
 	gl_release_texture(c, t);
-	row = newimage(src->width, 1, GL_RGBA);
 	for(i=0; i<src->height; i++){
-		memmove(row->pixels, src->pixels+i*src->width*4, src->width*4);
-		gl_image_format(row, im->format);
-		memmove(im->pixels+((y+i)*im->width+x)*4, row->pixels, src->width*4);
+		dst = im->pixels+((y+i)*im->width+x)*4;
+		memmove(dst, src->pixels+i*src->width*4, src->width*4);
+		gl_pixel_format(dst, src->width, im->format);
 	}
-	free(row);
 	if(p[1].i == 0 && t->generate && im->width && im->height) mipmaps(t);
 }
 

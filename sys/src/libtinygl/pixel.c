@@ -90,13 +90,9 @@ gl_unpack(GLPixelstore *s, int w, int h, int fmt, int type, const void *pixels)
 }
 
 void
-gl_image_format(GLImage *im, int format)
+gl_pixel_format(uchar *p, int n, int format)
 {
-	uchar *p;
-	int n;
-
-	im->format = format;
-	for(p=im->pixels, n=im->width*im->height; n--; p+=4){
+	for(; n--; p+=4){
 		switch(format){
 		case GL_ALPHA: p[0] = p[1] = p[2] = 255; break;
 		case GL_LUMINANCE: p[3] = 255; /* fall through */
