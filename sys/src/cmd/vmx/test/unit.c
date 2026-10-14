@@ -2,6 +2,7 @@
 #define threadmain vmxmain
 #include "../vmx.c"
 #undef threadmain
+#include "../virtio.h"
 
 static uvlong now;
 static Region *code, *lapic;
@@ -232,6 +233,92 @@ iointerrupts(void)
 	apicack(cpu, 0x62); writereg(0xb0, 0);
 }
 
+static u32int
+vioreg(VIODev *v, int read, int off, u32int value, int size)
+{
+	return v->pci->bar[0].io(read,off,value,size,v);
+}
+
+static void
+virtiotransport(void)
+{
+	VIODev *v;
+	VIOQueue *q;
+	VIOBuf *b;
+	uchar *p, buf[8];
+	char request[] = "request", response[] = "response";
+	uvlong base;
+
+	mainid = threadid();
+	v = mkviodev(0x1050,0x030000,16,1);
+	v->pci->irqno = 255;
+	v->devfeat = 1;
+	viomodern(v);
+	q = mkvioqueue(v,8,viowakeup);
+	assert(vioreg(v,1,4,0,4) == 1);
+	vioreg(v,0,0,1,4);
+	assert(vioreg(v,1,4,0,4) == 1);
+	vioreg(v,0,12,2,4);
+	vioreg(v,0,20,11,1);
+	assert((vioreg(v,1,20,0,1)&8) == 0);
+	vioreg(v,0,12,1,4);
+	vioreg(v,0,8,1,4);
+	vioreg(v,0,12,1,4);
+	vioreg(v,0,20,11,1);
+	assert(vioreg(v,1,20,0,1) == 11);
+	p = code->v;
+	base = code->start;
+	memset(p,0,BY2PG);
+	vioreg(v,0,32,base,4);
+	vioreg(v,0,40,base+256,4);
+	vioreg(v,0,48,base+320,4);
+	vioreg(v,0,36,1,4);
+	vioreg(v,0,28,1,2);
+	assert(vioreg(v,1,28,0,2) == 0);
+	vioreg(v,0,36,0,4);
+	vioreg(v,0,32,base+1,4);
+	vioreg(v,0,28,1,2);
+	assert(vioreg(v,1,28,0,2) == 0);
+	vioreg(v,0,32,base,4);
+	vioreg(v,0,24,3,2);
+	vioreg(v,0,28,1,2);
+	assert(vioreg(v,1,28,0,2) == 0);
+	vioreg(v,0,24,8,2);
+	vioreg(v,0,28,1,2);
+	assert(vioreg(v,1,28,0,2) == 1);
+	/* An enabled queue's configuration is immutable until reset. */
+	vioreg(v,0,32,base+16,4);
+	vioreg(v,0,24,4,2);
+	assert(vioreg(v,1,32,0,4) == base && vioreg(v,1,24,0,2) == 8);
+	vioreg(v,0,20,15,1);
+	PUT64(p,0,base+512); PUT32(p,8,8); PUT16(p,12,BUFCHAIN); PUT16(p,14,1);
+	PUT64(p,16,base+528); PUT32(p,24,8); PUT16(p,28,BUFWR);
+	memmove(p+512,request,8);
+	PUT16(p,256,USEDNOIRQ);
+	PUT16(p,258,1);
+	b = viogetbuf(q,0);
+	assert(b != nil && vioqread(b,buf,8) == 8 && memcmp(buf,request,8) == 0);
+	assert(vioqwrite(b,response,8) == 8);
+	vioputbuf(b);
+	assert(q->livebuf == 0 && GET16(p,322) == 1 && GET32(p,328) == 8);
+	assert(memcmp(p+528,response,8) == 0);
+	/* Bad heads and cycles must not dereference nil or build infinite chains. */
+	PUT16(p,262,99); PUT16(p,258,2);
+	assert(viogetbuf(q,0) == nil);
+	PUT16(p,14,0); PUT16(p,258,3);
+	assert(viogetbuf(q,0) == nil);
+	PUT16(p,14,1); PUT16(p,258,4);
+	b = viogetbuf(q,0);
+	assert(b != nil && q->livebuf == 1);
+	v->devstat = 0;
+	vioputbuf(b);
+	assert(q->livebuf == 0 && GET16(p,322) == 1);
+	vioreg(v,0,20,0,1);
+	assert(q->desc == nil && q->enabled == 0 && q->size == 8);
+	assert(v->guestfeat == 0 && v->dfsel == 0 && v->gfsel == 0 && v->qsel == 0);
+	print("PASS: modern VirtIO negotiation, split queues, malformed chains and reset completion\n");
+}
+
 void
 threadmain(int, char **)
 {
@@ -256,6 +343,7 @@ threadmain(int, char **)
 	msrs();
 	interrupts();
 	iointerrupts();
+	virtiotransport();
 	print("PASS: MMIO decoding, MSRs, APIC priority, timers, IPI and I/O APIC\n");
 	threadexitsall(nil);
 }

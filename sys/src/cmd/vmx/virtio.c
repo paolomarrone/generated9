@@ -7,80 +7,7 @@
 #include <ip.h>		/* parseether() */
 #include <libsec.h>	/* genrandom() */
 
-typedef struct VIODev VIODev;
-typedef struct VIOQueue VIOQueue;
-typedef struct VIOBuf VIOBuf;
-typedef struct VIONetDev VIONetDev;
-typedef struct VIOBlkDev VIOBlkDev;
-
-enum {
-	BUFCHAIN = 1,
-	BUFWR = 2,
-	
-	USEDNOIRQ = 1,
-	
-	DRIVEROK = 4, /* devstat */
-};
-
-struct VIOBuf {
-	u32int flags;
-	VIOQueue *qu;
-	void *p;
-	u64int addr;
-	u32int len;
-	u32int idx;
-	VIOBuf *next, *head;
-	u32int rptr, wptr;
-};
-
-struct VIOQueue {
-	QLock;
-	Rendez;
-	VIODev *d;
-	u8int (*desc)[16], *avail, *used;
-	u16int size;
-	u32int addr;
-	u16int availidx, usedidx;
-	void (*notify)(VIOQueue*);
-	int livebuf;
-	Rendez livebufrend;
-};
-
-struct VIONetDev {
-	int readfd, writefd;
-	u8int mac[6];
-	enum {
-		VNETPROMISC = 1,
-		VNETALLMULTI = 2,
-		VNETALLUNI = 4,
-		VNETNOMULTI = 8,
-		VNETNOUNI = 16,
-		VNETNOBCAST = 32,
-		
-		VNETHEADER = 1<<31,
-	} flags;
-	u64int macbloom, multibloom;
-};
-
-struct VIOBlkDev {
-	int fd;
-	uvlong size;
-};
-
-struct VIODev {
-	PCIDev *pci;
-	u32int devfeat, guestfeat;
-	u16int qsel;
-	u8int devstat, isrstat;
-	VIOQueue *qu;
-	int nqu, allocqu;
-	u32int (*io)(int, u16int, u32int, int, VIODev *);
-	void (*reset)(VIODev *);
-	union {
-		VIONetDev net;
-		VIOBlkDev blk;
-	};
-};
+#include "virtio.h"
 
 static void
 vioirq_(void *arg)
@@ -124,8 +51,9 @@ VIOBuf *
 viogetbuf(VIOQueue *q, int wait)
 {
 	u16int gidx;
-	VIOBuf *b, *rb, **bp;
+	VIOBuf *b, *rb, *next, **bp;
 	void *dp;
+	int count;
 	
 	qlock(q);
 waitloop:
@@ -136,10 +64,14 @@ waitloop:
 		}
 		rsleep(q);
 	}
+	coherence();
 	dp = checkdesc(q, GET16(q->avail, 4 + 2 * (q->availidx % q->size)));
 	rb = nil;
 	bp = &rb;
+	count = 0;
 	for(;;){
+		if(dp == nil || ++count > q->size || (GET16(dp, 12) & ~(BUFCHAIN|BUFWR)) != 0)
+			goto bad;
 		b = emalloc(sizeof(VIOBuf));
 		b->qu = q;
 		b->idx = (u8int(*)[16])dp - q->desc;
@@ -150,20 +82,28 @@ waitloop:
 		if(b->p == nil){
 			vmerror("virtio device %#x: invalid buffer pointer %#p in queue, ignoring descriptor", q->d->pci->bdf, (void*)b->addr);
 			free(b);
-			break;
+			goto bad;
 		}
 		*bp = b;
 		b->head = rb;
 		bp = &b->next;
 		if((b->flags & BUFCHAIN) == 0) break;
 		dp = checkdesc(q, GET16(dp, 14));
-		if(dp == nil) break;
 	}
 	q->availidx++;
 	if(rb == nil) goto waitloop;
 	q->livebuf++;
 	qunlock(q);
 	return rb;
+bad:
+	vmerror("virtio device %#x: invalid descriptor chain", q->d->pci->bdf);
+	while(rb != nil){
+		next = rb->next;
+		free(rb);
+		rb = next;
+	}
+	q->availidx++;
+	goto waitloop;
 }
 
 void
@@ -172,28 +112,32 @@ vioputbuf(VIOBuf *b)
 	VIOBuf *bn;
 	VIOQueue *q;
 	u8int *p;
+	int irq;
 	
 	if(b == nil) return;
 	q = b->qu;
 	qlock(q);
-	if((q->d->devstat & DRIVEROK) == 0){
-		qunlock(q);
-		goto end;
-	}
+	irq = 0;
+	if((q->d->devstat & DRIVEROK) == 0)
+		goto done;
 	if(q->used == nil)
 		vmerror("virtio device %#x: address was set to an invalid value while holding buffer", q->d->pci->bdf);
 	else{
 		p = q->used + 4 + 8 * (q->usedidx % q->size);
 		PUT32(p, 4, b->wptr);
 		PUT32(p, 0, b->idx);
+		/* Publish the buffer and used entry before the guest sees its index. */
+		coherence();
 		PUT16(q->used, 2, ++q->usedidx);
 	}
+	coherence();
+	irq = q->avail != nil && (GET16(q->avail, 0) & USEDNOIRQ) == 0;
+done:
 	if(--q->livebuf <= 0)
 		rwakeup(&q->livebufrend);
 	qunlock(q);
-	if(q->avail != nil && (GET16(q->avail, 0) & USEDNOIRQ) == 0)
+	if(irq)
 		vioirq(q->d, 1);
-end:
 	while(b != nil){
 		bn = b->next;
 		free(b);
@@ -319,6 +263,9 @@ vioqreset(VIOQueue *q)
 	q->addr = 0;
 	q->availidx = 0;
 	q->usedidx = 0;
+	q->size = q->maxsize;
+	q->enabled = 0;
+	q->descaddr = q->availaddr = q->usedaddr = 0;
 }
 
 static void
@@ -328,9 +275,8 @@ viodevstatset(VIODev *v, u32int val)
 
 	v->devstat = val;
 	if(val == 0){
-		if(v->reset != nil)
-			v->reset(v);
 		v->guestfeat = 0;
+		v->dfsel = v->gfsel = v->qsel = 0;
 		vioirq(v, 0);
 		for(i = 0; i < v->nqu; i++){
 			qlock(&v->qu[i]);
@@ -339,6 +285,8 @@ viodevstatset(VIODev *v, u32int val)
 			vioqreset(&v->qu[i]);
 			qunlock(&v->qu[i]);
 		}
+		if(v->reset != nil)
+			v->reset(v);
 	}else{
 		for(i = 0; i < v->nqu; i++)
 			v->qu[i].notify(&v->qu[i]);
@@ -374,6 +322,112 @@ vioio(int isin, u16int port, u32int val, int sz, void *vp)
 	return iowhine(isin, port, val, sz, whinebuf);
 }
 
+/* VirtIO 1.0 PCI capabilities, using an I/O BAR like the legacy devices. */
+static u32int
+viocapread(PCICap *c, u8int off)
+{
+	static u32int offsets[] = {0, 64, 68, 128};
+	static u32int lengths[] = {56, 4, 1, 128};
+	int type;
+
+	type = (c->addr-64)/20;
+	switch(off){
+	case 0: return 9 | (type == 1 ? 20 : 16)<<16 | (type+1)<<24;
+	case 4: return 0;	/* BAR 0 */
+	case 8: return offsets[type];
+	case 12: return lengths[type];
+	case 16: return 0;	/* all queues use the same notify register */
+	}
+	return 0;
+}
+
+static void
+vioenable(VIOQueue *q)
+{
+	qlock(q);
+	if(!q->enabled && q->size != 0 && q->size <= q->maxsize && (q->size & (q->size-1)) == 0
+	&& (q->descaddr&15) == 0 && (q->availaddr&1) == 0 && (q->usedaddr&3) == 0){
+		q->desc = gptr(q->descaddr, 16*q->size);
+		q->avail = gptr(q->availaddr, 6+2*q->size);
+		q->used = gptr(q->usedaddr, 6+8*q->size);
+		q->enabled = q->desc != nil && q->avail != nil && q->used != nil;
+		if(!q->enabled)
+			q->desc = nil;
+	}
+	qunlock(q);
+}
+
+static u32int
+vio1io(int isin, u16int port, u32int val, int sz, void *arg)
+{
+	VIODev *v;
+	VIOQueue *q;
+	u64int *addr;
+	int rc;
+
+	v = arg;
+	q = v->qsel < v->nqu ? &v->qu[v->qsel] : nil;
+	if(port >= 128)
+		return v->io == nil ? 0 : v->io(isin, port-128, val, sz, v);
+	if(port >= 32 && port < 56 && (port&3) == 0 && sz == 4){
+		if(q == nil) return 0;
+		addr = port < 40 ? &q->descaddr : port < 48 ? &q->availaddr : &q->usedaddr;
+		if(isin) return *addr >> ((port&4)*8);
+		if(!q->enabled){
+			if(port&4) *addr = (u32int)*addr | (u64int)val<<32;
+			else *addr = (*addr & 0xffffffff00000000ULL) | val;
+		}
+		return 0;
+	}
+	switch(isin<<16 | port){
+	case 0: v->dfsel = val; break;
+	case 8: v->gfsel = val; break;
+	case 12:
+		if(v->gfsel == 0) v->guestfeat = (v->guestfeat & 0xffffffff00000000ULL) | val;
+		if(v->gfsel == 1) v->guestfeat = (u32int)v->guestfeat | (u64int)val<<32;
+		break;
+	case 16: break;	/* no MSI-X */
+	case 20:
+		if((val&8) && ((v->guestfeat & ~v->devfeat) != 0 || (v->guestfeat & 1ULL<<32) == 0))
+			val &= ~8;
+		viodevstatset(v, val);
+		break;
+	case 22: v->qsel = val; break;
+	case 24: if(q != nil && !q->enabled && val <= q->maxsize) q->size = val; break;
+	case 26: break;
+	case 28: if(q != nil && val == 1) vioenable(q); break;
+	case 64: if(val < v->nqu) v->qu[val].notify(&v->qu[val]); break;
+	case 0x10000: return v->dfsel;
+	case 0x10004: return v->dfsel < 2 ? v->devfeat >> (32*v->dfsel) : 0;
+	case 0x10008: return v->gfsel;
+	case 0x1000c: return v->gfsel < 2 ? v->guestfeat >> (32*v->gfsel) : 0;
+	case 0x10010: return 0xffff;
+	case 0x10012: return v->nqu;
+	case 0x10014: return v->devstat;
+	case 0x10015: return 0;
+	case 0x10016: return v->qsel;
+	case 0x10018: return q == nil ? 0 : q->size;
+	case 0x1001a: return 0xffff;
+	case 0x1001c: return q == nil ? 0 : q->enabled;
+	case 0x1001e: return 0;
+	case 0x10044: rc = v->isrstat; vioirq(v, 0); return rc;
+	}
+	return 0;
+}
+
+void
+viomodern(VIODev *v)
+{
+	int i;
+
+	assert(v->pci->cap == nil && v->pci->capalloc == 64);
+	v->devfeat |= 1ULL<<32;
+	v->pci->clrev |= 1;
+	v->pci->bar[0].io = vio1io;
+	for(i=0; i<4; i++)
+		mkpcicap(v->pci, 20, viocapread, nil);
+}
+
 VIODev *
 mkviodev(u16int devid, u32int pciclass, u32int subid, int queues)
 {
@@ -388,7 +442,7 @@ mkviodev(u16int devid, u32int pciclass, u32int subid, int queues)
 	return d;
 }
 
-static void
+void
 viowakeup(VIOQueue *q)
 {
 	qlock(q);
@@ -405,7 +459,7 @@ mkvioqueue(VIODev *d, int sz, void (*fn)(VIOQueue*))
 	q = d->qu + d->nqu++;
 	q->Rendez.l = q;
 	q->livebufrend.l = q;
-	q->size = sz;
+	q->size = q->maxsize = sz;
 	q->d = d;
 	q->notify = fn;
 	vioqreset(q);

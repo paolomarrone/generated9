@@ -3,7 +3,7 @@
 BIN=/$objtype/bin
 TARG=vmx
 CLEANFILES=$O.vmxgdb test/$O.out test/$O.plan9 test/$O.device test/*.$O
-HFILES=dat.h fns.h x86.h
+HFILES=dat.h fns.h x86.h virtio.h
 TESTDEP=test/$O.out
 VMOFILES=\
 	ksetup.$O \
