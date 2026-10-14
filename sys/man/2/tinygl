@@ -47,9 +47,10 @@ strips, fans, quads and convex polygons; indexed client arrays and buffer
 objects; flat and smooth colors; matrix stacks and projections;
 face culling; one- and two-sided vertex lighting and materials;
 display lists; alpha testing and blending; depth functions and write masks;
-polygon offset; and clearing color and depth.
-Lines have width one. Points support sizes from 1 through 64 pixels,
-distance attenuation and texture sprites. Polygons are filled.
+polygon offset; color write masks and scissor rectangles; and clearing color
+and depth. Clears honor the scissor and write masks. Lines and points support
+sizes from 1 through 64 pixels. Points also support distance attenuation and
+texture sprites. Polygons may be filled, outlined or drawn as points.
 The header declares the available entry points, not a complete GL API.
 .PP
 Four texture units provide two-dimensional textures up to 2048 by 2048,
@@ -57,10 +58,14 @@ nearest and linear filtering, mipmaps, repeat/clamp wrapping, texture
 matrices and object-linear, eye-linear and sphere-map coordinate generation.
 Images accept unsigned-byte RGB, RGBA, alpha, luminance and
 luminance-alpha pixels, with configurable unpack alignment, row length
-and skipped rows/pixels. Texture borders must be zero.
+and skipped rows/pixels. Packed RGB565, RGBA5551 and RGBA4444 unsigned-short
+pixels are also supported. Texture borders must be zero.
 Mipmaps may be supplied as individual levels or generated on image replacement
 with
 .BR GL_GENERATE_MIPMAP_SGIS .
+Subimages replace rectangular regions without redefining the texture.
+Texture and framebuffer readback use the corresponding pack parameters;
+framebuffer coordinates start at the lower left and must lie inside the target.
 Fixed-function texture environments include modulate, replace, decal, add,
 blend and combine (replace, modulate, add, signed add and interpolate).
 .PP
@@ -126,6 +131,7 @@ tglclose();
 .B /sys/src/libtinygl
 .SH SEE ALSO
 .IR glgears (1),
+.IR raylib (2),
 .IR gpu (2),
 .IR gpu (3),
 .IR draw (2)
@@ -134,8 +140,7 @@ As in TinyGL, invalid or unsupported operations are fatal.
 There is no recoverable GL error queue.
 .SH BUGS
 This is an experimental subset, not a conformant OpenGL implementation.
-There is no stencil, scissor, fog, multisampling, programmable shader API,
-selection, texture subimage update or non-fill polygon mode.
+There is no stencil, fog, multisampling, programmable shader API or selection.
 Unsupported operations are rejected; functions absent from the header are
 not provided. Lighting retains TinyGL's approximations.
 .PP

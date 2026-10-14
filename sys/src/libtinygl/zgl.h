@@ -95,6 +95,11 @@ typedef struct GLParamBuffer {
   struct GLParamBuffer *next;
 } GLParamBuffer;
 
+typedef struct GLPixelstore GLPixelstore;
+struct GLPixelstore {
+  int alignment, row_length, skip_rows, skip_pixels;
+};
+
 typedef struct GLImage GLImage;
 struct GLImage {
   GLImage *next;
@@ -233,7 +238,7 @@ typedef struct GLContext {
   GLTexture *textures;
   GLTexunit texunit[MAX_TEXTURE_UNITS];
   int active_texture, client_texture;
-  int unpack_alignment, unpack_row_length, unpack_skip_rows, unpack_skip_pixels;
+  GLPixelstore pack, unpack;
   int current_edge_flag;
 
   /* glBegin / glEnd */
@@ -257,6 +262,9 @@ typedef struct GLContext {
   int depth_test, depth_func, depth_mask;
   int blend_enabled, blend_src, blend_dst, alpha_enabled, alpha_func;
   float alpha_ref, offset_factor, offset_units;
+  int scissor_enabled, scissor[4], color_mask;
+  int line_smooth;
+  float line_width;
   int offset_fill, need_eye;
   int point_sprite;
   float point_size, point_min, point_max, point_fade, point_atten[3];
@@ -265,6 +273,10 @@ typedef struct GLContext {
 extern GLContext *gl_ctx;
 
 void gl_add_op(GLParam *p);
+
+GLImage *gl_unpack(GLPixelstore*, int, int, int, int, const void*);
+void gl_pack(GLPixelstore*, int, int, int, int, const uchar*, int, void*);
+void gl_image_format(GLImage*, int);
 
 /* virgl.c */
 void gl_draw_triangle(GLContext*, GLVertex*, GLVertex*, GLVertex*);

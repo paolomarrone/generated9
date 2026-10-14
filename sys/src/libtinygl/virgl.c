@@ -21,7 +21,8 @@ struct State {
 	int mode;
 	u32int depth, blend, alpha, offset[2];
 	int x, y, w, h;
-	u32int raster, sprite;
+	u32int raster, sprite, linewidth;
+	int scissor[4];
 };
 struct Render {
 	Gpu gpu;
@@ -360,7 +361,8 @@ gl_flush(GLContext *c)
 	p[0] = 9;
 	p[1] = s->raster;
 	p[3] = s->sprite;
-	p[2] = p[5] = gpufloat(1);
+	p[2] = gpufloat(1);
+	p[5] = s->linewidth;
 	gpubind(g, GpuRasterizer, 9);
 	p[6] = s->offset[0];
 	p[7] = s->offset[1];
@@ -379,6 +381,9 @@ gl_flush(GLContext *c)
 	p[3] = p[6] = gpufloat(.5);
 	p[4] = gpufloat(s->x+s->w/2.);
 	p[5] = gpufloat(s->y+s->h/2.);
+	p = gpuemit(g, GpuScissor, 0, 3);
+	p[1] = s->scissor[0] | s->scissor[1]<<16;
+	p[2] = s->scissor[2] | s->scissor[3]<<16;
 	p = gpuemit(g, GpuDraw, 0, 12);
 	p[1] = r->nvertex;
 	p[2] = s->mode;
@@ -433,7 +438,7 @@ primitive(GLContext *c, int mode, GLVertex **v, int n)
 	s.alpha = gpufloat(c->alpha_ref);
 	src = blendfactor(c->blend_src);
 	dst = blendfactor(c->blend_dst);
-	s.blend = 15U<<27 | c->blend_enabled | src<<4 | dst<<9 | src<<17 | dst<<22;
+	s.blend = (u32int)c->color_mask<<27 | c->blend_enabled | src<<4 | dst<<9 | src<<17 | dst<<22;
 	s.offset[0] = gpufloat(c->offset_units);
 	s.offset[1] = gpufloat(c->offset_factor);
 	s.x = c->viewport.xmin;
@@ -448,12 +453,21 @@ primitive(GLContext *c, int mode, GLVertex **v, int n)
 			cull |= 2;
 	}
 	/* Y_0_TOP resources invert readback; the viewport uses GL coordinates. */
+	s.linewidth = gpufloat(c->line_width > 64 ? 64 : c->line_width);
+	for(i=0; i<4; i++){
+		vlong v = c->scissor[i&1];
+		if(i >= 2) v += c->scissor[i];
+		s.scissor[i] = v < 0 ? 0 : v > 65535 ? 65535 : v;
+	}
 	s.sprite = 0;
 	if(mode == 0){
 		for(i=0; i<MAX_TEXTURE_UNITS; i++)
 			if(c->point_sprite && c->texunit[i].replace) s.sprite |= 1<<(i+1);
 	}
-	s.raster = 2 | (c->lighting_enabled && c->light_model_two_side)<<5 | (mode == 0)<<24 | (mode == 0 && c->point_sprite)<<7 | c->offset_fill<<20 | cull<<8 | (!c->current_front_face)<<15 | 1U<<29 | 1U<<30;
+	s.raster = 2 | c->line_smooth<<26 | c->scissor_enabled<<14
+		| (c->polygon_mode_front == GL_LINE ? 1 : c->polygon_mode_front == GL_POINT ? 2 : 0)<<10
+		| (c->polygon_mode_back == GL_LINE ? 1 : c->polygon_mode_back == GL_POINT ? 2 : 0)<<12
+		| (c->lighting_enabled && c->light_model_two_side)<<5 | (mode == 0)<<24 | (mode == 0 && c->point_sprite)<<7 | c->offset_fill<<20 | cull<<8 | (!c->current_front_face)<<15 | 1U<<29 | 1U<<30;
 	if(r->nvertex+n > Nvertex || memcmp(&s, &r->state, sizeof(s)) != 0)
 		gl_flush(c);
 	r->state = s;
@@ -498,6 +512,41 @@ gl_draw_point(GLContext *c, GLVertex *a)
 	primitive(c, 0, &a, 1);
 }
 
+/* Gallium's clear ignores GL masks and scissors. Draw a rectangle when needed. */
+static void
+clearrect(GLContext *c, int mask)
+{
+	GLContext clear;
+	GLVertex v[4];
+	Render *r;
+	int i;
+
+	r = c->opaque;
+	clear = *c;
+	clear.viewport.xmin = clear.viewport.ymin = 0;
+	clear.viewport.xsize = r->width;
+	clear.viewport.ysize = r->height;
+	clear.depth_test = clear.depth_mask = (mask&GL_DEPTH_BUFFER_BIT) != 0;
+	clear.depth_func = GL_ALWAYS;
+	clear.color_mask = mask&GL_COLOR_BUFFER_BIT ? c->color_mask : 0;
+	clear.blend_enabled = clear.alpha_enabled = clear.cull_face_enabled = 0;
+	clear.offset_fill = clear.lighting_enabled = 0;
+	clear.current_shade_model = GL_SMOOTH;
+	clear.polygon_mode_front = clear.polygon_mode_back = GL_FILL;
+	for(i=0; i<MAX_TEXTURE_UNITS; i++) clear.texunit[i].enabled = 0;
+	memset(v, 0, sizeof v);
+	for(i=0; i<4; i++){
+		v[i].pc.X = i&1 ? 1 : -1;
+		v[i].pc.Y = i&2 ? 1 : -1;
+		v[i].pc.Z = 2*c->clear_depth-1;
+		v[i].pc.W = 1;
+		v[i].color = v[i].back_color = c->clear_color;
+	}
+	gl_draw_triangle(&clear, &v[0], &v[1], &v[2]);
+	gl_draw_triangle(&clear, &v[1], &v[3], &v[2]);
+	gl_flush(&clear);
+}
+
 void
 gl_clear(GLContext *c, int mask)
 {
@@ -511,8 +560,13 @@ gl_clear(GLContext *c, int mask)
 	assert(!c->in_begin);
 	gl_flush(c);
 	if(!c->depth_mask) mask &= ~GL_DEPTH_BUFFER_BIT;
+	if(c->color_mask == 0) mask &= ~GL_COLOR_BUFFER_BIT;
 	if(mask == 0)
 		return;
+	if(c->scissor_enabled || ((mask&GL_COLOR_BUFFER_BIT) && c->color_mask != 15)){
+		clearrect(c, mask);
+		return;
+	}
 	r = c->opaque;
 	p = gpuemit(&r->gpu, GpuClearbuf, 0, 8);
 	p[0] = (mask & GL_COLOR_BUFFER_BIT ? 4 : 0) | (mask & GL_DEPTH_BUFFER_BIT ? 1 : 0);
@@ -647,6 +701,33 @@ tglread(void *pixels, int bytes)
 	if(fprint(r->gpu.ctl, "download %ud 0 0 0 0 %d %d 1 0 0 0",
 		r->color, r->width, r->height) < 0 || pread(r->imagefd, pixels, n, 0) != n)
 		sysfatal("read GL frame: %r");
+}
+
+void
+glReadPixels(GLint x, GLint y, GLsizei w, GLsizei h, GLenum fmt, GLenum type, GLvoid *out)
+{
+	GLContext *c;
+	Render *r;
+	uchar *pixels, *p;
+	int i, l;
+
+	c = gl_get_context();
+	assert(!c->in_begin);
+	r = c->opaque;
+	if(x < 0 || y < 0 || w < 0 || h < 0 || x > r->width || y > r->height
+	|| w > r->width-x || h > r->height-y)
+		gl_fatal_error("read pixels outside framebuffer");
+	if(w == 0 || h == 0) return;
+	pixels = gl_malloc(r->width*r->height*4);
+	tglread(pixels, r->width*r->height*4);
+	/* Framebuffer luminance is the clamped RGB sum, unlike texture extraction. */
+	if(fmt == GL_LUMINANCE || fmt == GL_LUMINANCE_ALPHA)
+		for(p=pixels, i=0; i<r->width*r->height; i++, p+=4){
+			l = p[0]+p[1]+p[2];
+			p[2] = l > 255 ? 255 : l;
+		}
+	gl_pack(&c->pack, w, h, fmt, type, pixels+((r->height-1-y)*r->width+x)*4, -r->width*4, out);
+	free(pixels);
 }
 
 void

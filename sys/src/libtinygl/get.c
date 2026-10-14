@@ -66,10 +66,10 @@ void glGetFloatv(int pname, float *v)
     }
     break;
   case GL_LINE_WIDTH:
-    *v = 1.0f;
+    *v = c->line_width;
     break;
   case GL_LINE_WIDTH_RANGE:
-    v[0] = v[1] = 1.0f;
+    v[0] = 1; v[1] = 64;
     break;
   case GL_POINT_SIZE:
     *v = c->point_size;

@@ -19,6 +19,8 @@ void glopEnableDisable(GLContext *c,GLParam *p)
   int v=p[2].i;
 
   switch(code) {
+  case GL_SCISSOR_TEST: c->scissor_enabled=v; break;
+  case GL_LINE_SMOOTH: c->line_smooth=v; break;
   case GL_POINT_SPRITE: c->point_sprite=v; break;
   case GL_TEXTURE_GEN_S: case GL_TEXTURE_GEN_T: case GL_TEXTURE_GEN_R: case GL_TEXTURE_GEN_Q:
     c->texunit[c->active_texture].gen[code-GL_TEXTURE_GEN_S]=v;
@@ -80,7 +82,8 @@ void glopPolygonMode(GLContext *c,GLParam *p)
   int face=p[1].i;
   int mode=p[2].i;
 
-  if (mode != GL_FILL) gl_fatal_error("only filled polygons are supported");
+  if (mode != GL_FILL && mode != GL_LINE && mode != GL_POINT)
+    gl_fatal_error("invalid polygon mode");
   switch(face) {
   case GL_BACK:
     c->polygon_mode_back=mode;
@@ -213,6 +216,8 @@ glIsEnabled(GLenum cap)
 	case GL_BLEND: return c->blend_enabled;
 	case GL_ALPHA_TEST: return c->alpha_enabled;
 	case GL_POLYGON_OFFSET_FILL: return c->offset_fill;
+	case GL_SCISSOR_TEST: return c->scissor_enabled;
+	case GL_LINE_SMOOTH: return c->line_smooth;
 	case GL_POINT_SPRITE: return c->point_sprite;
 	case GL_TEXTURE_GEN_S: case GL_TEXTURE_GEN_T: case GL_TEXTURE_GEN_R: case GL_TEXTURE_GEN_Q:
 		return c->texunit[c->active_texture].gen[cap-GL_TEXTURE_GEN_S];
@@ -285,4 +290,57 @@ glopPointParameter(GLContext *c, GLParam *p)
 		break;
 	default: gl_fatal_error("unsupported point parameter");
 	}
+}
+
+void
+glColorMask(GLboolean r, GLboolean g, GLboolean b, GLboolean a)
+{
+	GLParam p[2];
+
+	p[0].op = OP_ColorMask;
+	p[1].i = (r!=0) | (g!=0)<<1 | (b!=0)<<2 | (a!=0)<<3;
+	gl_add_op(p);
+}
+
+void
+glopColorMask(GLContext *c, GLParam *p)
+{
+	c->color_mask = p[1].i;
+}
+
+void
+glScissor(GLint x, GLint y, GLsizei w, GLsizei h)
+{
+	GLParam p[5];
+
+	p[0].op = OP_Scissor;
+	p[1].i = x; p[2].i = y; p[3].i = w; p[4].i = h;
+	gl_add_op(p);
+}
+
+void
+glopScissor(GLContext *c, GLParam *p)
+{
+	int i;
+
+	if(p[3].i < 0 || p[4].i < 0)
+		gl_fatal_error("negative scissor size");
+	for(i=0; i<4; i++) c->scissor[i] = p[i+1].i;
+}
+
+void
+glLineWidth(GLfloat width)
+{
+	GLParam p[2];
+
+	p[0].op = OP_LineWidth;
+	p[1].f = width;
+	gl_add_op(p);
+}
+
+void
+glopLineWidth(GLContext *c, GLParam *p)
+{
+	if(!(p[1].f > 0)) gl_fatal_error("invalid line width");
+	c->line_width = p[1].f;
 }

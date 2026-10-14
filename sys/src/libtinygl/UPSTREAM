@@ -35,6 +35,10 @@ Local adaptations:
   retained CPU images allow transparent reupload and target resizing.
 - Alpha testing/blending, depth masks/functions, polygon offset, two-sided
   materials, point size/attenuation and point sprites use VirGL state.
+- Color masks, scissor rectangles and masked/scissored clears, line widths,
+  wireframe/point polygons, texture subimages and pixel readback. Shared pixel
+  conversion handles byte and packed 16-bit formats plus pack/unpack layout.
+  Display lists own subimage data, and updates invalidate cached GPU copies.
 - Correct scalar/vector argument lengths, material-list parameter ownership,
   linked light removal, local-viewer vector components and color-material
   tracking when enabled or reconfigured.

@@ -57,7 +57,7 @@ gl_init_textures(GLContext *c)
 			e->operand[j][2] = GL_SRC_ALPHA;
 		}
 	}
-	c->unpack_alignment = 4;
+	c->unpack.alignment = c->pack.alignment = 4;
 }
 
 void
@@ -212,21 +212,27 @@ glMultiTexCoord4f(GLenum texture, GLfloat s, GLfloat t, GLfloat r, GLfloat q)
 void
 glopPixelStore(GLContext *c, GLParam *p)
 {
-	int n;
+	GLPixelstore *s;
+	int name, n;
 
 	assert(!c->in_begin);
+	name = p[1].i;
 	n = p[2].i;
-	if(n < 0)
-		gl_fatal_error("negative pixel storage parameter");
-	switch(p[1].i){
+	if(n < 0) gl_fatal_error("negative pixel storage parameter");
+	s = &c->unpack;
+	if(name >= GL_PACK_SWAP_BYTES && name <= GL_PACK_ALIGNMENT){
+		s = &c->pack;
+		name += GL_UNPACK_SWAP_BYTES-GL_PACK_SWAP_BYTES;
+	}
+	switch(name){
 	case GL_UNPACK_ALIGNMENT:
 		if(n != 1 && n != 2 && n != 4 && n != 8)
 			gl_fatal_error("invalid pixel alignment");
-		c->unpack_alignment = n;
+		s->alignment = n;
 		break;
-	case GL_UNPACK_ROW_LENGTH: c->unpack_row_length = n; break;
-	case GL_UNPACK_SKIP_ROWS: c->unpack_skip_rows = n; break;
-	case GL_UNPACK_SKIP_PIXELS: c->unpack_skip_pixels = n; break;
+	case GL_UNPACK_ROW_LENGTH: s->row_length = n; break;
+	case GL_UNPACK_SKIP_ROWS: s->skip_rows = n; break;
+	case GL_UNPACK_SKIP_PIXELS: s->skip_pixels = n; break;
 	default: gl_fatal_error("unsupported pixel storage parameter");
 	}
 }
@@ -267,61 +273,18 @@ glTexImage2D(int target, int level, int components, int w, int h, int border,
 	GLContext *c;
 	GLImage *im;
 	GLParam p[3];
-	uchar *src, *dst, r, g, b, a;
-	uvlong stride, off, rows, bytesleft;
-	int f, bytes, x, y;
+	int f;
 
 	c = gl_get_context();
 	assert(!c->in_begin);
-	if(target != GL_TEXTURE_2D || border != 0 || type != GL_UNSIGNED_BYTE)
+	if(target != GL_TEXTURE_2D || border != 0)
 		gl_fatal_error("unsupported texture image");
 	if(level < 0 || level >= MAX_TEXTURE_LEVELS || w < 0 || h < 0
 	|| w > MAX_TEXTURE_SIZE>>level || h > MAX_TEXTURE_SIZE>>level)
 		gl_fatal_error("invalid texture dimensions");
 	f = format(components);
-	switch(fmt){
-	case GL_ALPHA: case GL_LUMINANCE: bytes = 1; break;
-	case GL_LUMINANCE_ALPHA: bytes = 2; break;
-	case GL_RGB: bytes = 3; break;
-	case GL_RGBA: bytes = 4; break;
-	default: gl_fatal_error("unsupported pixel format"); return;
-	}
-	stride = (uvlong)(c->unpack_row_length ? c->unpack_row_length : w)*bytes;
-	stride = (stride+c->unpack_alignment-1) & ~(uvlong)(c->unpack_alignment-1);
-	if(pixels != nil && w && h){
-		bytesleft = (uintptr)-1-(uintptr)pixels;
-		rows = (uvlong)c->unpack_skip_rows+h-1;
-		if(stride && rows > bytesleft/stride)
-			gl_fatal_error("pixel address overflow");
-		bytesleft -= rows*stride;
-		if(((uvlong)c->unpack_skip_pixels+w)*bytes > bytesleft)
-			gl_fatal_error("pixel address overflow");
-	}
-	off = stride*c->unpack_skip_rows+(uvlong)c->unpack_skip_pixels*bytes;
-	im = newimage(w, h, f);
-	for(y=0; pixels != nil && y<h; y++){
-		src = (uchar*)pixels+off+y*stride;
-		dst = im->pixels+y*w*4;
-		for(x=0; x<w; x++, src+=bytes, dst+=4){
-			r = g = b = 0;
-			a = 255;
-			switch(fmt){
-			case GL_ALPHA: a = src[0]; break;
-			case GL_LUMINANCE: r = g = b = src[0]; break;
-			case GL_LUMINANCE_ALPHA: r = g = b = src[0]; a = src[1]; break;
-			case GL_RGBA: a = src[3]; /* fall through */
-			case GL_RGB: r = src[0]; g = src[1]; b = src[2]; break;
-			}
-			switch(f){
-			case GL_ALPHA: r = g = b = 255; break;
-			case GL_LUMINANCE: a = 255; /* fall through */
-			case GL_LUMINANCE_ALPHA: g = b = r; break;
-			case GL_INTENSITY: g = b = a = r; break;
-			case GL_RGB: a = 255; break;
-			}
-			dst[0] = b; dst[1] = g; dst[2] = r; dst[3] = a;
-		}
-	}
+	im = gl_unpack(&c->unpack, w, h, fmt, type, pixels);
+	gl_image_format(im, f);
 	p[0].op = OP_TexImage2D;
 	p[1].i = level;
 	p[2].p = im;
@@ -619,4 +582,72 @@ gl_texcoord(GLContext *c, GLVertex *v)
 		if(size > c->point_max) size = c->point_max;
 		v->point_size = size < 1 ? 1 : size > 64 ? 64 : size;
 	}
+}
+
+void
+glTexSubImage2D(GLenum target, GLint level, GLint x, GLint y,
+	GLsizei w, GLsizei h, GLenum fmt, GLenum type, const GLvoid *pixels)
+{
+	GLContext *c;
+	GLImage *im;
+	GLParam p[5];
+
+	c = gl_get_context();
+	assert(!c->in_begin);
+	if(target != GL_TEXTURE_2D || level < 0 || level >= MAX_TEXTURE_LEVELS
+	|| x < 0 || y < 0 || w < 0 || h < 0 || w > MAX_TEXTURE_SIZE || h > MAX_TEXTURE_SIZE)
+		gl_fatal_error("invalid texture subimage");
+	if(w && h && pixels == nil) gl_fatal_error("nil texture subimage");
+	im = gl_unpack(&c->unpack, w, h, fmt, type, pixels);
+	p[0].op = OP_TexSubImage2D;
+	p[1].i = level;
+	p[2].i = x;
+	p[3].i = y;
+	p[4].p = im;
+	gl_add_op(p);
+	if(c->compile_flag){
+		im->next = c->compile_list->images;
+		c->compile_list->images = im;
+	}else free(im);
+}
+
+void
+glopTexSubImage2D(GLContext *c, GLParam *p)
+{
+	GLTexture *t;
+	GLImage *im, *src, *row;
+	int x, y, i;
+
+	t = c->texunit[c->active_texture].texture;
+	im = t->image[p[1].i];
+	src = p[4].p;
+	x = p[2].i;
+	y = p[3].i;
+	if(im == nil || x > im->width || y > im->height
+	|| src->width > im->width-x || src->height > im->height-y)
+		gl_fatal_error("texture subimage outside image");
+	gl_flush(c);
+	gl_release_texture(c, t);
+	row = newimage(src->width, 1, GL_RGBA);
+	for(i=0; i<src->height; i++){
+		memmove(row->pixels, src->pixels+i*src->width*4, src->width*4);
+		gl_image_format(row, im->format);
+		memmove(im->pixels+((y+i)*im->width+x)*4, row->pixels, src->width*4);
+	}
+	free(row);
+	if(p[1].i == 0 && t->generate && im->width && im->height) mipmaps(t);
+}
+
+void
+glGetTexImage(GLenum target, GLint level, GLenum fmt, GLenum type, GLvoid *pixels)
+{
+	GLContext *c;
+	GLImage *im;
+
+	c = gl_get_context();
+	assert(!c->in_begin);
+	if(target != GL_TEXTURE_2D || level < 0 || level >= MAX_TEXTURE_LEVELS)
+		gl_fatal_error("invalid texture image query");
+	im = c->texunit[c->active_texture].texture->image[level];
+	if(im != nil) gl_pack(&c->pack, im->width, im->height, fmt, type, im->pixels, im->width*4, pixels);
 }

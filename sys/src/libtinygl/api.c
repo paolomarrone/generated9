@@ -675,3 +675,9 @@ glLightModelf(GLenum name, GLfloat v)
 	p[2].f = v;
 	gl_add_op(p);
 }
+
+void
+glVertex2i(int x, int y)
+{
+	glVertex2f(x, y);
+}

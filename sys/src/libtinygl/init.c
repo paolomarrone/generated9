@@ -146,6 +146,10 @@ void glInit(int width, int height)
   c->specbuf_num_buffers = 0;
 
   /* depth test */
+  c->color_mask = 15;
+  c->line_width = 1;
+  c->scissor[2] = c->viewport.xsize;
+  c->scissor[3] = c->viewport.ysize;
   c->depth_test = 0;
   c->depth_func = GL_LESS;
   c->depth_mask = 1;

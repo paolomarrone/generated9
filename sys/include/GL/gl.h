@@ -553,6 +553,10 @@ enum {
 	GL_TEXTURE_1D_BINDING		= 0x8068,
 	GL_TEXTURE_2D_BINDING		= 0x8069,
 
+	GL_UNSIGNED_SHORT_5_6_5 = 0x8363,
+	GL_UNSIGNED_SHORT_5_5_5_1 = 0x8034,
+	GL_UNSIGNED_SHORT_4_4_4_4 = 0x8033,
+
 	/* Internal texture formats */
 	GL_ALPHA4			= 0x803B,
 	GL_ALPHA8			= 0x803C,
@@ -714,6 +718,7 @@ void glPolygonMode(int face,int mode);
 void glBegin(int type);
 void glEnd(void);
 
+void glVertex2i(int, int);
 void glVertex2f(float, float);
 void glVertex3f(float, float, float);
 void glVertex4f(float, float, float, float);
@@ -774,6 +779,13 @@ void glBlendFunc(GLenum, GLenum);
 void glAlphaFunc(GLenum, GLclampf);
 GLboolean glIsEnabled(GLenum);
 void glClearDepth(double depth);
+
+void glColorMask(GLboolean, GLboolean, GLboolean, GLboolean);
+void glScissor(GLint, GLint, GLsizei, GLsizei);
+void glLineWidth(GLfloat);
+void glTexSubImage2D(GLenum, GLint, GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, const GLvoid*);
+void glGetTexImage(GLenum, GLint, GLenum, GLenum, GLvoid*);
+void glReadPixels(GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, GLvoid*);
 
 /* selection */
 int glRenderMode(int mode);

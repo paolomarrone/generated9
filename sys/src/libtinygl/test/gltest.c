@@ -803,6 +803,96 @@ lifetime(void)
 	print("PASS: target and context recreation beyond device resource limits\n");
 }
 
+static void
+pixelops(void)
+{
+	uchar input[16] = {255,0,0,255, 0,255,0,255, 0,0,255,255, 255,255,255,255};
+	uchar patch[8] = {255,255,0,255, 0,255,255,255}, out[64];
+	ushort packed[4] = {0xf800,0x07e0,0x001f,0xffff}, packedout[4];
+	GLuint t, list;
+	int i;
+
+	tglclose();
+	tglinit(device,W,H);
+	glViewport(0,0,W,H);
+	glClearColor(0,0,1,1);
+	glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
+	glEnable(GL_SCISSOR_TEST);
+	glScissor(4,8,12,16);
+	glClearColor(1,0,0,1);
+	glClear(GL_COLOR_BUFFER_BIT);
+	readback();
+	pixel(8,H-12,255,0,0,"scissored clear");
+	pixel(20,H-12,0,0,255,"outside scissored clear");
+	pixel(8,12,0,0,255,"scissor origin");
+	glColorMask(0,1,0,0);
+	glClearColor(0,1,0,0);
+	glClear(GL_COLOR_BUFFER_BIT);
+	readback();
+	pixel(8,H-12,255,255,0,"masked scissored clear");
+	glColorMask(1,1,1,1);
+	glColor3f(0,1,0);
+	texquad();
+	readback();
+	pixel(8,H-12,0,255,0,"scissored draw");
+	pixel(20,H-12,0,0,255,"outside scissored draw");
+	glDisable(GL_SCISSOR_TEST);
+	glPixelStorei(GL_PACK_ALIGNMENT,1);
+	memset(out,99,sizeof out);
+	glPixelStorei(GL_PACK_ROW_LENGTH,4);
+	glPixelStorei(GL_PACK_SKIP_ROWS,1);
+	glPixelStorei(GL_PACK_SKIP_PIXELS,1);
+	glReadPixels(8,12,2,2,GL_RGB,GL_UNSIGNED_BYTE,out);
+	for(i=0; i<sizeof out; i++){
+		int expected = 99;
+		if((i>=15 && i<21) || (i>=27 && i<33)) expected = i%3 == 1 ? 255 : 0;
+		if(out[i] != expected) sysfatal("packed readback offset %d: %d",i,out[i]);
+	}
+	glPixelStorei(GL_PACK_ROW_LENGTH,0);
+	glPixelStorei(GL_PACK_SKIP_ROWS,0);
+	glPixelStorei(GL_PACK_SKIP_PIXELS,0);
+	glReadPixels(8,12,1,1,GL_LUMINANCE,GL_UNSIGNED_BYTE,out);
+	if(out[0] != 255) sysfatal("framebuffer luminance sum");
+	glGenTextures(1,&t);
+	glBindTexture(GL_TEXTURE_2D,t);
+	glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,2,2,0,GL_RGBA,GL_UNSIGNED_BYTE,input);
+	list = glGenLists(1);
+	glNewList(list,GL_COMPILE);
+	glTexSubImage2D(GL_TEXTURE_2D,0,1,0,1,2,GL_RGBA,GL_UNSIGNED_BYTE,patch);
+	glEndList();
+	memset(patch,0,sizeof patch);
+	glCallList(list);
+	glGetTexImage(GL_TEXTURE_2D,0,GL_RGBA,GL_UNSIGNED_BYTE,out);
+	input[4] = input[5] = 255; input[6] = 0;
+	input[12] = 0; input[13] = input[14] = 255;
+	if(memcmp(out,input,sizeof input)) sysfatal("texture subimage/readback mismatch");
+	glDeleteLists(list,1);
+	glTexImage2D(GL_TEXTURE_2D,0,GL_RGB,2,2,0,GL_RGB,GL_UNSIGNED_SHORT_5_6_5,packed);
+	glGetTexImage(GL_TEXTURE_2D,0,GL_RGB,GL_UNSIGNED_SHORT_5_6_5,packedout);
+	if(memcmp(packed,packedout,sizeof packed)) sysfatal("RGB565 roundtrip");
+	glGetTexImage(GL_TEXTURE_2D,0,GL_LUMINANCE,GL_UNSIGNED_BYTE,out);
+	if(out[0] != 255 || out[1] != 0 || out[2] != 0 || out[3] != 255)
+		sysfatal("texture luminance extraction");
+	glDeleteTextures(1,&t);
+	clear();
+	glColor3f(1,0,0);
+	glLineWidth(6);
+	glBegin(GL_LINES);
+	glVertex2f(-.75,0); glVertex2f(.75,0);
+	glEnd();
+	readback();
+	pixel(32,30,255,0,0,"wide line");
+	pixel(32,26,0,0,255,"wide line bounds");
+	clear();
+	glLineWidth(1);
+	glPolygonMode(GL_FRONT_AND_BACK,GL_LINE);
+	triangle(0);
+	readback();
+	pixel(32,32,0,0,255,"wireframe interior");
+	glPolygonMode(GL_FRONT_AND_BACK,GL_FILL);
+	print("PASS: scissored drawing and clears, color masks, packed readback and texture subimages\n");
+}
+
 void
 main(int argc, char **argv)
 {
@@ -899,6 +989,7 @@ main(int argc, char **argv)
 	texgenpoints();
 	lighting();
 	primitives();
+	pixelops();
 	errors();
 	lifetime();
 	exits(nil);
