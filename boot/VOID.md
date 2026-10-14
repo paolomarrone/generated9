@@ -61,12 +61,28 @@ This replaces the library only for this QEMU process; the installed host
 packages are unchanged. No host library is linked into native generated9
 programs. The patch retains virglrenderer's MIT license and exact revision.
 
+For audio on an outer Linux host running PulseAudio or PipeWire's PulseAudio
+server, append these options after `--` in either QEMU command above:
+
+```sh
+-audiodev pa,id=audio0 -device intel-hda -device hda-duplex,audiodev=audio0
+```
+
+The generated9 HDA driver provides `/dev/audio`. Keep its default 44100 Hz
+rate. The nested guest needs no audio configuration; its desktop audio
+server discovers the VirtIO sound card. Build and boot the current generated9
+kernel too: the HDA driver detects playback underruns even when an interrupt
+arrives after DMA has passed the last queued sample. Previously this could
+look like an almost full ring and block a write for over a second. Omit `-a /dev/audio` below if the
+outer VM has no sound device. Other native programs can share the output
+through `audio/mixfs` in the monitor's namespace.
+
 Inside a rio terminal:
 
 ```rc
 cd /tmp/void-vmx
 echo type virtio > /dev/vgactl
-vmx -P 4 -M 2G -w 1024x768 -g '#∇' -n ether0 \
+vmx -P 4 -M 2G -w 1024x768 -g '#∇' -a /dev/audio -n ether0 \
     -d void-live-x86_64-20250202-xfce.iso \
     -m initrd vmlinuz \
     'root=live:CDLABEL=VOID_LIVE init=/sbin/init ro rd.luks=0 rd.md=0 rd.dm=0 rd.live.overlay.overlayfs=1'
@@ -85,9 +101,16 @@ and hardware compositing available. These are the guest driver's reported
 capabilities, not an OpenGL conformance claim for generated9's native TinyGL.
 
 Rendering reaches the outer host GPU through `vmx` and `gpu(3)`. Video
-decoding still runs on the guest CPU; audio is not provided. Presentation
+decoding still runs on the guest CPU. Audio uses VirtIO Sound and the host
+`/dev/audio`; the unmodified ISO supplies `virtio_snd` and PipeWire. Presentation
 reads pixels back and copies changed rows into the rio window. Resolution, codec
 and the cost of nested CPU virtualization still affect video playback.
+
+Audio was checked through ALSA, PipeWire and Firefox, with the stereo output
+captured from the outer QEMU stream. Repeated playback and idle transitions,
+and detaching and reattaching the guest sound driver, were exercised. The
+VirtIO sound regression in `mk test` also covers malformed requests, host
+open failures and reset with a full monitor notification channel.
 
 With the corrected host renderer, a local 854x480 H.264 video at 30 fps
 presented 550 frames in a 20.2-second interval after startup (about 27 fps),

@@ -105,7 +105,32 @@ using the framebuffer's existing changed-row comparison to reduce draw traffic;
 the cursor restores its old area from a separate scanout image. GPU updates wake
 the drawing process directly; legacy framebuffers still poll every 20 ms.
 This is not zero-copy presentation. There is no video codec or Vulkan transport,
-resource blob support, audio device, or GPU passthrough.
+resource blob support or GPU passthrough.
+
+Audio output
+
+Add -a /dev/audio to expose a modern VirtIO sound card. The host file must
+accept audio(3)'s stereo signed 16-bit little-endian PCM at 44100 Hz. It is
+opened at START and closed at RELEASE or device reset, so an idle VM does
+not retain the exclusive audio device. A namespace with audio/mixfs can
+share the host output with other native applications. No mixer, resampler
+or input stream is implemented in vmx; the guest handles mixing and format
+conversion through its normal audio stack.
+
+One worker services control and playback queues. Writes to the host file
+pace playback, and stat's length supplies the number of buffered output
+bytes. Control messages take priority between periods. RELEASE publishes
+all queued completions before its response and sends a single interrupt;
+notification happens with no locks or live buffers held, allowing reset
+even if the monitor's notification channel is full. Periods are limited
+to 64 KiB and guest buffers to 1 MiB. The host file must provide bounded
+write backpressure, as audio(3) does; an arbitrary blocked pipe can delay
+control requests and reset.
+
+The wire protocol follows VirtIO 1.2 section 5.14 (Sound Device):
+https://docs.oasis-open.org/virtio/virtio/v1.2/virtio-v1.2.html
+This is new generated9 code under the root license, with no imported
+sound driver or emulator source. See boot/VOID.md for the outer QEMU setup.
 
 Tests
 
@@ -122,7 +147,10 @@ read-only and reserved registers, reserved bits, mode transitions and INIT.
 The VirtIO tests negotiate modern features, validate queue alignment and size,
 keep enabled queue addresses fixed, transfer data through a real split queue,
 reject invalid descriptor heads and cycles, and return an outstanding buffer
-during device reset. The GPU driver's gputest checks sharing across
+during device reset. Sound tests check discovery, malformed control requests,
+unsupported formats, exact PCM bytes, stop/start, host open failure and retry,
+RELEASE with queued periods, and reset while the notification channel is full.
+The GPU driver's gputest checks sharing across
 contexts, stale descriptors after reattachment, resource limits and release.
 
 test/virgl.c runs under Linux/Xorg with Mesa and GLX. Build it on Linux with

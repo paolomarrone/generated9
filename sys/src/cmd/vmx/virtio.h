@@ -82,6 +82,8 @@ VIOQueue *mkvioqueue(VIODev *, int, void (*)(VIOQueue*));
 void viowakeup(VIOQueue *);
 VIOBuf *viogetbuf(VIOQueue *, int);
 void vioputbuf(VIOBuf *);
+int viopublish(VIOBuf *);
+void vionotify(VIODev *);
 ulong vioqread(VIOBuf *, void *, ulong);
 ulong vioqwrite(VIOBuf *, void *, ulong);
 ulong vioqrem(VIOBuf *, int);

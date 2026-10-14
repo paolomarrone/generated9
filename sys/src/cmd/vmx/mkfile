@@ -15,6 +15,7 @@ VMOFILES=\
 	pci.$O \
 	virtio.$O \
 	viogpu.$O \
+	viosnd.$O \
 	vesa.$O \
 	9p.$O \
 	x86.$O \
@@ -41,7 +42,7 @@ test:V: $O.out $TESTDEP
 test/$O.out: test/unit.$O $VMOFILES
 	$LD $LDFLAGS -o $target $prereq
 
-test/unit.$O: test/unit.c vmx.c $HFILES
+test/unit.$O: test/unit.c test/sound.c vmx.c $HFILES
 	$CC $CFLAGS -o $target test/unit.c
 
 test/$O.plan9: test/plan9.$O

@@ -103,6 +103,11 @@ new generated9 additions use the [root license](LICENSE).
 
 ## vmx
 
+The VirtIO sound output device is new generated9 code under the
+[root license](LICENSE), implementing section 5.14 of the
+[VirtIO 1.2 specification](https://docs.oasis-open.org/virtio/virtio/v1.2/virtio-v1.2.html).
+No sound driver or emulator source was imported.
+
 The native VirtIO GPU bridge follows the protocol definitions and notices
 recorded in [UPSTREAM.gpu](sys/src/cmd/vmx/UPSTREAM.gpu) and
 [LICENSE.gpu](sys/src/cmd/vmx/LICENSE.gpu). It connects guest VirGL clients

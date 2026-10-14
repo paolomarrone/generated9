@@ -52,6 +52,7 @@ void elcr(u16int);
 int mkvionet(char *);
 int mkvioblk(char *);
 int mkviogpu(char *);
+int mkviosnd(char *);
 void vgapresent(uchar *, int, int);
 void vgacursor(int, int, int, uchar *, int, int);
 int mkideblk(char *);

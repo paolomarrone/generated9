@@ -17,6 +17,11 @@ vioirq_(void *arg)
 	
 	d = ((void**)arg)[0];
 	val = (uintptr)((void**)arg)[1];
+	/* The monitor may have reset the device while this notification waited. */
+	if(val != 0 && (d->devstat & DRIVEROK) == 0){
+		free(arg);
+		return;
+	}
 	if(val != 0)
 		d->isrstat |= val;
 	else
@@ -106,15 +111,16 @@ bad:
 	goto waitloop;
 }
 
-void
-vioputbuf(VIOBuf *b)
+/* Publish and free a buffer; return whether the driver needs an interrupt. */
+int
+viopublish(VIOBuf *b)
 {
 	VIOBuf *bn;
 	VIOQueue *q;
 	u8int *p;
 	int irq;
 	
-	if(b == nil) return;
+	if(b == nil) return 0;
 	q = b->qu;
 	qlock(q);
 	irq = 0;
@@ -136,13 +142,29 @@ done:
 	if(--q->livebuf <= 0)
 		rwakeup(&q->livebufrend);
 	qunlock(q);
-	if(irq)
-		vioirq(q->d, 1);
 	while(b != nil){
 		bn = b->next;
 		free(b);
 		b = bn;
 	}
+	return irq;
+}
+
+void
+vionotify(VIODev *d)
+{
+	vioirq(d, 1);
+}
+
+void
+vioputbuf(VIOBuf *b)
+{
+	VIODev *d;
+
+	if(b == nil) return;
+	d = b->qu->d;
+	if(viopublish(b))
+		vionotify(d);
 }
 
 ulong

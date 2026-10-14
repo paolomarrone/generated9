@@ -501,6 +501,8 @@ virtiotransport(void)
 	print("PASS: modern VirtIO negotiation, split queues, malformed chains and reset completion\n");
 }
 
+#include "sound.c"
+
 void
 threadmain(int, char **)
 {
@@ -529,6 +531,7 @@ threadmain(int, char **)
 	iointerrupts();
 	x2apic();
 	virtiotransport();
+	sound();
 	print("PASS: MMIO decoding, MSRs, APIC priority, timers, IPI and I/O APIC\n");
 	threadexitsall(nil);
 }

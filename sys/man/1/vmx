@@ -39,6 +39,10 @@ vmx \- virtual PC
 .I gpu
 ]
 [
+.B -a
+.I audio
+]
+[
 .B -m
 .I bootmod
 ]
@@ -128,7 +132,21 @@ in each direction.
 Guest drivers submit 3D commands through the host GPU's file interface;
 completed images use the existing window and input devices.
 Linux can use its standard virtio_gpu driver and Mesa VirGL renderer.
-Video decoding, audio, resource blobs and Vulkan are not provided.
+Video decoding, resource blobs and Vulkan are not provided.
+.PP
+The
+.B -a
+option adds a VirtIO sound card with one stereo output stream.
+Its argument is a writable file, usually
+.BR /dev/audio ,
+with the
+.IR audio (3)
+format: signed 16-bit little-endian samples at 44100 Hz, left channel first.
+The file is opened when the guest starts playback and closed when it
+releases the stream or resets the device.
+Linux uses its standard virtio_snd driver; format conversion and mixing
+remain the guest's responsibility.
+No input stream is provided.
 .PP
 The
 .B -c
