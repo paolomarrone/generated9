@@ -99,8 +99,8 @@ gpufloat(float f)
 	return v.u;
 }
 
-u32int*
-gpuemit(Gpu *g, int op, int object, int n)
+static u32int*
+reserve(Gpu *g, int op, int object, int n)
 {
 	u32int *p;
 
@@ -110,8 +110,17 @@ gpuemit(Gpu *g, int op, int object, int n)
 		gpusubmit(g);
 	g->command[g->ncommand++] = op | object<<8 | (u32int)n<<16;
 	p = g->command+g->ncommand;
-	memset(p, 0, n*4);
 	g->ncommand += n;
+	return p;
+}
+
+u32int*
+gpuemit(Gpu *g, int op, int object, int n)
+{
+	u32int *p;
+
+	p = reserve(g, op, object, n);
+	memset(p, 0, n*4);
 	return p;
 }
 
@@ -143,7 +152,9 @@ gpuwrite(Gpu *g, u32int id, ulong offset, void *data, int n)
 		}
 		m = (m-12)*4;
 		if(m > n) m = n;
-		p = gpuemit(g, GpuInline, 0, 11+(m+3)/4);
+		p = reserve(g, GpuInline, 0, 11+(m+3)/4);
+		memset(p, 0, 11*4);
+		p[11+(m-1)/4] = 0;	/* padding in the final payload word */
 		p[0] = id;
 		p[2] = 2;	/* PIPE_TRANSFER_WRITE */
 		p[5] = offset;
