@@ -32,9 +32,10 @@ extern u8int mouseactive;
 static uchar *sfb;	/* packed snapshot, independent of the guest's scanline pitch */
 static uchar *gpufb;
 static VgaMode gpumode;
-static int gpudirty, gpuchange, gpuredraw;
+static int gpudirty, gpuchange;
 static Image *gpucursor;
 static Point gpupos, gpuhot;
+static Channel *drawch;
 
 typedef struct VGA VGA;
 struct VGA {
@@ -559,7 +560,7 @@ drawfbrect(Rectangle upd)
 		loadimage(img, upd, (void *) buf, curmode->w * 4 * (upd.max.y - upd.min.y));
 		free(buf);
 		draw(screen, rectaddpt(upd, picr.min), img, nil, upd.min);
-	}else if(curmode->chan != screen->chan || !rectinrect(picr, screen->r)){
+	}else if(curmode == &gpumode || curmode->chan != screen->chan || !rectinrect(picr, screen->r)){
 		loadimage(img, upd, sfb + upd.min.y * hb, (upd.max.y - upd.min.y) * hb);
 		draw(screen, rectaddpt(upd, picr.min), img, nil, upd.min);
 	}else
@@ -592,6 +593,16 @@ drawfb(uchar *base, int pitch, int redraw)
 	return changed;
 }
 
+static void
+drawtick(void *)
+{
+	threadsetname("draw tick");
+	for(;;){
+		sleep(20);
+		nbsendul(drawch, 0);
+	}
+}
+
 void
 drawproc(void *)
 {
@@ -599,12 +610,18 @@ drawproc(void *)
 	int event;
 	VgaMode *m;
 	Point p;
-	Rectangle r;
+	Rectangle r, cursor;
+	Alt a[] = {
+		{drawch, &ul, CHANRCV},
+		{mc->resizec, &ul, CHANRCV},
+		{nil, nil, CHANEND},
+	};
 
 	threadsetname("draw");
 	sfb = emalloc(MAX(fbsz,maxw*maxh*4));
+	cursor = ZR;
 	event = 4;
-	for(;; sleep(20)){
+	for(;;){
 		qlock(&vga);
 		if(gpuchange){ event |= 1; gpuchange = 0; }
 		m = nextmode;
@@ -626,19 +643,23 @@ drawproc(void *)
 		}
 		if(curmode == &gpumode){
 			if(gpudirty || event != 0){
-				drawfb(gpufb,curmode->hbytes,gpuredraw || event != 0);
+				if((gpudirty & 1) != 0 || event != 0)
+					drawfb(gpufb,curmode->hbytes,event != 0);
+				/* img holds the scanout without the cursor. */
+				if(event == 0 && rectclip(&cursor,picr))
+					draw(screen,cursor,img,nil,subpt(cursor.min,picr.min));
+				cursor = ZR;
 				if(gpucursor != nil){
 					p = addpt(picr.min,subpt(gpupos,gpuhot));
 					r = rectaddpt(gpucursor->r,p);
 					if(rectclip(&r,picr)){
-						/* Blend against the scanout, never the previous cursor. */
-						drawfbrect(Rect(0,r.min.y-picr.min.y,curmode->w,r.max.y-picr.min.y));
+						draw(screen,r,img,nil,subpt(r.min,picr.min));
 						draw(screen,r,gpucursor,nil,subpt(r.min,p));
+						cursor = r;
 					}
 				}
 				flushimage(display,1);
 				gpudirty = 0;
-				gpuredraw = 0;
 			}
 		}else if(curmode == &textmode)
 			drawtext();
@@ -646,6 +667,8 @@ drawproc(void *)
 			flushimage(display,1);
 		event = 0;
 		qunlock(&vga);
+		if(alt(a) == 1)
+			event |= 2;
 	}
 }
 
@@ -664,8 +687,9 @@ vgapresent(uchar *p, int w, int h)
 	else memset(gpufb,0,w*h*4);
 	nextmode = &gpumode;
 	nexthbytes = w*4;
-	gpudirty = 1;
+	gpudirty |= 1;
 	qunlock(&vga);
+	nbsendul(drawch, 0);
 }
 
 void
@@ -683,10 +707,9 @@ vgacursor(int x, int y, int update, uchar *p, int hotx, int hoty)
 				sysfatal("GPU cursor: %r");
 		}
 	}
-	gpudirty = 1;
-	/* Erase the cursor at its previous position before drawing the new one. */
-	gpuredraw = 1;
+	gpudirty |= 2;
 	qunlock(&vga);
+	nbsendul(drawch, 0);
 }
 
 static int
@@ -835,8 +858,10 @@ vgainit(int new)
 	mc = initmouse(nil, screen);
 	kbdch = chancreate(sizeof(ulong), 128);
 	mousech = chancreate(sizeof(Mouse), 32);
+	drawch = chancreate(sizeof(ulong), 1);
 	proccreate(mousethread, nil, 4096);
 	proccreate(keyproc, nil, 4096);
+	proccreate(drawtick, nil, 4096);
 	proccreate(drawproc, nil, 4096);
 	if(vesamode){
 		d = mkpcidev(allocbdf(), 0x06660666, 0x03000000, 0);

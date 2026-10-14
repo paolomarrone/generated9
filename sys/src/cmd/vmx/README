@@ -95,7 +95,9 @@ contexts count toward that limit. Guest scatter lists are copied into native
 resource files, coalescing adjacent entries. Readback preserves guest bytes
 outside the transferred box. Scanout is read back into the existing rio window,
 using the framebuffer's existing changed-row comparison to reduce draw traffic;
-this is not zero-copy presentation. There is no video codec or Vulkan transport,
+the cursor restores its old area from a separate scanout image. GPU updates wake
+the drawing process directly; legacy framebuffers still poll every 20 ms.
+This is not zero-copy presentation. There is no video codec or Vulkan transport,
 resource blob support, audio device, or GPU passthrough.
 
 Tests
