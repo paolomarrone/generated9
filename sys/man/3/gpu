@@ -137,7 +137,7 @@ echo type virtio > /dev/vgactl
 .IR draw (3)
 .SH BUGS
 This is an experimental privileged interface, not an OpenGL implementation.
-It supports one GPU, 32 contexts, 64 resources and 64 MiB of backing per context.
+It supports one GPU, 32 contexts, 256 resources and 64 MiB of backing per context.
 There is one synchronous control queue; asynchronous command submission,
 cursor queues, buffer sharing and device recovery are not implemented.
 The display uses a separate backing allocation of up to 64 MiB.

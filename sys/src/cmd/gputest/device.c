@@ -91,7 +91,7 @@ main(void)
 	check(open(path, OREAD) < 0, "last close removes context");
 	ctl = open("#∇/clone", ORDWR);
 	check(ctl >= 0, "clone for resource limit");
-	for(i=0; i<64; i++)
+	for(i=0; i<256; i++)
 		check(fprint(ctl, "resource 0 64 16 64 1 1 1 0 0 0 64") > 0, "allocate resource table");
 	check(fprint(ctl, "resource 0 64 16 64 1 1 1 0 0 0 64") < 0, "resource limit");
 	info(ctl, &slot, &id);

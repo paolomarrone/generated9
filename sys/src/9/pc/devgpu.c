@@ -72,7 +72,7 @@ enum {
 	Submit,
 	Ok = 0x1100,
 	Maxctx = 32,
-	Maxres = 64,
+	Maxres = 256,
 	Maxmem = 64*1024*1024,
 	Maxcmd = 256*1024,
 	Qdir = 0,
