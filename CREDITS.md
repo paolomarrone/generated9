@@ -234,3 +234,15 @@ par_shapes, Model3D, vox_loader, jar_xm, jar_mod, sinfl/sdefl and rprand retain
 their authorship and license notices in `sys/src/libraylib/external`.
 The native backend and examples are generated9 contributions under the root
 license; imported algorithms retain their original component licenses.
+
+## raylib games
+
+`sys/src/games/raygames` adapts Arkanoid, Asteroids and Missile Commander from
+the official [raylib-games collection](https://github.com/raysan5/raylib-games/tree/318688c759eaf391b36b9f893355c038fcf56419/classics),
+revision `318688c759eaf391b36b9f893355c038fcf56419`.
+Arkanoid and Missile Commander are by Marc Palau and Ramon Santamaria;
+Asteroids is by Ian Eito, Albert Martos and Ramon Santamaria.
+The original source headers and zlib/libpng `classics/LICENSE` are preserved.
+File digests and adaptations are recorded in the local `UPSTREAM` file.
+These games use geometry and raylib's built-in font; no additional assets
+are bundled. The native runner and tests use the generated9 root license.

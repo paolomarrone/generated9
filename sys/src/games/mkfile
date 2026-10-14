@@ -48,6 +48,7 @@ DIRS=\
 	nes\
 	neverputt\
 	opl3\
+	raygames\
 	snes\
 	sokoban\
 	sudoku\

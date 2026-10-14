@@ -1,0 +1,34 @@
+Arkanoid, Asteroids and Missile Commander from raylib-games.
+
+Source: https://github.com/raysan5/raylib-games
+Revision: 318688c759eaf391b36b9f893355c038fcf56419
+
+Files from classics/src/ (SHA256 before adaptation):
+arkanoid.c
+  8b759b7a344cb0c0c768d456741fb9bfeec54f52c0615f0a65ddd5d7a843a218
+asteroids.c
+  b27e39cbad11be1182bf9dca261ff2bf05b2c8e8de91b5f62fffa3e520844872
+missile_commander.c (local name: missile.c)
+  52604888c9063b9fe3963ba23ac219b6fd1271f1fae9865a9088296fdacab727
+
+Arkanoid and Missile Commander: Marc Palau and Ramon Santamaria.
+Asteroids: Ian Eito, Albert Martos and Ramon Santamaria.
+Copyright (c) 2015 Ramon Santamaria; original source headers are retained.
+LICENSE is the unmodified classics/LICENSE, under the zlib/libpng license.
+New native integration and tests use the generated9 root LICENSE.
+
+Local changes:
+- Native headers, 6c/mk builds and one shared window loop in game.c.
+- Fixed logical arena with aspect-preserving rendering and mouse mapping.
+- Native command-line options, screenshot capture and R to restart.
+- Restart resets pause and round counters; no browser or desktop main loop.
+- Initialize Arkanoid's ball radius before positioning it.
+- Place Arkanoid's pause message below the bricks so it remains legible.
+- Stop a spent Asteroids shot from hitting the fragments it just created.
+- Reject Missile Commander shots outside the arena or at the launcher itself;
+  a missile that has hit a building cannot also score an interception.
+- Reinitialize explosion slots through one shared function, advance every
+  interceptor each frame, and shrink explosions to zero before expiry.
+
+These games draw only geometry and raylib's built-in font. There are no
+external game assets, sound files, shaders or additional runtime libraries.

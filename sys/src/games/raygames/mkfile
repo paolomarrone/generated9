@@ -1,0 +1,12 @@
+</$objtype/mkfile
+
+TARG=arkanoid asteroids missile
+OFILES=game.$O
+HFILES=game.h /sys/include/raylib.h /sys/include/raymath9.h
+CFLAGS=$CFLAGS -p
+LIB=/$objtype/lib/libraylib.a /$objtype/lib/libtinygl.a /$objtype/lib/libgpu.a
+BIN=/$objtype/bin/games
+
+default:V: all
+
+</sys/src/cmd/mkmany

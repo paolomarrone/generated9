@@ -122,6 +122,21 @@ a host audio backend. `mk data` compiles maps and decodes music and effects
 once, using native tools. See the [port README](../sys/src/games/neverputt/README)
 and [neverputt(1)](../sys/man/1/neverputt) for setup, controls and limitations.
 
+Three small raylib games use the same accelerated path, with no external
+assets or audio. After installing `libraylib`:
+
+```rc
+cd /sys/src/games/raygames
+mk install
+games/arkanoid
+games/asteroids
+games/missile
+```
+
+Each game runs in its own rio window. P pauses, R restarts and Escape exits.
+The [README](../sys/src/games/raygames/README) and
+[raygames(1)](../sys/man/1/raygames) describe the controls and test options.
+
 ## Presenting the desktop through VirtIO
 
 Use a single VirtIO VGA device for both the initial VESA screen and GPU

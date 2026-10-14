@@ -1,0 +1,64 @@
+.TH RAYGAMES 1
+.SH NAME
+arkanoid, asteroids, missile, raygames \- three raylib arcade games
+.SH SYNOPSIS
+.B games/arkanoid
+[
+.B -n
+.I frames
+] [
+.B -s
+.I seed
+] [
+.B -o
+.I image.png
+]
+.br
+.B games/asteroids
+[
+.I options
+]
+.br
+.B games/missile
+[
+.I options
+]
+.SH DESCRIPTION
+These games run in rio windows using the native raylib and TinyGL libraries.
+They need no external game data.
+.PP
+.I Arkanoid
+breaks bricks with a bouncing ball.
+Left and Right move the paddle; Space launches the ball.
+.PP
+.I Asteroids
+flies a ship among rocks that split when shot.
+Left and Right turn, Up accelerates, Down brakes, and Space fires.
+.PP
+.I Missile
+runs Missile Commander: protect cities and launchers from incoming missiles.
+Aim with the mouse; buttons 1, 2 and 3 fire from the left, middle and right
+launchers respectively.
+.PP
+In all three games, P pauses, R restarts and Escape exits.
+Enter starts a new round after losing.
+Resizing preserves the arena's aspect ratio and adjusts mouse aiming.
+.PP
+.B -n
+exits after the given number of displayed frames.
+.B -s
+sets the random seed for a repeatable game.
+.B -o
+saves the last displayed frame as a PNG image before exiting.
+.SH SOURCE
+.B /sys/src/games/raygames
+.SH SEE ALSO
+.IR games (1),
+.IR raylib (2),
+.IR tinygl (2),
+.IR gpu (3)
+.SH BUGS
+Requires a VirtIO GPU with VirGL and its host-owner access.
+The original frame-based game logic is paced at 60 frames per second;
+slower rendering slows play.
+These single-round games have no audio or saved scores.
