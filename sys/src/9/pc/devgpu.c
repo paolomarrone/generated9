@@ -72,8 +72,9 @@ enum {
 	Submit,
 	Ok = 0x1100,
 	Maxctx = 32,
-	Maxres = 256,
-	Maxmem = 64*1024*1024,
+	Maxres = 4096,
+	Maxmem = 256*1024*1024,
+	Maxbacking = 64*1024*1024,
 	Maxcmd = 256*1024,
 	Qdir = 0,
 	Qclone,
@@ -84,12 +85,19 @@ enum {
 };
 
 typedef struct Resource Resource;
+typedef struct Attachment Attachment;
 typedef struct Context Context;
 
 struct Resource {
 	u32int id;
 	uchar *data;
 	ulong size;
+	int ref;
+};
+
+struct Attachment {
+	Resource *r;
+	u32int vers;
 };
 
 struct Context {
@@ -97,7 +105,7 @@ struct Context {
 	u32int id;
 	u32int last;
 	ulong bytes;
-	Resource res[Maxres];
+	Attachment res[Maxres];
 };
 
 static QLock gpulock;		/* table, contexts, and one outstanding command */
@@ -481,15 +489,22 @@ Out:
 }
 
 static void
-freeres(Context *ctx, Resource *r)
+freeres(Context *ctx, Attachment *a)
 {
+	Resource *r;
+
+	r = a->r;
 	if(!gpu.failed){
 		rescmd(Ctxdetach, ctx->id, r->id);
-		rescmd(Unref, 0, r->id);
+		if(r->ref == 1)
+			rescmd(Unref, 0, r->id);
 	}
 	ctx->bytes -= r->size;
-	free(r->data);
-	memset(r, 0, sizeof(*r));
+	a->r = nil;
+	if(--r->ref == 0){
+		free(r->data);
+		free(r);
+	}
 }
 
 static Context*
@@ -508,7 +523,7 @@ context(Qid q)
 	if(f < Qres){
 		if(q.vers != ctx->id)
 			error(Enonexist);
-	}else if(f-Qres >= Maxres || ctx->res[f-Qres].id != q.vers)
+	}else if(f-Qres >= Maxres || ctx->res[f-Qres].r == nil || ctx->res[f-Qres].vers != q.vers)
 		error(Enonexist);
 	return ctx;
 }
@@ -519,8 +534,8 @@ resource(Context *ctx, u32int id)
 	int i;
 
 	for(i=0; i<Maxres; i++)
-		if(ctx->res[i].id == id && id != 0)
-			return &ctx->res[i];
+		if(ctx->res[i].r != nil && ctx->res[i].r->id == id)
+			return ctx->res[i].r;
 	error("gpu unknown resource");
 }
 
@@ -578,10 +593,10 @@ gpugen(Chan *c, char*, Dirtab*, int, int s, Dir *dp)
 	}
 	if(s-2 >= Maxres)
 		return -1;
-	r = &ctx->res[s-2];
-	if(r->id == 0)
+	r = ctx->res[s-2].r;
+	if(r == nil)
 		return 0;
-	q.vers = r->id;
+	q.vers = ctx->res[s-2].vers;
 	snprint(up->genbuf, sizeof(up->genbuf), "%ud", r->id);
 	devdir(c, q, up->genbuf, r->size, eve, 0660, dp);
 	return 1;
@@ -682,7 +697,7 @@ gpuclose(Chan *c)
 	c->aux = nil;
 	if(--ctx->ref == 0){
 		for(i=0; i<Maxres; i++){
-			if(ctx->res[i].id == 0)
+			if(ctx->res[i].r == nil)
 				continue;
 			if(waserror()){
 				gpufail();
@@ -742,7 +757,7 @@ gpuread(Chan *c, void *a, long n, vlong off)
 			snprint(buf, sizeof(buf), "%d %ud %ud\n", SLOT(c->qid), ctx->id, ctx->last);
 			n = readstr(off, a, n, buf);
 		}else if(FILE(c->qid) >= Qres){
-			r = &ctx->res[FILE(c->qid)-Qres];
+			r = ctx->res[FILE(c->qid)-Qres].r;
 			n = readmem(off, a, n, r->data, r->size);
 		}else
 			error(Eperm);
@@ -767,6 +782,7 @@ number(char *s)
 static void
 control(Context *ctx, Cmdbuf *cb)
 {
+	Context *src;
 	Resource *r;
 	u32int req[18], v[12];
 	int i, op;
@@ -776,27 +792,53 @@ control(Context *ctx, Cmdbuf *cb)
 	for(i=1; i<cb->nf; i++)
 		v[i-1] = number(cb->f[i]);
 	memset(req, 0, sizeof(req));
+	if(strcmp(cb->f[0], "attach") == 0){
+		if(cb->nf != 3)
+			error(Ebadarg);
+		for(src=gpu.ctx; src<gpu.ctx+Maxctx; src++)
+			if(src->ref != 0 && src->id == v[0])
+				break;
+		if(src == gpu.ctx+Maxctx)
+			error("gpu unknown context");
+		r = resource(src, v[1]);
+		for(i=0; i<Maxres; i++)
+			if(ctx->res[i].r == r)
+				error(Eexist);
+		for(i=0; i<Maxres && ctx->res[i].r != nil; i++)
+			;
+		if(i == Maxres || r->size > Maxmem-ctx->bytes)
+			error("gpu context resource limit");
+		/* Every attachment has its own lifetime, even on reattachment. */
+		ctx->res[i].vers = newid();
+		rescmd(Ctxattach, ctx->id, r->id);
+		ctx->res[i].r = r;
+		r->ref++;
+		ctx->bytes += r->size;
+		ctx->last = r->id;
+		return;
+	}
 	if(strcmp(cb->f[0], "resource") == 0){
 		/* target format bind width height depth array levels samples flags bytes */
-		if(cb->nf != 12 || v[10] == 0 || v[10] > Maxmem-ctx->bytes)
+		if(cb->nf != 12 || v[10] == 0 || v[10] > Maxbacking || v[10] > Maxmem-ctx->bytes)
 			error(Ebadarg);
-		if(v[0] > 8 || v[3] == 0 || v[3] > (v[0] == 0 ? Maxmem : 16384)
+		if(v[0] > 8 || v[3] == 0 || v[3] > (v[0] == 0 ? Maxbacking : 16384)
 		|| v[4] == 0 || v[4] > 16384 || v[5] == 0 || v[5] > 16384
 		|| v[6] == 0 || v[6] > 2048 || v[7] > 14 || v[8] > 64 || (v[9]&~1) != 0)
 			error(Ebadarg);
-		for(i=0; i<Maxres && ctx->res[i].id != 0; i++)
+		for(i=0; i<Maxres && ctx->res[i].r != nil; i++)
 			;
 		if(i == Maxres)
 			error("gpu no free resources");
-		r = &ctx->res[i];
-		r->id = newid();
+		r = malloc(sizeof(*r));
+		if(r == nil)
+			error(Enomem);
 		r->size = v[10];
-		r->data = nil;
 		if(waserror()){
 			free(r->data);
-			memset(r, 0, sizeof(*r));
+			free(r);
 			nexterror();
 		}
+		r->id = newid();
 		r->data = malloc(r->size);
 		if(r->data == nil)
 			error(Enomem);
@@ -817,6 +859,8 @@ control(Context *ctx, Cmdbuf *cb)
 		}
 		attachbacking(r);
 		rescmd(Ctxattach, ctx->id, r->id);
+		r->ref = 1;
+		ctx->res[i] = (Attachment){r, r->id};
 		ctx->bytes += r->size;
 		ctx->last = r->id;
 		poperror();
@@ -825,7 +869,9 @@ control(Context *ctx, Cmdbuf *cb)
 	}
 	r = resource(ctx, v[0]);
 	if(strcmp(cb->f[0], "unref") == 0 && cb->nf == 2){
-		freeres(ctx, r);
+		for(i=0; ctx->res[i].r != r; i++)
+			;
+		freeres(ctx, &ctx->res[i]);
 		return;
 	}
 	if(strcmp(cb->f[0], "upload") == 0)
@@ -892,7 +938,7 @@ gpuwrite(Chan *c, void *a, long n, vlong off)
 		memmove(req+8, a, n);
 		command(req, 32+n);
 	}else if(f >= Qres){
-		r = &ctx->res[f-Qres];
+		r = ctx->res[f-Qres].r;
 		if(off < 0 || off > r->size || n > r->size-off)
 			error(Ebadarg);
 		memmove(r->data+off, a, n);

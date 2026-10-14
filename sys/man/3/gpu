@@ -67,6 +67,18 @@ A binary file with that decimal identifier appears in the context directory.
 Reads and writes of this file access guest backing memory only;
 they do not implicitly transfer data to or from the GPU.
 .TP
+.BI attach " context id"
+Attach an existing resource to this context.
+.I context
+is the source's host context identifier, as returned by its
+.B ctl
+file; it is distinct from the directory number.
+The resource must still be attached to that context.
+The new attachment shares both GPU storage and guest backing memory,
+and counts against this context's resource and memory limits.
+A resource remains allocated until its last attachment is released.
+Attaching a resource already present in this context is an error.
+.TP
 .BI upload " id level x y z width height depth offset stride layerstride"
 Transfer a box from guest backing to the GPU resource.
 .I offset
@@ -78,9 +90,9 @@ Transfer a box from the GPU resource to guest backing.
 The application can then read the resource file.
 .TP
 .BI unref " id"
-Detach and release a resource.
+Detach a resource from this context, freeing it on the last attachment.
 Existing descriptors for that resource become invalid, even if its table
-slot is later reused.
+slot is later reused or the same resource is attached again.
 .PP
 Control operations, command submission and backing access are serialized.
 All device requests are fenced.
@@ -137,9 +149,10 @@ echo type virtio > /dev/vgactl
 .IR draw (3)
 .SH BUGS
 This is an experimental privileged interface, not an OpenGL implementation.
-It supports one GPU, 32 contexts, 256 resources and 64 MiB of backing per context.
+It supports one GPU, 32 contexts, 4096 resources and 256 MiB of backing per context.
+Each resource's backing store is limited to 64 MiB.
 There is one synchronous control queue; asynchronous command submission,
-cursor queues, buffer sharing and device recovery are not implemented.
+cursor queues, exported DMA buffers and device recovery are not implemented.
 The display uses a separate backing allocation of up to 64 MiB.
 .PP
 Resource targets are 0 through 8. Buffers are limited to 64 MiB;

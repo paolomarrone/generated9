@@ -96,9 +96,10 @@ invalid operations and repeated target/context recreation. Existing triangle
 and teapot tests also exercise the shared `libgpu` encoder.
 Texture tests also exceed both the device's resource count and backing budget,
 then check reupload and resizing. TinyGL retains CPU images and evicts unused
-GPU copies under pressure. The current driver allows 256 resources per context
-within the same 64 MiB backing budget, so applications can keep many small
-textures resident.
+GPU copies under pressure. The driver now allows 4096 resources and 256 MiB
+of backing per context, with at most 64 MiB per resource. Resources can be
+shared between contexts through `gpu(3)`'s `attach` operation. This supports
+Mesa clients inside `vmx`; see [VOID.md](VOID.md).
 
 Validation on the development amd64 QEMU guest also passed with the GPU bound
 at another namespace path and with the window resized while animating.

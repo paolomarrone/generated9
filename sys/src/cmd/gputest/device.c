@@ -22,6 +22,50 @@ info(int ctl, int *slot, u32int *id)
 	*id = strtoul(f[2], nil, 10);
 }
 
+static void
+sharing(void)
+{
+	int a, b, data, stale, slot, n;
+	u32int id, ctx;
+	char text[80], path[80], *f[3];
+	uchar value;
+
+	a = open("#∇/clone", ORDWR);
+	b = open("#∇/clone", ORDWR);
+	check(a >= 0 && b >= 0, "shared contexts");
+	check(fprint(a, "resource 0 64 16 64 1 1 1 0 0 0 64") > 0, "shared resource");
+	info(a, &slot, &id);
+	n = pread(a, text, sizeof(text)-1, 0);
+	check(n > 0, "source context id");
+	text[n] = 0;
+	check(tokenize(text, f, 3) == 3, "shared context info");
+	ctx = strtoul(f[1], nil, 10);
+	check(fprint(b, "attach %ud %ud", ctx, id) > 0, "attach resource");
+	check(fprint(b, "attach %ud %ud", ctx, id) < 0, "reject duplicate attachment");
+	info(b, &slot, &id);
+	snprint(path, sizeof(path), "#∇/%d/%ud", slot, id);
+	stale = open(path, ORDWR);
+	check(stale >= 0, "open attachment");
+	check(fprint(b, "unref %ud", id) > 0, "detach resource");
+	check(fprint(b, "attach %ud %ud", ctx, id) > 0, "reattach resource");
+	check(pread(stale, &value, 1, 0) < 0, "reattachment cannot revive old descriptors");
+	close(stale);
+	close(a);
+	data = open(path, ORDWR);
+	check(data >= 0, "resource survives original context");
+	value = 123;
+	check(pwrite(data, &value, 1, 0) == 1, "write shared backing");
+	check(fprint(b, "upload %ud 0 0 0 0 64 1 1 0 0 0", id) > 0, "upload shared resource");
+	value = 0;
+	check(pwrite(data, &value, 1, 0) == 1, "clear shared backing");
+	check(fprint(b, "download %ud 0 0 0 0 64 1 1 0 0 0", id) > 0, "download shared resource");
+	check(pread(data, &value, 1, 0) == 1 && value == 123, "shared GPU round trip");
+	close(data);
+	close(b);
+	check(open(path, OREAD) < 0, "last attachment releases resource");
+	print("PASS: shared resources, context lifetime and stale attachments\n");
+}
+
 void
 main(void)
 {
@@ -31,6 +75,7 @@ main(void)
 	char path[80];
 	uchar a[64], b[64];
 
+	sharing();
 	data = open("#∇/caps", OREAD);
 	check(data >= 0, "open capabilities");
 	d = dirfstat(data);
@@ -91,12 +136,21 @@ main(void)
 	check(open(path, OREAD) < 0, "last close removes context");
 	ctl = open("#∇/clone", ORDWR);
 	check(ctl >= 0, "clone for resource limit");
-	for(i=0; i<256; i++)
+	for(i=0; i<4096; i++)
 		check(fprint(ctl, "resource 0 64 16 64 1 1 1 0 0 0 64") > 0, "allocate resource table");
 	check(fprint(ctl, "resource 0 64 16 64 1 1 1 0 0 0 64") < 0, "resource limit");
 	info(ctl, &slot, &id);
 	check(fprint(ctl, "unref %ud", id) > 0, "release full table entry");
 	check(fprint(ctl, "resource 0 64 16 64 1 1 1 0 0 0 64") > 0, "reuse full table entry");
+	close(ctl);
+	ctl = open("#∇/clone", ORDWR);
+	check(ctl >= 0, "clone for backing limit");
+	for(i=0; i<4; i++)
+		check(fprint(ctl, "resource 0 64 16 64 1 1 1 0 0 0 67108864") > 0, "allocate backing budget");
+	check(fprint(ctl, "resource 0 64 16 64 1 1 1 0 0 0 1") < 0, "context backing limit");
+	info(ctl, &slot, &id);
+	check(fprint(ctl, "unref %ud", id) > 0, "release backing budget");
+	check(fprint(ctl, "resource 0 64 16 64 1 1 1 0 0 0 67108864") > 0, "reuse backing budget");
 	close(ctl);
 	for(i=0; i<nelem(fds); i++){
 		fds[i] = open("#∇/clone", ORDWR);

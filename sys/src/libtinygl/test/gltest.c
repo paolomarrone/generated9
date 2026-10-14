@@ -153,12 +153,13 @@ streaming(void)
 static void
 texturepressure(int count, int size)
 {
-	GLuint tex[320];
+	GLuint *tex;
 	uchar *data;
 	int i, pass;
 
+	tex = malloc(count*sizeof(*tex));
 	data = malloc(size*size*4);
-	if(data == nil) sysfatal("texture test allocation: %r");
+	if(tex == nil || data == nil) sysfatal("texture test allocation: %r");
 	glEnable(GL_TEXTURE_2D);
 	glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
 	glGenTextures(count, tex);
@@ -180,6 +181,7 @@ texturepressure(int count, int size)
 		}
 	}
 	glDeleteTextures(count, tex);
+	free(tex);
 	free(data);
 	glDisable(GL_TEXTURE_2D);
 	glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
@@ -1152,8 +1154,9 @@ main(int argc, char **argv)
 	arrays();
 	buffers();
 	textures();
-	texturepressure(320, 1);
-	texturepressure(20, 1024);
+	/* Exceed gpu(3)'s 4096 resources and 256 MiB backing budget. */
+	texturepressure(4128, 1);
+	texturepressure(68, 1024);
 	fragmentstate();
 	vertexlayouts();
 	texgenpoints();
