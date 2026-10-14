@@ -72,6 +72,12 @@ files through `libgpu`. Passing a device directory to `tglinit` allows normal
 namespace bindings; nil uses `#∇`. No kernel GL API is needed.
 Window presentation stays in the application and uses libdraw.
 
+Vertex data and draws share a buffered VirGL command stream. A full command
+buffer submits automatically; explicit `glFlush`, readback and resource
+release also submit pending work. Vertex batches use disjoint buffer ranges
+until a completed submission makes reuse safe. This reduces synchronous
+device round trips without changing the kernel queue or file protocol.
+
 This is a classic GL **subset**, not full or conformant OpenGL. The
 backend supports geometry, typed arrays and buffer objects, matrices,
 vertex lighting, culling, display lists, depth testing, textures with mipmaps
@@ -267,3 +273,42 @@ a rendering context failed with the expected VirGL error.
 
 Source revisions and license notices are in
 [UPSTREAM](../sys/src/cmd/gputest/UPSTREAM) and [CREDITS.md](../CREDITS.md).
+
+## Multiple rendering clients
+
+A comparison against `9e5221bc9` used a four-CPU KVM guest with 4 GiB RAM,
+a 1920 by 1080 VirtIO desktop and four non-overlapping 800 by 450 client
+windows. Neverputt ran `-h map-paxed/a.sol -n 900`. Arkanoid, Asteroids and
+Missile used seed 1 and paused scenes, with `-n 3600` keeping timed redraws
+enabled. This measures command batching with all four clients rendering.
+Each comparison used the same kernel, assets and scene, with no second
+generated9 VM running during the measurement.
+
+| QEMU display | Neverputt alone, before / after | Four rendering clients, before / after |
+| --- | ---: | ---: |
+| EGL headless, rio desktop | 61.7 / 61.6 fps | 38.6 / 61.5 fps |
+| GTK with OpenGL | 61.6 / 61.5 fps | 44.6 / 61.4 fps |
+
+Temporary instrumented native builds measured 31 vertex uploads and 32
+command submissions per Neverputt frame before batching, versus 11 command
+submissions carrying both data and draws afterward. Framebuffer download
+and desktop presentation are additional operations. The vertex data remained
+about 2.10 MiB per frame. In the four-client EGL run, paint time fell from
+24.17 to 11.51 ms per frame, excluding readback and libdraw presentation;
+phase measurements omit the first 60 frames. FPS above covers all 900 frames
+and approaches Neverputt's animation timer limit after batching.
+
+Interactive arcade runs also wait for events while paused or game over.
+In separate pause checks, frame counters and application user/kernel CPU
+times remained unchanged over one-second idle intervals. Resume, restart,
+resize while paused and Escape exit were exercised for all three games;
+all GPU contexts were released on exit. Fixed-frame runs keep redrawing
+so tests and captures terminate without input.
+The installed, uninstrumented binaries also completed a simultaneous
+600-frame GTK run with all four games active; Neverputt reported 61.7 fps.
+The displayed games were inspected and the three arcade captures completed.
+
+These are elapsed measurements of specific scenes, including scheduling,
+copies and GPU waits. They do not establish a maximum rendering rate or
+guarantee 60 fps in other levels. CPU vertex transforms, pixel readback and
+software window composition remain in the path.
