@@ -18,5 +18,6 @@
 /sys/src/cmd/unix/u9fs/*.o
 /sys/src/cmd/unix/u9fs/u9fs
 
-# Downloaded Neverputt data and compiled maps.
+# Downloaded Neverball/Neverputt data and compiled maps.
+/sys/games/lib/neverball/
 /sys/games/lib/neverputt/

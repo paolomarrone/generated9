@@ -1,0 +1,72 @@
+Neverball and Neverputt for generated9
+
+Native C ports of Neverball 1.6.0 and its minigolf companion. See UPSTREAM,
+LICENSE.md and the preserved notices for attribution and licensing.
+
+Both games share one native platform: libdraw/libevent for rio and input,
+libttf for text, system PNG/JPEG readers, and a PCM mixer over /dev/audio.
+The original physics, level formats, scores and replay code are retained.
+Graphics use the classic GL subset in libtinygl and VirGL. There is no
+SDL, C++, Mesa or foreign compiler in the guest.
+
+Prepare data on the host:
+
+    ./boot/getneverball
+
+Then inside generated9:
+
+    cd /sys/src/libgpu
+    mk install
+    cd /sys/src/libtinygl
+    mk install
+    cd /sys/src/games/neverball
+    mk install
+    mk data
+    games/neverball
+    games/neverputt
+
+The build needs no game data; playing does. The installer verifies the
+pinned original archive and keeps its asset licenses. mk data compiles all
+missing .map files with native mapc and decodes Ogg tracks with audio/oggdec.
+Remove an affected .sol or .pcm to rebuild it after changing its source.
+The first conversion of all 407 maps takes several minutes.
+
+The shared source and data directories are now named neverball. For an
+existing checkout, move sys/games/lib/neverputt to sys/games/lib/neverball
+on the host before mk data; already compiled holes and audio are reused.
+boot/getneverputt remains an installer alias. The games/neverputt command
+and $home/lib/neverputt settings path are unchanged. Neverball keeps its
+own settings, scores, replays and screenshots in $home/lib/neverball.
+
+Boot the current pc64 kernel with a VirGL device as described in boot/GPU.md.
+TinyGL evicts cached GPU texture copies under resource pressure, retaining
+images in guest memory. Sound requires a supported device, for example QEMU
+intel-hda with hda-duplex and a host audio backend. /dev/audio uses 44.1 kHz
+stereo signed 16-bit little-endian PCM. The games report unavailable audio.
+Only one application can open this audio device for output at a time.
+
+See neverball(1) and neverputt(1) for controls and options. Native menus omit
+display modes owned by rio and unsupported graphics features. Translations,
+gamepads, HMD, reflections and multisampling are not ported. Six general
+user clip planes in TinyGL support Neverball's transparent-ball rendering.
+
+Some maps in the original archive reference missing material images.
+mapc reports them and uses unit texture coordinates; the original material
+loader supplies a default material. The native compiler also clamps rounded
+normal dot products before acos. The camera fade handles a zero duration
+explicitly instead of relying on division by zero and subsequent clamping.
+
+Validation uses amd64 QEMU/KVM with four CPUs, 4 GiB RAM, VirGL and HDA.
+All 407 original maps compile natively. Tests cover native graphics and
+animation, menus, text input, gameplay, pause, resize and clean shutdown;
+this does not imply every level has been played to completion.
+
+The mixer regression test requires /dev/audio but no assets:
+
+    cd /sys/src/games/neverball/test
+    mk test
+
+It checks repeated initialization, pause/resume, shutdown while paused,
+missing background music and joining the mixer without consuming another
+child's wait message. Run it when no other application owns /dev/audio.
+Exit handlers also release the mixer if a requested level cannot be opened.

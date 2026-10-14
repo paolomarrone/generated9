@@ -1,0 +1,118 @@
+</$objtype/mkfile
+
+CFLAGS=$CFLAGS -p -I. -Ishare
+TARG=neverball neverputt
+OFILES=\
+	audio.$O\
+	loop.$O\
+	platform.$O\
+	glext.$O\
+	readpng.$O\
+	readjpg.$O\
+	writepng.$O\
+	video.$O\
+	share/video.$O\
+	font.$O\
+	share/image.$O\
+	share/base_image.$O\
+	share/lang.$O\
+	share/st_common.$O\
+	share/vec3.$O\
+	share/solid_base.$O\
+	share/solid_vary.$O\
+	share/solid_draw.$O\
+	share/solid_all.$O\
+	share/solid_sim_sol.$O\
+	share/mtrl.$O\
+	share/part.$O\
+	share/geom.$O\
+	share/ball.$O\
+	share/base_config.$O\
+	share/config.$O\
+	share/binary.$O\
+	share/state.$O\
+	share/gui.$O\
+	share/theme.$O\
+	share/text.$O\
+	share/common.$O\
+	share/list.$O\
+	share/fs_common.$O\
+	share/fs_stdio.$O\
+	share/dir.$O\
+	share/array.$O\
+	share/log.$O\
+	share/hmd_null.$O
+PUTTOFILES=\
+	putt/hud.$O\
+	putt/game.$O\
+	putt/hole.$O\
+	putt/course.$O\
+	putt/st_all.$O\
+	putt/st_conf.$O
+BALLOFILES=\
+	share/queue.$O\
+	share/cmd.$O\
+	share/tilt_null.$O\
+	ball/demo.$O\
+	ball/demo_dir.$O\
+	ball/game_client.$O\
+	ball/game_common.$O\
+	ball/game_draw.$O\
+	ball/game_proxy.$O\
+	ball/game_server.$O\
+	ball/hud.$O\
+	ball/level.$O\
+	ball/progress.$O\
+	ball/score.$O\
+	ball/set.$O\
+	ball/st_ball.$O\
+	ball/st_conf.$O\
+	ball/st_demo.$O\
+	ball/st_done.$O\
+	ball/st_fail.$O\
+	ball/st_goal.$O\
+	ball/st_help.$O\
+	ball/st_level.$O\
+	ball/st_name.$O\
+	ball/st_over.$O\
+	ball/st_pause.$O\
+	ball/st_play.$O\
+	ball/st_save.$O\
+	ball/st_set.$O\
+	ball/st_shared.$O\
+	ball/st_start.$O\
+	ball/st_title.$O\
+	ball/util.$O
+HFILES=port.h /sys/include/GL/gl.h `{ls share/*.h putt/*.h ball/*.h}
+LIB=/$objtype/lib/libtinygl.a /$objtype/lib/libgpu.a
+BIN=/$objtype/bin/games
+CLEANFILES=share/*.[$OS] putt/*.[$OS] ball/*.[$OS] [$OS].mapc
+
+</sys/src/cmd/mkmany
+
+$O.neverputt: $PUTTOFILES
+$O.neverball: $BALLOFILES
+
+%.$O: %.c
+	$CC $CFLAGS -o $target $stem.c
+
+readpng.$O: /sys/src/cmd/jpg/readpng.c /sys/src/cmd/jpg/imagefile.h
+	$CC $CFLAGS -I/sys/src/cmd/jpg -o $target /sys/src/cmd/jpg/readpng.c
+readjpg.$O: /sys/src/cmd/jpg/readjpg.c /sys/src/cmd/jpg/imagefile.h
+	$CC $CFLAGS -I/sys/src/cmd/jpg -o $target /sys/src/cmd/jpg/readjpg.c
+
+writepng.$O: /sys/src/cmd/jpg/writepng.c /sys/src/cmd/jpg/imagefile.h
+	$CC $CFLAGS -I/sys/src/cmd/jpg -o $target /sys/src/cmd/jpg/writepng.c
+
+MAPOFILES=share/mapc.$O share/vec3.$O share/base_image.$O\
+	share/solid_base.$O share/binary.$O share/base_config.$O\
+	share/common.$O share/fs_common.$O share/fs_stdio.$O\
+	share/dir.$O share/array.$O share/list.$O readpng.$O readjpg.$O
+
+$O.mapc: $MAPOFILES
+	$LD -o $target $prereq
+
+mapc:V: $O.mapc
+
+data:V: $O.mapc
+	rc data

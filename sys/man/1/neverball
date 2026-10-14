@@ -1,0 +1,72 @@
+.TH NEVERBALL 1
+.SH NAME
+neverball \- tilt a level to guide a rolling ball
+.SH SYNOPSIS
+.B games/neverball
+[
+.B -d
+.I directory
+]
+[
+.B -l
+.I level.sol
+|
+.B -r
+.I replay.nbr
+]
+[
+.B -n
+.I frames
+]
+.SH DESCRIPTION
+.I Neverball
+runs Neverball 1.6.0 in a rio window using the native C toolchain,
+TinyGL/VirGL, Plan 9 image and font readers, and PCM audio.
+Tilt the floor to collect enough coins and reach the goal before time
+runs out, without falling off the level.
+.PP
+The mouse or arrow keys tilt the floor.
+Enter activates menu items; Escape goes back or pauses play.
+R restarts the level when available.
+The 1, 2 and 3 keys select camera modes; E cycles them, and S and D
+rotate the camera. F9 toggles the frame counter and F12 saves a PNG.
+The window may be resized during play, retaining its logical aspect ratio.
+.PP
+The menus select level sets, balls and replays, and edit the player name.
+Settings, scores and recordings are stored separately from Neverputt's.
+.PP
+.B -d
+selects the game data directory.
+.B -l
+loads a compiled level directly, without selecting a set.
+.B -r
+plays a recorded game.
+.B -n
+exits after the specified number of displayed frames and reports the
+average frame rate, including rendering, readback and window presentation.
+.PP
+Original assets are installed on the host by
+.BR boot/getneverball .
+In the native source directory,
+.B mk data
+compiles missing maps and decodes Ogg audio into 44.1 kHz stereo PCM.
+Neverball and Neverputt use the same assets and native platform code.
+.SH FILES
+.TP
+.B /sys/games/lib/neverball
+Original data and generated maps/audio for both games.
+.TP
+.B $home/lib/neverball
+Settings, log, Screenshots, Replays and Scores.
+.SH SOURCE
+.B /sys/src/games/neverball
+.SH SEE ALSO
+.IR neverputt (1),
+.IR audio (1),
+.IR tinygl (2),
+.IR gpu (3)
+.SH BUGS
+Requires a VirtIO GPU with VirGL and its host-owner access.
+The native port supports mouse and keyboard, English menus and a rio window;
+fullscreen display modes, gamepads, VR, reflections and multisampling are
+not provided. It is not a port of SDL.

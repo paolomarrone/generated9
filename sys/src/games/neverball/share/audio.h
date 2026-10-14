@@ -1,0 +1,25 @@
+#include "port.h"
+#ifndef AUDIO_H
+#define AUDIO_H
+
+/*---------------------------------------------------------------------------*/
+
+void audio_init(void);
+void audio_free(void);
+void audio_pause(int);
+void audio_play(const char *, float);
+
+void audio_music_queue(const char *, float);
+void audio_music_play(const char *);
+void audio_music_stop(void);
+
+void audio_music_fade_to(float, const char *);
+void audio_music_fade_in(float);
+void audio_music_fade_out(float);
+
+void audio_check(void);
+void audio_volume(int, int);
+
+/*---------------------------------------------------------------------------*/
+
+#endif

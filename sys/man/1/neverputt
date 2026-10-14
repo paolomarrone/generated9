@@ -48,16 +48,17 @@ compiles missing maps and decodes Ogg audio into 44.1 kHz stereo PCM using
 .IR audio (1).
 This is done once; generated files remain alongside the original data.
 .SH FILES
-.TF /sys/games/lib/neverputt
+.TF /sys/games/lib/neverball
 .TP
-.B /sys/games/lib/neverputt
-Original data and generated maps/audio.
+.B /sys/games/lib/neverball
+Shared Neverball and Neverputt data and generated maps/audio.
 .TP
 .B $home/lib/neverputt
 Settings, log and Screenshots directory.
 .SH SOURCE
-.B /sys/src/games/neverputt
+.B /sys/src/games/neverball
 .SH SEE ALSO
+.IR neverball (1),
 .IR games (1),
 .IR audio (1),
 .IR tinygl (2),

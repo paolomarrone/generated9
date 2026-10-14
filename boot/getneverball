@@ -1,0 +1,42 @@
+#!/usr/bin/env python3
+"""Install the original Neverball and Neverputt data and map sources; compile maps in the guest."""
+import hashlib
+from pathlib import Path
+import shutil
+import subprocess
+import tarfile
+import tempfile
+
+ROOT = Path(__file__).resolve().parent.parent
+VERSION = "neverball-1.6.0"
+SHA256 = "73fe63cca4f96e2d355480d03bc0b2904e83a0abdf65fe8c52db5cc3cca88fa0"
+
+
+def main():
+    cache = ROOT / "boot/cache"
+    cache.mkdir(parents=True, exist_ok=True)
+    archive = cache / (VERSION + ".tar.gz")
+    target = ROOT / "sys/games/lib/neverball"
+    if target.exists():
+        raise SystemExit(f"{target} already exists; move it aside before reinstalling")
+    if not archive.exists():
+        part = archive.with_suffix(".part")
+        subprocess.run(["curl", "-4", "--fail", "--location", "--retry", "2",
+                        "--output", str(part), "https://neverball.org/" + archive.name], check=True)
+        part.replace(archive)
+    with archive.open("rb") as source:
+        if hashlib.file_digest(source, "sha256").hexdigest() != SHA256:
+            raise SystemExit(f"checksum mismatch: {archive}")
+    with tempfile.TemporaryDirectory(prefix="getneverball-", dir=cache) as tmp:
+        with tarfile.open(archive) as source:
+            source.extractall(tmp, filter="data")
+        unpacked = Path(tmp) / VERSION
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(unpacked / "data", target)
+        shutil.copytree(unpacked / "doc/legal", target / "legal")
+        shutil.copyfile(unpacked / "LICENSE.md", target / "LICENSE.md")
+    print("Data installed. In generated9: cd /sys/src/games/neverball; mk data")
+
+
+if __name__ == "__main__":
+    main()

@@ -82,6 +82,8 @@ This is a classic GL **subset**, not full or conformant OpenGL. The
 backend supports geometry, typed arrays and buffer objects, matrices,
 vertex lighting, culling, display lists, depth testing, textures with mipmaps
 and four texture units, alpha testing/blending, polygon offset and point sprites.
+Six user clip planes are captured in eye space and clipped on the guest CPU;
+ordinary view-volume clipping remains on VirGL.
 It has no stencil, GLSL, EGL or GLX. Unsupported operations fail
 explicitly. There is one current context per process and errors are fatal,
 following TinyGL's model. See [tinygl(2)](../sys/man/2/tinygl) for exact limits.
@@ -105,28 +107,31 @@ readback and libdraw presentation, with the VirtIO desktop active. The demo's
 17 ms event timer limits the window rate to about 59 fps; this is not a GPU
 throughput measurement. Pixel readback and desktop composition remain copies.
 
-## Neverputt
+## Neverball and Neverputt
 
-The native Neverputt port uses this classic GL interface, libdraw, libttf,
-the system image readers and a PCM mixer over `/dev/audio`. It preserves the
-original physics and level formats. The game and map compiler build with
+The native Neverball and Neverputt ports use this classic GL interface,
+libdraw, libttf, the system image readers and a PCM mixer over `/dev/audio`.
+They preserve the
+original physics and level formats. Both games and the map compiler build with
 the Plan 9 C toolchain.
 
-Install the pinned original assets on the host with `./boot/getneverputt`.
+Install the pinned original assets on the host with `./boot/getneverball`.
 In the guest, build the current kernel and graphics libraries above, then:
 
 ```rc
-cd /sys/src/games/neverputt
+cd /sys/src/games/neverball
 mk install
 mk data
+games/neverball
 games/neverputt
 ```
 
 Boot the newly built kernel before playing. For sound, QEMU also needs an
 emulated sound device, for example `intel-hda` and `hda-duplex` connected to
 a host audio backend. `mk data` compiles maps and decodes music and effects
-once, using native tools. See the [port README](../sys/src/games/neverputt/README)
-and [neverputt(1)](../sys/man/1/neverputt) for setup, controls and limitations.
+once, using native tools. See the [port README](../sys/src/games/neverball/README)
+and the [Neverball](../sys/man/1/neverball) and
+[Neverputt](../sys/man/1/neverputt) manuals for setup, controls and limitations.
 
 Three small raylib games use the same accelerated path, with no external
 assets or audio. After installing `libraylib`:
@@ -142,6 +147,29 @@ games/missile
 Each game runs in its own rio window. P pauses, R restarts and Escape exits.
 The [README](../sys/src/games/raygames/README) and
 [raygames(1)](../sys/man/1/raygames) describe the controls and test options.
+
+## raygui and the model viewer
+
+raygui provides immediate-mode controls over the native raylib port.
+The model viewer is a small client of both libraries:
+
+```rc
+cd /sys/src/libraylib
+mk install
+cd /sys/src/libraygui
+mk install
+cd /sys/src/cmd/modelview
+mk install
+modelview
+```
+
+With no file it shows a torus. It also loads OBJ, IQM, glTF/GLB, M3D and VOX
+through raylib, including embedded CPU animation. Drag to orbit, use the wheel
+to zoom, and use the toolbar for lighting, wireframe and animation controls.
+Static views wait for input. `modelview -n 120 -o /tmp/model.png model.glb`
+saves a bounded run. See [modelview(1)](../sys/man/1/modelview) and
+[raygui(2)](../sys/man/2/raygui). The renderer still has the classic GL limits
+above; loading a modern model format does not add shader-based materials.
 
 ## Presenting the desktop through VirtIO
 

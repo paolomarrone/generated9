@@ -179,7 +179,8 @@ see [VOID.md](VOID.md).
 ## Native GPU rendering
 
 For generated9's VirtIO GPU display backend, native VirGL triangle and rotating
-Utah teapot, and classic OpenGL gears through native TinyGL,
+Utah teapot, classic OpenGL gears, Neverball/Neverputt, raylib games and
+the raygui model viewer through native TinyGL,
 see [GPU.md](GPU.md).
 
 ## Shared filesystem

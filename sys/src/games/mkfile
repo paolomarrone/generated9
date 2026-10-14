@@ -46,7 +46,7 @@ DIRS=\
 	mix\
 	md\
 	nes\
-	neverputt\
+	neverball\
 	opl3\
 	raygames\
 	snes\

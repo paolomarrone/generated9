@@ -1,0 +1,36 @@
+Neverball and Neverputt 1.6.0 (Robert Kooima and Neverball contributors).
+
+Source: https://neverball.org/neverball-1.6.0.tar.gz
+SHA256: 73fe63cca4f96e2d355480d03bc0b2904e83a0abdf65fe8c52db5cc3cca88fa0
+
+Code: GPL version 2 or later; see LICENSE.md and license-GPL-2.0.txt.
+Selected ball/, putt/ and share/ modules retain their upstream notices and
+style. neverball.c and neverputt.c adapt the original main.c entry points
+and retain GPL notices. The new native platform code uses the generated9
+root LICENSE; the combined games remain GPL. Assets retain their original
+licenses and are installed separately, including all upstream legal notices.
+
+Local integration:
+- One native 6c/mk build and common platform for both games. The former
+  sys/src/games/neverputt tree now lives in sys/src/games/neverball.
+- Libdraw/libevent window, mouse and keyboard input, TinyGL/VirGL rendering.
+  Native keyboard character records handle Unicode player/replay names.
+- System PNG/JPEG readers and libttf replace SDL image/font dependencies.
+- Native PCM mixer with pause/resume; Ogg assets decoded by audio/oggdec.
+- Native filesystem, key names, timing, environment and date handling.
+- Explicit wire-endian SOL reads/writes, proper prototypes and opaque type
+  signatures for the Plan 9 compiler; C stdio string streams own formatting.
+- Triangle indices use arrays so element buffers contain no struct padding.
+- mapc clamps rounded normal dot products before acos and reports missing
+  texture images, retaining finite unit coordinates for default materials.
+- Menus expose native window settings and supported rendering options.
+  English, mouse and keyboard; no SDL, HMD, fullscreen, reflection or MSAA.
+- Accepting Neverputt's final score with the keyboard returns to the title,
+  matching the mouse path; standalone holes may omit background music.
+- Neverball's camera fade uses a bounded ratio before cubing, including
+  zero-duration fades without floating-point division by zero.
+- Set cleanup accepts an uninitialized set list, including early exits.
+
+Original data are installed by boot/getneverball with their complete legal
+notices; boot/getneverputt remains an alias. mk data compiles all maps and
+shared models in the guest. See README, neverball(1) and neverputt(1).
