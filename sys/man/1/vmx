@@ -35,6 +35,10 @@ vmx \- virtual PC
 .I vga
 ]
 [
+.B -g
+.I gpu
+]
+[
 .B -m
 .I bootmod
 ]
@@ -110,6 +114,23 @@ The guest can use VESA functions to switch the mode to one of those listed, whic
 The first mode is indicated as the preferred mode of the monitor.
 .PP
 The
+.B -g
+option adds a VirtIO GPU with VirGL capability set 1, using the
+.IR gpu (3)
+directory given as its argument, usually
+.BR '#∇' .
+It requires a framebuffer configured with
+.B -v
+or
+.BR -w .
+The framebuffer dimensions limit the single scanout, between 64 and 4096 pixels
+in each direction.
+Guest drivers submit 3D commands through the host GPU's file interface;
+completed images use the existing window and input devices.
+Linux can use its standard virtio_gpu driver and Mesa VirGL renderer.
+Video decoding, audio, resource blobs and Vulkan are not provided.
+.PP
+The
 .B -c
 and
 .B -C
@@ -159,6 +180,7 @@ The first boot module is passed as the \fIinitrd\fR; any further boot modules ar
 .SH SOURCE
 .B /sys/src/cmd/vmx
 .SH SEE ALSO
+.IR gpu (3),
 .IR vmx (3),
 .IR cpuid (8)
 .SH BUGS

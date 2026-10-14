@@ -103,6 +103,11 @@ new generated9 additions use the [root license](LICENSE).
 
 ## vmx
 
+The native VirtIO GPU bridge follows the protocol definitions and notices
+recorded in [UPSTREAM.gpu](sys/src/cmd/vmx/UPSTREAM.gpu) and
+[LICENSE.gpu](sys/src/cmd/vmx/LICENSE.gpu). It connects guest VirGL clients
+to generated9's GPU file interface using vmx's existing device transport.
+
 The multicore work extends 9front's existing vmx monitor and kernel driver,
 introduced by aiju in commits
 [`389ba6bdd9885f7570d8f87ea14b3eba48c000f6`](https://github.com/9front/9front/commit/389ba6bdd9885f7570d8f87ea14b3eba48c000f6)

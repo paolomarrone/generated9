@@ -1,0 +1,22 @@
+VirtIO GPU transport for vmx
+
+Wire layouts follow VirtIO 1.2, sections 4.1 (PCI) and 5.7 (GPU):
+https://docs.oasis-open.org/virtio/virtio/v1.2/virtio-v1.2.html
+
+GPU definitions: include/uapi/linux/virtio_gpu.h from Linux v6.12,
+revision adc218676eef25575469234709c2d87185ca223a.
+Copyright Red Hat, Inc. 2013-2014; Dave Airlie and Gerd Hoffmann.
+The BSD notice is preserved in LICENSE.gpu.
+
+VirGL command layouts: src/virgl_protocol.h and src/virgl_hw.h from
+virglrenderer revision 4d8bd3c9954a9599e0de70a2e432c761da80398d.
+Copyright 2014, 2015 Red Hat. The MIT notice is in LICENSE.gpu.
+Retrieved from the Chromium mirror:
+https://chromium.googlesource.com/chromiumos/third_party/virglrenderer/+/4d8bd3c9954a9599e0de70a2e432c761da80398d/
+
+The native implementation reuses vmx's PCI, split virtqueues, window and
+input code. It exposes VirtIO GPU capability set 1 through the generated9
+gpu(3) file interface, remapping resource identifiers while preserving
+guest context and object namespaces. No Mesa or virglrenderer code is
+linked into vmx. New integration code uses the generated9 root LICENSE;
+existing vmx code retains its original authorship and license.

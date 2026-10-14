@@ -689,7 +689,7 @@ usage(void)
 	for(p = blanks; *p != 0; p++)
 		*p = ' ';
 	fprint(2, "usage: %s [ -P cpus ] [ -M mem ] [ -c com1rd[,com1wr] ] [ -C com2rd[,com2r] ] [ -n nic ]\n", argv0);
-	fprint(2, "       %s [ -d blockfile ] [ -m module ] [ -v|-w vga ] [ -9 srv ] kernel [ args ... ]\n", blanks);
+	fprint(2, "       %s [ -d blockfile ] [ -m module ] [ -v|-w vga ] [ -g gpu ] [ -9 srv ] kernel [ args ... ]\n", blanks);
 	threadexitsall("usage");
 }
 
@@ -736,6 +736,14 @@ threadmain(int argc, char **argv)
 		assert(edevn < nelem(edev));
 		edev[edevn] = mkvionet;
 		edevt[edevn] = "virtio network";
+		edevaux[edevn++] = strdup(EARGF(usage()));
+		break;
+	case 'g':
+		for(i = 0; i < edevn; i++)
+			if(edev[i] == mkviogpu) usage();
+		assert(edevn < nelem(edev));
+		edev[edevn] = mkviogpu;
+		edevt[edevn] = "virtio gpu";
 		edevaux[edevn++] = strdup(EARGF(usage()));
 		break;
 	case 'd':

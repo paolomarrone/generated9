@@ -62,6 +62,39 @@ they cannot reach a new CPU that reuses its directory number. The old practice
 of keeping the last removed CPU for debugging is no longer supported; inspect
 a stopped CPU before removing its ctl.
 
+Accelerated graphics
+
+With a generated9 VirtIO/VirGL GPU, add -g '#∇' to a framebuffer VM:
+
+	vmx -P 4 -M 2G -w 1024x768 -g '#∇' ...
+
+Build and boot the current host kernel first. The outer QEMU must expose
+virtio-vga-gl with a working OpenGL backend; see boot/GPU.md and boot/VOID.md.
+The guest sees a modern VirtIO PCI GPU with two split queues, one scanout
+and VirGL capability set 1. Its existing Linux DRM and Mesa drivers work
+without guest patches. Disk and network devices retain their legacy transport.
+
+Each guest rendering context owns a gpu(3) context. Allocation contexts keep
+resources alive independently of rendering contexts; gpu(3)'s attach operation
+shares their backing and host handles. Only resource identifiers in VirGL
+commands are translated. Object names, shaders and subcontexts pass through.
+Query backing is synchronized in both directions on submission: Mesa resets
+it through the guest mapping before reusing a query. Returning only host writes
+would let a later submission overwrite that reset with an old completed result.
+The bridge returns only changed query state and publishes the result before its
+ready flag, which another guest CPU can poll without waiting for the interrupt.
+Queue workers serialize GPU operations and return a guest fence only after the
+host operation completes. Interrupts still go through the monitor event loop.
+
+There are at most 4096 guest resources, with at most 64 MiB backing each.
+The host's 32-context and 256 MiB-per-context limits also apply; allocation
+contexts count toward that limit. Guest scatter lists are copied into native
+resource files, coalescing adjacent entries. Readback preserves guest bytes
+outside the transferred box. Scanout is read back into the existing rio window,
+using the framebuffer's existing changed-row comparison to reduce draw traffic;
+this is not zero-copy presentation. There is no video codec or Vulkan transport,
+resource blob support, audio device, or GPU passthrough.
+
 Tests
 
 Inside generated9, mk test checks instruction decoding against real APIC
@@ -69,6 +102,22 @@ MMIO registers, MSR operand widths, priority/EOI behavior, and timer reloads
 with a controlled clock. It runs without VMX hardware. The cases cover 16-
 and 32-bit addressing, and on amd64 also REX prefix ordering, RIP-relative,
 address-size and segment overrides.
+The VirtIO tests negotiate modern features, validate queue alignment and size,
+keep enabled queue addresses fixed, transfer data through a real split queue,
+reject invalid descriptor heads and cycles, and return an outstanding buffer
+during device reset. The GPU driver's gputest checks sharing across
+contexts, stale descriptors after reattachment, resource limits and release.
+
+test/virgl.c runs under Linux/Xorg with Mesa and GLX. Build it on Linux with
+the X11 and GL development headers and libraries, then run it inside the guest:
+
+	cc -O2 -o virgl test/virgl.c -lGL -lX11
+	./virgl
+
+It reuses one timestamp query across 300 rendered frames and checks that each
+result advances. This exercises query backing synchronization and the outer
+renderer; boot/VOID.md records an outer EGL polling defect found with it.
+It requires GL_ARB_timer_query or OpenGL 3.3.
 
 test/run is a Linux-host integration test. It boots generated9 with nested
 Intel VMX, builds the native monitor, and runs Linux inside vmx. It requires

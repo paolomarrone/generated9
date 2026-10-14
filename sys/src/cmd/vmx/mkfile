@@ -14,6 +14,7 @@ VMOFILES=\
 	vga.$O \
 	pci.$O \
 	virtio.$O \
+	viogpu.$O \
 	vesa.$O \
 	9p.$O \
 	x86.$O \

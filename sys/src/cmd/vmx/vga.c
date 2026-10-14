@@ -30,6 +30,11 @@ Channel *kbdch, *mousech;
 u8int mousegrab;
 extern u8int mouseactive;
 static uchar *sfb;	/* packed snapshot, independent of the guest's scanline pitch */
+static uchar *gpufb;
+static VgaMode gpumode;
+static int gpudirty, gpuchange, gpuredraw;
+static Image *gpucursor;
+static Point gpupos, gpuhot;
 
 typedef struct VGA VGA;
 struct VGA {
@@ -561,8 +566,8 @@ drawfbrect(Rectangle upd)
 		loadimage(screen, rectaddpt(upd, picr.min), sfb + upd.min.y * hb, (upd.max.y - upd.min.y) * hb);
 }
 
-static void
-drawfb(int redraw)
+static int
+drawfb(uchar *base, int pitch, int redraw)
 {
 	Rectangle upd;
 	uchar *p, *q;
@@ -571,7 +576,7 @@ drawfb(int redraw)
 	upd = Rect(0, 0, curmode->w, 0);
 	changed = 0;
 	for(y = 0; y <= curmode->h; y++){
-		p = fb + y * curhbytes;
+		p = base + y * pitch;
 		q = sfb + y * curmode->hbytes;
 		if(y < curmode->h && (redraw || memcmp(p, q, curmode->hbytes) != 0)){
 			memmove(q, p, curmode->hbytes);
@@ -584,8 +589,7 @@ drawfb(int redraw)
 			upd.min.y = upd.max.y = y + 1;
 		}
 	}
-	if(changed)
-		flushimage(display, 1);
+	return changed;
 }
 
 void
@@ -594,12 +598,15 @@ drawproc(void *)
 	ulong ul;
 	int event;
 	VgaMode *m;
+	Point p;
+	Rectangle r;
 
 	threadsetname("draw");
-	sfb = emalloc(fbsz);
+	sfb = emalloc(MAX(fbsz,maxw*maxh*4));
 	event = 4;
 	for(;; sleep(20)){
 		qlock(&vga);
+		if(gpuchange){ event |= 1; gpuchange = 0; }
 		m = nextmode;
 		if(m != curmode){
 			event |= 1;
@@ -617,13 +624,69 @@ drawproc(void *)
 				sysfatal("resize failed: %r");
 			screeninit((event & 2) != 0);
 		}
-		if(curmode == &textmode)
+		if(curmode == &gpumode){
+			if(gpudirty || event != 0){
+				drawfb(gpufb,curmode->hbytes,gpuredraw || event != 0);
+				if(gpucursor != nil){
+					p = addpt(picr.min,subpt(gpupos,gpuhot));
+					r = rectaddpt(gpucursor->r,p);
+					if(rectclip(&r,picr)){
+						/* Blend against the scanout, never the previous cursor. */
+						drawfbrect(Rect(0,r.min.y-picr.min.y,curmode->w,r.max.y-picr.min.y));
+						draw(screen,r,gpucursor,nil,subpt(r.min,p));
+					}
+				}
+				flushimage(display,1);
+				gpudirty = 0;
+				gpuredraw = 0;
+			}
+		}else if(curmode == &textmode)
 			drawtext();
-		else
-			drawfb(event != 0);
+		else if(drawfb(fb,curhbytes,event != 0))
+			flushimage(display,1);
 		event = 0;
 		qunlock(&vga);
 	}
+}
+
+/* VirtIO scanout shares the existing window, input and presentation path. */
+void
+vgapresent(uchar *p, int w, int h)
+{
+	qlock(&vga);
+	if(gpufb == nil) gpufb = emalloc(maxw*maxh*4);
+	if(gpumode.w != w || gpumode.h != h) gpuchange = 1;
+	gpumode.w = w;
+	gpumode.h = h;
+	gpumode.hbytes = w*4;
+	gpumode.chan = XRGB32;
+	if(p != nil) memmove(gpufb,p,w*h*4);
+	else memset(gpufb,0,w*h*4);
+	nextmode = &gpumode;
+	nexthbytes = w*4;
+	gpudirty = 1;
+	qunlock(&vga);
+}
+
+void
+vgacursor(int x, int y, int update, uchar *p, int hotx, int hoty)
+{
+	qlock(&vga);
+	gpupos = Pt(x,y);
+	if(update){
+		freeimage(gpucursor);
+		gpucursor = nil;
+		gpuhot = Pt(hotx,hoty);
+		if(p != nil){
+			gpucursor = allocimage(display,Rect(0,0,64,64),ARGB32,0,DNofill);
+			if(gpucursor == nil || loadimage(gpucursor,gpucursor->r,p,64*64*4) < 0)
+				sysfatal("GPU cursor: %r");
+		}
+	}
+	gpudirty = 1;
+	/* Erase the cursor at its previous position before drawing the new one. */
+	gpuredraw = 1;
+	qunlock(&vga);
 }
 
 static int
