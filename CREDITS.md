@@ -219,3 +219,18 @@ upstream `doc/legal` notices, including those for DejaVu and WenQuanYi fonts.
 Downloaded data, compiled maps, and decoded audio are excluded from commits.
 The native port uses the existing Plan 9 PNG/JPEG readers, libttf, and audio
 filters; their original licenses continue to apply.
+
+## raylib
+
+The native raylib port imports [raylib 6.0](https://github.com/raysan5/raylib/tree/dbc56a87da87d973a9c5baa4e7438a9d20121d28),
+commit `dbc56a87da87d973a9c5baa4e7438a9d20121d28`, by Ramon Santamaria and
+contributors. Its original zlib/libpng notice is preserved in
+`sys/src/libraylib/LICENSE` and in the imported modules and public headers.
+The source archive digest and native changes are recorded in
+`sys/src/libraylib/UPSTREAM`.
+
+Bundled miniaudio, stb libraries, dr_wav, dr_mp3, QOI/QOA, cgltf, tinyobjloader-c,
+par_shapes, Model3D, vox_loader, jar_xm, jar_mod, sinfl/sdefl and rprand retain
+their authorship and license notices in `sys/src/libraylib/external`.
+The native backend and examples are generated9 contributions under the root
+license; imported algorithms retain their original component licenses.

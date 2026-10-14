@@ -1,0 +1,69 @@
+Native raylib 6.0 for generated9
+
+Build in a generated9 terminal:
+
+    cd /sys/src/libraylib
+    mk install
+    cd examples
+    mk install
+    games/raydemo
+
+The examples use the native compiler and linker. Client programs include
+<u.h>, <libc.h>, then <raylib.h>; use the compiler's -p option for ANSI cpp.
+The public header selects libraylib automatically. <raymath.h> supplies the
+math helpers; <rlgl.h> exposes the compiled classic rendering interface.
+Do not define RLGL_IMPLEMENTATION in clients of the installed library.
+For matrix arrays, use a named float16 from MatrixToFloatV and its .v member;
+the native compiler cannot decay an array member of a returned structure.
+
+Run graphics programs inside a rio window, with /dev/gpu providing a VirGL
+context (QEMU virtio-vga-gl and a host OpenGL renderer). This is the same
+accelerated path used by the existing TinyGL programs. The current target
+limit is 2048 by 2048 pixels. Rendering is read back and presented through
+libdraw. No foreign compiler, GLFW, SDL, Mesa guest library or C++ is used.
+
+The backend provides one resizable rio window, keyboard, Unicode text,
+mouse buttons and wheel, cursor locking, /dev/snarf text and plumber URLs.
+Fullscreen, window decorations and placement policy belong to rio.
+Gamepads, touch devices, clipboard images, window icons, opacity and physical
+monitor measurements are unavailable. Unsupported window requests log a
+warning. Window flags cannot make a rio window non-resizable. Resizing and
+placement require the current window; pointer warps require the pointer to
+be inside it, as specified by rio(4).
+
+The renderer uses raylib's OpenGL 1.1 path: shapes, textures, fonts, cameras
+and fixed-function models. Programmable shaders, render textures, instancing
+and the modern OpenGL examples require a different renderer. This port does
+not claim complete OpenGL conformance; see tinygl(2) for the supported subset.
+
+Audio uses /dev/audio (signed 16-bit little-endian, stereo, 44100 Hz). The
+upstream float mixer and resampler run in a shared-memory process. The usual
+sound, music stream, raw stream and callback APIs retain their roles. Release
+sounds and streams before CloseAudioDevice. Callbacks run in the mixer and
+must not call back into APIs which acquire the audio lock.
+
+games/raydemo -a enables a short sound when Space toggles the animation.
+-n limits the number of frames, for unattended smoke tests. Space pauses,
+arrows rotate the camera, and the mouse wheel changes the viewing distance.
+
+FileRename supports paths within the same directory; moving files between
+directories is not an atomic operation provided by the native file API.
+
+The source revision, licenses and port changes are recorded in UPSTREAM.
+
+Validation (amd64, QEMU with VirGL and an HDA audio device):
+
+    cd /sys/src/libraylib/test
+    mk test
+    ./6.out -a
+
+The -a test requires /dev/audio. It checks generated WAV data, resampling,
+playback, stream pause/resume and device recreation. The default tests check
+file operations, packed component layouts, images, texture updates, screen
+capture and repeated window/context creation. The example needs no assets.
+
+Additional smoke tests used the pinned upstream example assets: OBJ cube,
+IQM guy, glTF robot, M3D Suzanne, VOX fez, the PixAntiqua TrueType font, and
+WAV/OGG/MP3/QOA/XM audio. These downloadable assets are not installed or
+vendored. Rendering and PCM delivery were exercised; the automated VM used
+QEMU's silent audio backend. Other architectures have not been tested.

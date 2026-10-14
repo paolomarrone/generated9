@@ -1,0 +1,13 @@
+</$objtype/mkfile
+
+LIB=/$objtype/lib/libraylib.a
+OFILES=rcore.$O rshapes.$O rtextures.$O rtext.$O rmodels.$O raudio.$O
+HFILES=plan9.h config.h rcamera.h rgestures.h
+HFILES=$HFILES /sys/include/raylib.h /sys/include/raymath.h /sys/include/rlgl.h /sys/include/raymath9.h
+HFILES=$HFILES `{echo external/*.[ch] platforms/*.c}
+CFLAGS=$CFLAGS -p -DPLATFORM_PLAN9 -D_$objtype -DGRAPHICS_API_OPENGL_11 -I.
+
+</sys/src/cmd/mksyslib
+
+%.$O: %.c
+	$CC $CFLAGS -o $target $stem.c

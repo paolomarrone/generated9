@@ -1,0 +1,81 @@
+.TH RAYLIB 2
+.SH NAME
+raylib \- native game and multimedia library
+.SH SYNOPSIS
+.B #include <u.h>
+.br
+.B #include <libc.h>
+.br
+.B #include <raylib.h>
+.SH DESCRIPTION
+Raylib provides window input, 2D drawing, images, text, 3D models,
+cameras, collision tests and audio. This port uses the native C compiler
+and libraries. Compile clients with the
+.B -p
+option; the header selects
+.B libraylib.a
+at link time.
+.PP
+Graphics programs run inside a
+.IR rio (4)
+window. The classic OpenGL renderer uses
+.IR tinygl (2)
+and VirGL through
+.IR gpu (3).
+Frames are copied into the window with
+.IR draw (2).
+Keyboard, mouse, clipboard and URLs use the native files and plumber.
+Window and cursor operations obey rio's focus and placement policy.
+.PP
+Audio uses a shared-memory mixer process writing signed 16-bit stereo PCM
+at 44100 Hz to
+.BR /dev/audio .
+Release sounds and streams before closing the audio device. Audio callbacks
+run under the mixer lock and must not reenter APIs that acquire that lock.
+.PP
+The public headers document the API.
+.B <raymath.h>
+provides vector and matrix helpers;
+.B <rlgl.h>
+exposes the compiled classic rendering interface.
+Clients must not define
+.BR RLGL_IMPLEMENTATION .
+For matrix arrays, store the result of
+.B MatrixToFloatV
+in a named
+.B float16
+and use its
+.B v
+member.
+.SH FILES
+.TP
+.B /sys/src/libraylib/README
+Build instructions, tests and native constraints.
+.TP
+.B /sys/src/libraylib/examples
+Self-contained rotating textured cube demo; run
+.B mk install
+then
+.BR games/raydemo .
+Space pauses, arrows orbit, and the wheel zooms.
+.B -a
+adds a sound on Space;
+.B -n
+limits the number of frames.
+.SH SOURCE
+.B /sys/src/libraylib
+.SH SEE ALSO
+.IR tinygl (2),
+.IR draw (2),
+.IR audio (3),
+.IR gpu (3),
+.IR rio (4)
+.SH BUGS
+The renderer implements the classic OpenGL path. Programmable shaders,
+render textures, instancing and modern OpenGL examples are unavailable.
+Targets are limited to 2048 by 2048 pixels. One window/context per process
+is supported. Window icons, opacity, gamepads and clipboard images are
+unavailable. Only amd64 with QEMU VirGL has been tested.
+.PP
+.B FileRename
+supports renaming within one directory, including paths to that directory.

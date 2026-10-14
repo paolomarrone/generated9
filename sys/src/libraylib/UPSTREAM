@@ -1,0 +1,43 @@
+raylib 6.0
+https://github.com/raysan5/raylib
+Tag: 6.0
+Commit: dbc56a87da87d973a9c5baa4e7438a9d20121d28
+Archive: https://codeload.github.com/raysan5/raylib/tar.gz/refs/tags/6.0
+SHA256: 2b3ee1e2120c7a0796b33062c7e9a694dd8a8caa56a96319ac8c8ecf54a90d0b
+
+Copyright (c) 2013-2026 Ramon Santamaria and contributors.
+The raylib modules retain their zlib/libpng license; see LICENSE.
+Bundled codecs and utilities retain the license notices in their source files.
+
+This is an altered source distribution for generated9, built with the native
+Plan 9 compiler and libraries. The platform backends, build files, examples
+and tests are generated9 contributions under the root LICENSE.
+
+Port changes:
+- Native rio, /dev/kbd, /dev/snarf, plumber, directory and timer interfaces.
+- Classic OpenGL rendering through generated9's TinyGL/VirGL implementation.
+- Native /dev/audio output; the upstream mixer, codecs and miniaudio data
+  converters are retained. Native QLocks implement their synchronization.
+- C library includes and scalar math operations adapted for native libc.
+- Explicit packed Color and Vector3 component arrays, incomplete audio types,
+  packed IQM wire structures, named arrays and local matrix temporaries for
+  the native compiler.
+- Vorbis temporary allocations use the heap with matching frees. An explicit
+  int promotion preserves its negative floor-class sentinel under Plan 9
+  integer promotion rules (2c(1)).
+- Portable bit scanning and native file information; generic file errors in
+  codecs instead of a fabricated POSIX errno. Unused wide-file entry points
+  in miniaudio/MP3 are unavailable; raylib's UTF-8 file names remain supported.
+- Explicit undefinitions in stb_image_resize2 where repeated inclusion would
+  otherwise redefine macros rejected by Plan 9 cpp.
+
+- FileRename converts successful native wstat byte counts to raylib's zero
+  success result and supports rename within one directory.
+- Model/material validity checks honor the classic renderer, which does not
+  use shader IDs or vertex buffer objects.
+
+Public raylib.h, raymath.h and rlgl.h are installed in /sys/include.
+raymath9.h supplies native float-math adapters shared with the port.
+
+Only dependencies of the configured native build are included. Foreign
+window backends, software GL, FLAC and build systems are omitted.
