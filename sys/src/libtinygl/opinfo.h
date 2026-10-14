@@ -44,6 +44,7 @@ ADD_OP(LoadName,1,"%d")
 
 ADD_OP(TexImage2D,2,"%d %p")
 ADD_OP(TexSubImage2D,4,"%d %d %d %p")
+ADD_OP(ClipPlane,5,"%C %f %f %f %f")
 ADD_OP(Scissor,4,"%d %d %d %d")
 ADD_OP(ColorMask,1,"%d")
 ADD_OP(LineWidth,1,"%f")

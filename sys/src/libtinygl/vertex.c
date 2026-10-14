@@ -61,7 +61,7 @@ void glopBegin(GLContext * c, GLParam * p)
     c->vertex_n = 0;
     c->vertex_cnt = 0;
 
-    eye = c->lighting_enabled || type == GL_POINTS;
+    eye = c->lighting_enabled || c->clip_enabled || type == GL_POINTS;
     for(i=0; i<MAX_TEXTURE_UNITS; i++)
         for(j=0; j<4; j++)
             if(c->texunit[i].enabled && c->texunit[i].gen[j]) eye=1;

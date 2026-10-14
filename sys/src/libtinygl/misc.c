@@ -50,7 +50,10 @@ void glopEnableDisable(GLContext *c,GLParam *p)
     c->depth_test = v;
     break;
   default:
-    if (code>=GL_LIGHT0 && code<GL_LIGHT0+MAX_LIGHTS) {
+    if(code >= GL_CLIP_PLANE0 && code < GL_CLIP_PLANE0+MAX_CLIP_PLANES){
+      if(v) c->clip_enabled |= 1<<(code-GL_CLIP_PLANE0);
+      else c->clip_enabled &= ~(1<<(code-GL_CLIP_PLANE0));
+    } else if (code>=GL_LIGHT0 && code<GL_LIGHT0+MAX_LIGHTS) {
       gl_enable_disable_light(c,code - GL_LIGHT0, v);
     } else {
       gl_fatal_error("unsupported capability %x",code);
@@ -223,6 +226,8 @@ glIsEnabled(GLenum cap)
 		return c->texunit[c->active_texture].gen[cap-GL_TEXTURE_GEN_S];
 	case GL_TEXTURE_2D: return c->texunit[c->active_texture].enabled;
 	}
+	if(cap >= GL_CLIP_PLANE0 && cap < GL_CLIP_PLANE0+MAX_CLIP_PLANES)
+		return (c->clip_enabled & (1<<(cap-GL_CLIP_PLANE0))) != 0;
 	if(cap >= GL_LIGHT0 && cap < GL_LIGHT0+MAX_LIGHTS)
 		return c->lights[cap-GL_LIGHT0].enabled;
 	gl_fatal_error("unsupported capability");

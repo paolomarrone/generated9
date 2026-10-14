@@ -746,6 +746,8 @@ void glRotatef(float angle,float x,float y,float z);
 void glTranslatef(float x,float y,float z);
 void glScalef(float x,float y,float z);
 
+void glClipPlane(GLenum plane, const GLdouble *equation);
+void glGetClipPlane(GLenum plane, GLdouble *equation);
 void glViewport(int x,int y,int width,int height);
 void glFrustum(double left,double right,double bottom,double top,
                double near,double far);

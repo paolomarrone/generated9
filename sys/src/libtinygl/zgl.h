@@ -138,6 +138,8 @@ typedef struct GLList {
   /* TODO: extensions for an hash table or a better allocating scheme */
 } GLList;
 
+#define MAX_CLIP_PLANES 6
+
 typedef struct GLVertex {
   V3 normal;
   V4 coord;
@@ -226,6 +228,8 @@ typedef struct GLContext {
   int current_cull_face;
   int cull_face_enabled;
   int normalize_enabled;
+  int clip_enabled;
+  V4 clip_plane[MAX_CLIP_PLANES];
 
   /* clear */
   float clear_depth;
@@ -279,6 +283,7 @@ void gl_pack(GLPixelstore*, int, int, int, int, const uchar*, int, void*);
 void gl_pixel_format(uchar*, int, int);
 
 /* virgl.c */
+void gl_primitive(GLContext*, int, GLVertex**, int);
 void gl_draw_triangle(GLContext*, GLVertex*, GLVertex*, GLVertex*);
 void gl_draw_line(GLContext*, GLVertex*, GLVertex*);
 void gl_draw_point(GLContext*, GLVertex*);

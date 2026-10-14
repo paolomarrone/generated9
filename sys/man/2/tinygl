@@ -26,6 +26,7 @@ TinyGL implements a subset of classic OpenGL using native Plan 9 C.
 Matrix transformations and vertex lighting run on the CPU.
 Clipping, interpolation, rasterization and depth testing use VirGL through
 .IR gpu (3).
+Six additional user clip planes are evaluated on the CPU.
 No Mesa, GLX, external compiler or Linux emulation is required in the guest.
 .PP
 .I Tglinit
@@ -52,6 +53,17 @@ and depth. Clears honor the scissor and write masks. Lines and points support
 sizes from 1 through 64 pixels. Points also support distance attenuation and
 texture sprites. Polygons may be filled, outlined or drawn as points.
 The header declares the available entry points, not a complete GL API.
+.PP
+.B glClipPlane
+captures a plane equation in eye coordinates using the inverse transpose
+of the current modelview matrix. Enable planes individually with
+.B GL_CLIP_PLANE0
+through
+.BR GL_CLIP_PLANE5 .
+Points, lines and polygons retain the nonnegative half-space.
+.B glGetClipPlane
+returns the captured equation. Display lists transform equations when
+executed, not when compiled.
 .PP
 Four texture units provide two-dimensional textures up to 2048 by 2048,
 nearest and linear filtering, mipmaps, repeat/clamp wrapping, texture

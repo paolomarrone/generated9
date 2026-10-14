@@ -53,6 +53,83 @@ texquad(void)
 }
 
 static void
+clipplanes(void)
+{
+	double plane[4] = {1,0,0,0}, got[4];
+	uint list;
+	int i, n;
+
+	glGetIntegerv(GL_MAX_CLIP_PLANES,&n);
+	if(n != 6) sysfatal("clip plane count");
+	glClipPlane(GL_CLIP_PLANE0,plane);
+	glEnable(GL_CLIP_PLANE0);
+	clear();
+	glColor3f(1,0,0);
+	texquad();
+	readback();
+	pixel(16,32,0,0,255,"clipped quad");
+	pixel(48,32,255,0,0,"retained quad");
+
+	glTranslatef(.25,0,0);
+	glClipPlane(GL_CLIP_PLANE0,plane);
+	glLoadIdentity();
+	glGetClipPlane(GL_CLIP_PLANE0,got);
+	if(got[0] != 1 || got[3] != -.25) sysfatal("clip plane eye transform");
+	clear();
+	texquad();
+	readback();
+	pixel(36,32,0,0,255,"captured clip transform");
+	pixel(48,32,255,0,0,"captured clip transform");
+
+	list = glGenLists(1);
+	glNewList(list,GL_COMPILE);
+	glClipPlane(GL_CLIP_PLANE0,plane);
+	glEndList();
+	glTranslatef(-.25,0,0);
+	glCallList(list);
+	glLoadIdentity();
+	glDeleteLists(list,1);
+	glGetClipPlane(GL_CLIP_PLANE0,got);
+	if(got[3] != .25) sysfatal("clip plane display list execution");
+	for(i=0; i<n; i++){
+		memset(plane,0,sizeof plane);
+		plane[i/2] = (i&1) ? -1 : 1;
+		plane[3] = .5;
+		glClipPlane(GL_CLIP_PLANE0+i,plane);
+		glEnable(GL_CLIP_PLANE0+i);
+		if(!glIsEnabled(GL_CLIP_PLANE0+i)) sysfatal("clip enable query");
+	}
+	clear();
+	texquad();
+	readback();
+	pixel(32,32,255,0,0,"six clip planes");
+	pixel(8,32,0,0,255,"six clip planes left");
+	pixel(56,32,0,0,255,"six clip planes right");
+	pixel(32,8,0,0,255,"six clip planes top");
+	pixel(32,56,0,0,255,"six clip planes bottom");
+	clear();
+	glLineWidth(3);
+	glBegin(GL_LINES);
+	glColor3f(0,1,0);
+	glVertex2f(-1,0); glVertex2f(1,0);
+	glEnd();
+	glPointSize(5);
+	glBegin(GL_POINTS);
+	glColor3f(1,0,0);
+	glVertex2f(0,.25); glVertex2f(.75,.25);
+	glEnd();
+	readback();
+	pixel(32,32,0,255,0,"clipped line");
+	pixel(8,32,0,0,255,"discarded line");
+	pixel(32,24,255,0,0,"retained point");
+	pixel(56,24,0,0,255,"discarded point");
+	glLineWidth(1);
+	glPointSize(1);
+	for(i=0; i<n; i++) glDisable(GL_CLIP_PLANE0+i);
+	print("PASS: user clip planes, eye transforms, display lists, triangles, lines and points\n");
+}
+
+static void
 streaming(void)
 {
 	int x, y;
@@ -1021,6 +1098,7 @@ main(int argc, char **argv)
 	glDeleteLists(list, 1);
 	if(glIsList(list)) sysfatal("list not deleted");
 	print("PASS: display list compilation, execution and deletion\n");
+	clipplanes();
 	matrices();
 	geometry();
 	streaming();

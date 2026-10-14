@@ -45,6 +45,10 @@ Local adaptations:
 - Correct scalar/vector argument lengths, material-list parameter ownership,
   linked light removal, local-viewer vector components and color-material
   tracking when enabled or reconfigured.
+- Six user clip planes, captured in eye space through the inverse transpose
+  of the modelview matrix. CPU clipping interpolates vertex attributes and
+  preserves provoking colors before normal VirGL clipping and rasterization.
+  Display lists evaluate plane transformations when executed.
 
 VirGL encoding derives from the existing generated9 examples and
 virglrenderer at 4d8bd3c9954a9599e0de70a2e432c761da80398d.

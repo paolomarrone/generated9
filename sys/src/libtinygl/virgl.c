@@ -439,8 +439,8 @@ blendfactor(int f)
 	return 0;
 }
 
-static void
-primitive(GLContext *c, int mode, GLVertex **v, int n)
+void
+gl_primitive(GLContext *c, int mode, GLVertex **v, int n)
 {
 	Render *r;
 	State s;
@@ -506,30 +506,6 @@ primitive(GLContext *c, int mode, GLVertex **v, int n)
 				p[8+4*k+j] = v[i]->texcoord[k].v[j];
 		}
 	}
-}
-
-void
-gl_draw_triangle(GLContext *c, GLVertex *a, GLVertex *b, GLVertex *d)
-{
-	GLVertex *v[3];
-
-	v[0] = a; v[1] = b; v[2] = d;
-	primitive(c, 4, v, 3);
-}
-
-void
-gl_draw_line(GLContext *c, GLVertex *a, GLVertex *b)
-{
-	GLVertex *v[2];
-
-	v[0] = a; v[1] = b;
-	primitive(c, 1, v, 2);
-}
-
-void
-gl_draw_point(GLContext *c, GLVertex *a)
-{
-	primitive(c, 0, &a, 1);
 }
 
 /* Gallium's clear ignores GL masks and scissors. Draw a rectangle when needed. */

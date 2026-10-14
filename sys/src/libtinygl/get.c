@@ -24,6 +24,9 @@ void glGetIntegerv(int pname,int *params)
   case GL_MAX_PROJECTION_STACK_DEPTH:
     *params = MAX_PROJECTION_STACK_DEPTH;
     break;
+  case GL_MAX_CLIP_PLANES:
+    *params = MAX_CLIP_PLANES;
+    break;
   case GL_MAX_LIGHTS:
     *params = MAX_LIGHTS;
     break;
