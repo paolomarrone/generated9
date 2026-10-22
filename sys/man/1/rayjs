@@ -1,0 +1,167 @@
+.TH RAYJS 1
+.SH NAME
+rayjs, gemrun \- JavaScript graphics and a small 3D game
+.SH SYNOPSIS
+.B rayjs
+[
+.B -m
+.I megabytes
+]
+.I file.js
+[
+.I arg ...
+]
+.PP
+.B games/gemrun
+[
+.B -a
+]
+[
+.B -n
+.I frames
+]
+[
+.B -o
+.I screenshot.png
+]
+.SH DESCRIPTION
+.I Rayjs
+runs QuickJS with a statically linked
+.B raylib
+module for native window input, drawing and sound.
+Graphics require a
+.IR rio (4)
+window and the VirGL stack described in
+.IR gpu (3).
+.PP
+.B scriptArgs
+contains the script path followed by its arguments.
+.B print
+writes arguments to standard output.
+ES modules can import other JavaScript files by relative or absolute path.
+Files ending in
+.B .mjs
+or containing module syntax are evaluated as modules;
+other files are scripts.
+.B -m
+sets the JavaScript heap limit, in MiB (4 through 1024, default 128).
+Native image, model and audio allocations are outside this limit.
+.PP
+The raylib module retains the C API's names and argument order.
+Vectors are objects with
+.B x,
+.B y
+and, for 3D,
+.B z
+fields; colors have integer
+.B r,
+.B g,
+.B b,
+.B a
+fields in 0..255. Cameras have
+.B position,
+.B target,
+.B up,
+.B fovy
+and
+.B projection
+fields. Numeric arguments must be finite numbers.
+The standard raylib color constants have read-only components.
+.PP
+The supported calls are:
+.IP
+InitWindow, CloseWindow, WindowShouldClose, IsWindowReady,
+EnableEventWaiting, DisableEventWaiting, SetTargetFPS, GetFrameTime, GetTime, GetFPS, GetScreenWidth, GetScreenHeight.
+.IP
+BeginDrawing, EndDrawing, ClearBackground, BeginMode3D, EndMode3D.
+.IP
+IsKeyDown, IsKeyPressed, IsKeyReleased, IsMouseButtonDown,
+IsMouseButtonPressed, GetMouseX, GetMouseY, GetMouseWheelMove.
+.IP
+DrawText, DrawFPS, DrawRectangle, DrawCircle, DrawLine,
+DrawCube, DrawCubeWires, DrawSphere, DrawPlane, DrawGrid.
+.IP
+LoadImage, LoadImageFromScreen, ExportImage, GenImageColor, GenImageChecked, UnloadImage,
+LoadTexture, LoadTextureFromImage, UnloadTexture, DrawTextureEx,
+LoadModel, UnloadModel, DrawModel.
+.IP
+InitAudioDevice, CloseAudioDevice, IsAudioDeviceReady,
+LoadSound, LoadSoundFromWave, UnloadSound, PlaySound, StopSound,
+IsSoundPlaying, SetSoundVolume.
+.PP
+Key constants cover arrows, Space, Enter, Escape and W, A, S, D, R, P.
+Mouse constants cover the left, middle and right buttons.
+Camera projections are CAMERA_PERSPECTIVE and CAMERA_ORTHOGRAPHIC.
+.PP
+Resource loaders return opaque objects. Images and textures expose read-only
+.B width
+and
+.B height
+properties. Unload calls are idempotent; other uses of unloaded resources
+throw an exception. Garbage collection and process completion also release
+resources. A model owns its imported material textures.
+.PP
+.B CloseWindow
+releases its textures and models; reopening the window does not revive them.
+.B CloseAudioDevice
+releases all sounds. Images can outlive a window.
+Drawing must be bracketed by BeginDrawing/EndDrawing;
+3D drawing by BeginMode3D/EndMode3D inside a frame.
+CloseWindow requires an ended frame.
+.PP
+LoadSoundFromWave accepts an object with integer
+.B frameCount,
+.B sampleRate,
+.B sampleSize,
+.B channels
+and an
+.B ArrayBuffer
+in
+.B data.
+It copies the samples. Mono/stereo, 8-bit unsigned, 16-bit signed or 32-bit
+floating PCM at 8000..192000 Hz is accepted; multibyte samples use native byte
+order. Buffer length must match the format. Frame count is at most 2646000.
+.PP
+.I Gemrun
+uses rayjs to collect eight gems while avoiding moving sentinels.
+Arrows or WASD move, P pauses, R restarts, and Enter advances after a win.
+Escape exits. Paused and finished games wait for input.
+.B -a
+enables synthesized sound,
+.B -n
+stops after a frame count, and
+.B -o
+saves the final image.
+.SH EXAMPLES
+.EX
+import * as r from 'raylib';
+r.InitWindow(640, 480, 'JavaScript');
+r.SetTargetFPS(60);
+while (!r.WindowShouldClose()) {
+    r.BeginDrawing();
+    r.ClearBackground(r.DARKBLUE);
+    r.DrawText('hello', 20, 20, 24, r.WHITE);
+    r.EndDrawing();
+}
+r.CloseWindow();
+.EE
+.SH SOURCE
+.B /sys/src/cmd/rayjs
+.br
+.B /sys/games/lib/gemrun
+.SH SEE ALSO
+.IR raylib (2),
+.IR tinygl (2),
+.IR gpu (3)
+.br
+.B /sys/src/cmd/rayjs/README
+.SH DIAGNOSTICS
+Script exceptions and unhandled promise rejections print a stack trace and
+produce a failing exit status. An unresolved top-level await is an error.
+.SH BUGS
+This is a subset of raylib. There are no browser, Node.js, std or os modules,
+timers, workers, dynamic C modules or asynchronous I/O.
+Promise jobs run after the main script returns; a synchronous rendering loop
+does not dispatch them. Modules are limited to 16 MiB each.
+Only one window/context is supported. Native graphics errors may terminate
+the process; rayjs is not a sandbox. See raylib(2) for backend limitations.

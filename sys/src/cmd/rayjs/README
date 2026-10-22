@@ -1,0 +1,34 @@
+rayjs for generated9
+
+Rebuild and install /sys/src/cmd/6c first: the bootstrap lacks the comparison
+and register-save fixes needed by QuickJS. Build libgpu, TinyGL and raylib
+(boot/GPU.md), then:
+
+    cd /sys/src/cmd/rayjs
+    mk install
+    games/gemrun
+    games/gemrun -a
+
+mk builds the native QuickJS core from ../quickjs/native as needed.
+The existing APE qjs and qjsc remain independent. No host compiler is needed.
+
+Scripts import the built-in raylib module. See rayjs(1) for the supported
+API and lifetimes, and /sys/games/lib/gemrun for a complete game.
+
+Tests in a rio window with VirGL:
+
+    cd /sys/src/cmd/rayjs
+    mk test
+    ./6.out test/audio.js
+    ./6.out /sys/games/lib/gemrun/main.js -n 120 -o /tmp/gemrun.png
+
+Audio is optional and needs /dev/audio. Tests cover language and module
+loading, numeric behavior, heap/stack limits, drawing state, resource lifetime,
+argument getters, game rules, exceptions and rejected promises. The window
+test writes /tmp/rayjs-pixels.png: green and red squares on a dark blue field,
+a gold model, a magenta sphere and text. Runtime validation: amd64,
+QEMU VirGL and HDA.
+
+QuickJS and raylib versions and licenses are recorded in CREDITS.md and their
+UPSTREAM files. rayjs, Gemrun and its mesh are generated9 contributions under
+the root LICENSE.

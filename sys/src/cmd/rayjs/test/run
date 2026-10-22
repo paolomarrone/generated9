@@ -1,0 +1,29 @@
+#!/bin/rc
+rayjs=$1
+for(t in language closure loop bigint cyclic_import){
+ if(! $rayjs /sys/src/cmd/quickjs/tests/test_$t.js) exit 'language test failed'
+}
+if(! $rayjs -m 4 test/core.js) exit 'core test failed'
+if(! @{
+ timezone='STD 3600 DST 7200
+ 1590000000 1600000000
+'
+ $rayjs test/time.js
+}) exit 'time test failed'
+if(! $rayjs test/world.js) exit 'game test failed'
+if(! $rayjs test/window.js) exit 'window test failed'
+# Each failure must return an error, including module promise rejection.
+tmp=/tmp/rayjs-$pid^.js
+for(source in 'throw Error("expected failure")' 'export const x = await Promise.reject(Error("expected rejection"))' 'export const x = await new Promise(() => {})' 'Promise.reject(Error("unhandled"))'){
+ echo $source > $tmp
+ if($rayjs $tmp){rm -f $tmp; exit 'exception returned success'}
+}
+echo 'Promise.reject(Error("handled")).catch(() => {})' > $tmp
+if(! $rayjs $tmp){rm -f $tmp; exit 'handled rejection failed'}
+if($rayjs test/errors.js > $tmp >[2=1]){rm -f $tmp; exit 'diagnostic returned success'}
+if(! grep -s 'expected diagnostic' $tmp){rm -f $tmp; exit 'missing diagnostic'}
+if(grep -s 'repeated diagnostic' $tmp){rm -f $tmp; exit 'recursive diagnostic'}
+echo 'import * as r from "raylib"; r.InitWindow(320,240,"exception test"); r.EnableEventWaiting(); r.BeginDrawing(); const image=r.GenImageColor(16,16,r.RED); const texture=r.LoadTextureFromImage(image); throw Error("expected graphics failure")' > $tmp
+if($rayjs $tmp){rm -f $tmp; exit 'graphics exception returned success'}
+rm -f $tmp
+echo 'rayjs tests passed'

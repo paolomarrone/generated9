@@ -1,0 +1,24 @@
+</$objtype/mkfile
+
+TARG=rayjs
+BIN=/$objtype/bin
+OFILES=main.$O raylib.$O
+HFILES=rayjs.h ../quickjs/quickjs.h ../quickjs/native.h ../quickjs/plan9.h /sys/include/raylib.h
+CFLAGS=-FTV -p -DPLAN9 -DPLAN9_NATIVE -D_$objtype -I../quickjs
+LIB=/$objtype/lib/libquickjs.a /$objtype/lib/libraylib.a /$objtype/lib/libtinygl.a /$objtype/lib/libgpu.a
+
+</sys/src/cmd/mkone
+
+/$objtype/lib/libquickjs.a: ../quickjs/native/mkfile ../quickjs/mkcore ../quickjs/native/native.c \
+	../quickjs/quickjs.c ../quickjs/cutils.c ../quickjs/libregexp.c \
+	../quickjs/libunicode.c ../quickjs/dtoa.c ../quickjs/support.c \
+	`{echo ../quickjs/*.h ../quickjs/math/*.[ch]}
+	cd ../quickjs/native && mk $MKFLAGS install
+
+test:V: $O.out
+	rc test/run ./$O.out
+
+install:V: $BIN/games/gemrun
+
+$BIN/games/gemrun: gemrun.rc
+	cp $prereq $target

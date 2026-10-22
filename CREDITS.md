@@ -123,6 +123,11 @@ archive SHA-256 `a9a118bbe84d8764da0ea0d28b3ab3fae8477fc7e4085d90102b8596fc7c75e
 [COPYRIGHT](sys/src/cmd/quickjs/math/COPYRIGHT) and individual files retain
 the MIT, Arm, Sun and FreeBSD notices. APE itself is unchanged.
 
+The native embedding build reuses these QuickJS and musl sources.
+[rayjs](sys/src/cmd/rayjs/README), its bindings to the raylib revision below,
+and Gemrun (including its mesh) are new generated9 contributions under the
+root LICENSE.
+
 ## Eigenmath
 
 [Eigenmath](https://github.com/georgeweigt/eigenmath) by George Weigt,

@@ -120,6 +120,9 @@ games/missile
 
 See [raygames(1)](../sys/man/1/raygames) for controls and capture options.
 
+For JavaScript graphics and the Gemrun game, build
+[rayjs](../sys/src/cmd/rayjs/README) after raylib.
+
 ## Tests
 
 Device and pixel tests can run without a display window:

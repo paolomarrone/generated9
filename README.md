@@ -29,10 +29,11 @@ Meanwhile, this is where we differ now:
   on raylib. Built with the Plan 9 C toolchain.
 - [QuickJS](sys/src/cmd/quickjs/README.Plan9) for JavaScript and
   [Eigenmath](sys/src/cmd/eigenmath/README.Plan9) for symbolic mathematics,
-  both built with the Plan 9 toolchain.
+  both built with the Plan 9 toolchain. [rayjs](sys/src/cmd/rayjs/README)
+  connects QuickJS to native raylib; Gemrun is a 3D game written in JavaScript.
 - An optional [Go bootstrap and gojq workflow](boot/README.md#go-and-gojq),
   using upstream's existing Plan 9 support without changes to Go or gojq.
-- Fixes for amd64 compiler comparisons involving NaN and HDA playback
+- Fixes for amd64 compiler NaN comparisons and register spills, HDA playback
   underruns, alongside graphics batching and reduced display copying.
 
 ## Getting started

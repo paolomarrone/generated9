@@ -1,0 +1,2 @@
+#!/bin/rc
+exec rayjs /sys/games/lib/gemrun/main.js $*
