@@ -234,6 +234,90 @@ clocktest(void)
 }
 
 static void
+interrupted(void*, char *msg)
+{
+	if(strcmp(msg, "interrupt") == 0)
+		noted(NCONT);
+	noted(NDFLT);
+}
+
+static void
+blocked(int pid, char *call)
+{
+	char path[64], buf[512], *f[4];
+	int fd, i, n;
+
+	snprint(path, sizeof(path), "/proc/%d/status", pid);
+	fd = open(path, OREAD);
+	if(fd < 0)
+		sysfatal("child status: %r");
+	for(i = 0; i < 1000; i++){
+		n = pread(fd, buf, sizeof(buf)-1, 0);
+		if(n <= 0)
+			break;
+		buf[n] = 0;
+		/* status reports the system call while a process is in the kernel. */
+		if(tokenize(buf, f, nelem(f)) >= 3 && strcmp(f[2], call) == 0){
+			close(fd);
+			return;
+		}
+		sleep(5);
+	}
+	sysfatal("child did not enter %s", call);
+}
+
+static void
+deferred(void)
+{
+	char path[64], buf[256];
+	int ctl, fd, pid, i, n;
+	Waitmsg *w;
+
+	for(i = 0; i < 12; i++){
+		ctl = clone(path, sizeof(path));
+		fd = vmopen(path, "wait", OREAD);
+		if(i%3 == 1 && fprint(ctl, "exc #ud") < 0)
+			sysfatal("first exception: %r");
+		pid = rfork(RFPROC|RFFDG);
+		if(pid < 0)
+			sysfatal("rfork: %r");
+		if(pid == 0){
+			notify(interrupted);
+			if(i%3 == 1){
+				if(fprint(ctl, "exc #ud") < 0)
+					sysfatal("deferred exception: %r");
+			}else{
+				n = read(fd, buf, sizeof(buf)-1);
+				if(i%3 == 2){
+					if(n >= 0)
+						sysfatal("interrupted wait succeeded");
+				}else{
+					if(n <= 0)
+						sysfatal("deferred wait: %r");
+					buf[n] = 0;
+					if(strcmp(buf, "*init 0\n") != 0)
+						sysfatal("unexpected deferred event: %s", buf);
+				}
+			}
+			exits(nil);
+		}
+		blocked(pid, i%3 == 1 ? "Pwrite" : "Pread");
+		if(i%3 == 2){
+			if(postnote(PNPROC, pid, "interrupt") < 0)
+				sysfatal("interrupt wait: %r");
+		}else if(fprint(ctl, "init") < 0)
+			sysfatal("wake deferred command: %r");
+		w = wait();
+		if(w == nil || w->pid != pid || w->msg[0] != 0)
+			sysfatal("deferred command failed: %s", w == nil ? "no child" : w->msg);
+		free(w);
+		close(fd);
+		close(ctl);
+	}
+	print("VMX-QUEUE-PASS: deferred waits, exceptions, INIT and cancellation\n");
+}
+
+static void
 trial(char *mount, int round)
 {
 	char path[64], next[64], name[128], buf[4096];
@@ -337,6 +421,7 @@ main(void)
 
 	rfork(RFNAMEG);
 	clocktest();
+	deferred();
 	snprint(mount, sizeof(mount), "/tmp/vmx-test-%d", getpid());
 	fd = create(mount, OREAD, DMDIR|0700);
 	if(fd < 0)

@@ -293,7 +293,6 @@ struct Vmx {
 	Rendez cmdwait;
 	Lock cmdlock;
 	VmCmd *firstcmd, **lastcmd;
-	VmCmd *postponed;
 	VmMem mem;
 	
 	enum {
@@ -1300,15 +1299,6 @@ killcmds(Vmx *vmx, VmCmd *notme)
 {
 	VmCmd *p, *pn;
 	
-	for(p = vmx->postponed; p != nil; p = pn){
-		pn = p->next;
-		p->next = nil;
-		if(p == notme)
-			continue;
-		kstrcpy(p->errstr, Equit, ERRMAX);
-		cmdrelease(p, CMDFFAIL);
-	}
-	vmx->postponed = nil;
 	ilock(&vmx->cmdlock);
 	for(p = vmx->firstcmd; p != nil; p = pn){
 		pn = p->next;
@@ -1831,89 +1821,55 @@ static int
 gotcmd(void *vmxp)
 {
 	Vmx *vmx = vmxp;
-	return vmx->firstcmd != nil;
-}
-
-static void
-markcmddone(VmCmd *p, VmCmd ***pp)
-{
-	if((p->flags & (CMDFFAIL|CMDFPOSTP)) == CMDFPOSTP){
-		**pp = p;
-		*pp = &p->next;
-	}else{
-		p->flags = p->flags & ~CMDFPOSTP;
-		cmdrelease(p, 0);
-	}
-}
-
-static VmCmd **
-markppcmddone(VmCmd **pp)
-{
 	VmCmd *p;
-	
-	p = *pp;
-	if((p->flags & (CMDFFAIL|CMDFPOSTP)) == CMDFPOSTP)
-		return &p->next;
-	*pp = p->next;
-	p->next = nil;
-	p->flags = p->flags & ~CMDFPOSTP;
-	cmdrelease(p, 0);
-	return pp;
+
+	/* Only this process removes commands; other processes append or cancel. */
+	for(p = vmx->firstcmd; p != nil; p = p->next)
+		if((p->flags & CMDFPOSTP) == 0 || p->scratched)
+			return 1;
+	return 0;
 }
 
-
-static VmCmd **
-runpostponed(Vmx *vmx)
-{
-	VmCmd *p, **pp;
-	
-	for(pp = &vmx->postponed; p = *pp, p != nil; ){
-		if(waserror()){
-			kstrcpy(p->errstr, up->errstr, ERRMAX);
-			p->flags |= CMDFFAIL;
-			pp = markppcmddone(pp);
-			continue;
-		}
-		p->flags &= ~CMDFPOSTP;
-		p->retval = p->cmd(p, p->va);
-		poperror();
-		pp = markppcmddone(pp);
-	}
-	return pp;
-}
-
-static void
+/* Deferred commands stay in the queue without blocking later commands. */
+static int
 runcmd(Vmx *vmx)
 {
 	VmCmd *p, **pp;
+	int progress;
 
-	pp = runpostponed(vmx);
+	progress = 0;
+	pp = &vmx->firstcmd;
 	for(;;){
 		ilock(&vmx->cmdlock);
-		p = vmx->firstcmd;
-		if(p == nil){
-			iunlock(&vmx->cmdlock);
-			break;
-		}
-		vmx->firstcmd = p->next;
-		if(vmx->lastcmd == &p->next)
-			vmx->lastcmd = &vmx->firstcmd;
+		p = *pp;
 		iunlock(&vmx->cmdlock);
-		p->next = nil;
+		if(p == nil)
+			break;
+		p->flags &= ~CMDFPOSTP;
 		if(waserror()){
 			kstrcpy(p->errstr, up->errstr, ERRMAX);
 			p->flags |= CMDFFAIL;
-			markcmddone(p, &pp);
-			continue;
+		}else{
+			if(p->scratched)
+				error(Eintr);
+			p->retval = p->cmd(p, p->va);
+			poperror();
 		}
-		if(p->scratched)
-			error(Eintr);
-		p->retval = p->cmd(p, p->va);
-		poperror();
-		markcmddone(p, &pp);
+		ilock(&vmx->cmdlock);
+		if((p->flags & (CMDFFAIL|CMDFPOSTP)) == CMDFPOSTP){
+			pp = &p->next;
+			iunlock(&vmx->cmdlock);
+		}else{
+			*pp = p->next;
+			if(vmx->lastcmd == &p->next)
+				vmx->lastcmd = pp;
+			p->next = nil;
+			iunlock(&vmx->cmdlock);
+			cmdrelease(p, 0);
+			progress = 1;
+		}
 	}
-	/* A command may satisfy a wait while leaving the CPU stopped (INIT). */
-	runpostponed(vmx);
+	return progress;
 }
 
 static void
@@ -1940,7 +1896,9 @@ vmxproc(void *vmxp)
 			vmx->state = VMXREADY;
 			defprocbctls = vmcsread(PROCB_CTLS);
 		}
-		runcmd(vmx);
+		/* INIT can satisfy an earlier wait without entering the guest. */
+		while(runcmd(vmx))
+			;
 		if(vmx->state == VMXRUNNING){
 			/* Let the awakened monitor run before reentering a busy guest. */
 			yield();
@@ -1968,7 +1926,9 @@ vmxproc(void *vmxp)
 					procbctls |= PROCB_NMIWIN;
 			}
 			if((vmx->onentry & POSTIRQ) != 0 && (vmx->onentry & STEP) == 0){
-				if(!injected && (vmcsread(GUEST_RFLAGS) & 1<<9) != 0 && (vmcsread(GUEST_CANINTR) & 3) == 0){
+				if(!injected
+				&& (vmcsread(GUEST_RFLAGS) & 1<<9) != 0
+				&& (vmcsread(GUEST_CANINTR) & 3) == 0){
 					vmcswrite(VMENTRY_INTRINFO, vmx->irq.info);
 					vmcswrite(VMENTRY_INTRCODE, vmx->irq.code);
 					vmcswrite(VMENTRY_INTRILEN, vmx->irq.ilen);

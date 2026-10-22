@@ -8,6 +8,7 @@ struct NDir
 {
 	Dir *d;
 	char	*prefix;
+	char	*name;
 };
 
 int	errs = 0;
@@ -36,7 +37,6 @@ void	growto(long);
 void	dowidths(Dir*);
 void	format(Dir*, char*);
 void	output(void);
-char*	xcleanname(char*);
 ulong	clk;
 int	swidth;			/* max width of -s size */
 int	qwidth;			/* max width of -q version */
@@ -50,6 +50,7 @@ Biobuf	bin;
 void
 main(int argc, char *argv[])
 {
+	char dot[] = ".";
 	int i;
 
 	Binit(&bin, 1, OWRITE);
@@ -77,7 +78,7 @@ main(int argc, char *argv[])
 	if(lflag)
 		clk = time(0);
 	if(argc == 0)
-		errs = ls(".", 0);
+		errs = ls(dot, 0);
 	else for(i=0; i<argc; i++)
 		errs |= ls(argv[i], 1);
 	output();
@@ -92,6 +93,7 @@ ls(char *s, int multi)
 	char *p;
 	Dir *db;
 
+	cleanname(s);
 	db = dirstat(s);
 	if(db == nil){
     error:
@@ -107,11 +109,11 @@ ls(char *s, int multi)
 		n = dirreadall(fd, &db);
 		if(n < 0)
 			goto error;
-		xcleanname(s);
 		growto(ndir+n);
 		for(i=0; i<n; i++){
-			dirbuf[ndir+i].d = db+i;
+			dirbuf[ndir+i].d = &db[i];
 			dirbuf[ndir+i].prefix = multi? s : 0;
+			dirbuf[ndir+i].name = db[i].name;
 		}
 		ndir += n;
 		close(fd);
@@ -120,10 +122,17 @@ ls(char *s, int multi)
 		growto(ndir+1);
 		dirbuf[ndir].d = db;
 		dirbuf[ndir].prefix = 0;
-		xcleanname(s);
+		dirbuf[ndir].name = s;
 		p = utfrrune(s, '/');
 		if(p){
+			/*
+			 * if we 'ls foo/.', we don't want to
+			 * replace '.' with the name from the
+			 * dir and get 'foo/foo'; intead, use
+			 * the name we used to get here.
+			 */
 			dirbuf[ndir].prefix = s;
+			dirbuf[ndir].name = p+1;
 			*p = 0;
 		}
 		ndir++;
@@ -134,22 +143,24 @@ ls(char *s, int multi)
 void
 output(void)
 {
+	char *p;
 	int i;
-	char buf[4096];
-	char *s;
 
 	if(!nflag)
 		qsort(dirbuf, ndir, sizeof dirbuf[0], (int (*)(void*, void*))compar);
 	for(i=0; i<ndir; i++)
 		dowidths(dirbuf[i].d);
 	for(i=0; i<ndir; i++) {
-		if(!pflag && (s = dirbuf[i].prefix)) {
-			if(strcmp(s, "/") ==0)	/* / is a special case */
-				s = "";
-			sprint(buf, "%s/%s", s, dirbuf[i].d->name);
-			format(dirbuf[i].d, buf);
-		} else
-			format(dirbuf[i].d, dirbuf[i].d->name);
+		if(!pflag && dirbuf[i].prefix){
+			if(strcmp(dirbuf[i].prefix, "/") == 0)
+				p = smprint("/%s", dirbuf[i].name);
+			else
+				p = smprint("%s/%s", dirbuf[i].prefix, dirbuf[i].name);
+		}else{
+			p = smprint("%s", dirbuf[i].name);
+		}
+		format(dirbuf[i].d, p);
+		free(p);
 	}
 	ndir = 0;
 	Bflush(&bin);
@@ -162,12 +173,12 @@ dowidths(Dir *db)
 	int n;
 
 	if(sflag) {
-		n = sprint(buf, "%llud", (db->length+1023)/1024);
+		n = snprint(buf, sizeof(buf), "%llud", (db->length+1023)/1024);
 		if(n > swidth)
 			swidth = n;
 	}
 	if(qflag) {
-		n = sprint(buf, "%lud", db->qid.vers);
+		n = snprint(buf, sizeof(buf), "%lud", db->qid.vers);
 		if(n > qwidth)
 			qwidth = n;
 	}
@@ -177,16 +188,16 @@ dowidths(Dir *db)
 			mwidth = n;
 	}
 	if(lflag) {
-		n = sprint(buf, "%ud", db->dev);
+		n = snprint(buf, sizeof(buf), "%ud", db->dev);
 		if(n > vwidth)
 			vwidth = n;
-		n = sprint(buf, "%q", db->uid);
+		n = snprint(buf, sizeof(buf), "%q", db->uid);
 		if(n > uwidth)
 			uwidth = n;
-		n = sprint(buf, "%q", db->gid);
+		n = snprint(buf, sizeof(buf), "%q", db->gid);
 		if(n > gwidth)
 			gwidth = n;
-		n = sprint(buf, "%llud", db->length);
+		n = snprint(buf, sizeof(buf), "%llud", db->length);
 		if(n > lwidth)
 			lwidth = n;
 	}
@@ -301,25 +312,4 @@ asciitime(long l)
 		memmove(buf, t+4, 12);		/* skip day of week */
 	buf[12] = 0;
 	return buf;
-}
-
-/*
- * Compress slashes, remove trailing slash.  Don't worry about . and ..
- */
-char*
-xcleanname(char *name)
-{
-	char *r, *w;
-
-	for(r=w=name; *r; r++){
-		if(*r=='/' && r>name && *(r-1)=='/')
-			continue;
-		if(w != r)
-			*w = *r;
-		w++;
-	}
-	*w = 0;
-	while(w-1>name && *(w-1)=='/')
-		*--w = 0;
-	return name;
 }

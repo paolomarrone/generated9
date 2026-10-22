@@ -94,8 +94,9 @@ CPU count:
 	mk test/6.plan9
 	test/6.plan9 2
 
-The first checks TSC, exits, stepping and CPU/mapping lifetime. The second
-checks CPU count, pinned processes, shared atomics, floating point and time.
+The first checks TSC, exits, stepping, deferred commands and CPU/mapping
+lifetime. The second checks CPU count, pinned processes, shared atomics,
+floating point and time.
 
 From the Linux host, test/run builds the monitor and boots nested Linux:
 
