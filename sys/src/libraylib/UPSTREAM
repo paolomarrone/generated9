@@ -37,6 +37,8 @@ Port changes:
   success result and supports rename within one directory.
 - Model/material validity checks honor the classic renderer, which does not
   use shader IDs or vertex buffer objects.
+- DrawSphereEx rotates saved vertex values; native structure constructors
+  write directly into their destination, so input and output must not alias.
 - CPU animation updates also work without vertex buffer objects; the classic
   renderer reads the animated vertex arrays directly. UnloadModel releases
   the current pose and bone matrices together with the skeleton.

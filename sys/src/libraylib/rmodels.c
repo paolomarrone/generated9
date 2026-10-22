@@ -510,10 +510,11 @@ void DrawSphereEx(Vector3 centerPos, float radius, int rings, int slices, Color 
             {
                 for (int j = 0; j < slices; j++)
                 {
+                    // Read the saved vertices: native structure constructors write fields in place.
                     vertices[0] = vertices[2]; // Rotate around y axis to set up vertices for next face
                     vertices[1] = vertices[3];
-                    vertices[2] = (Vector3){ cosslice*vertices[2].x - sinslice*vertices[2].z, vertices[2].y, sinslice*vertices[2].x + cosslice*vertices[2].z }; // Rotation matrix around y axis
-                    vertices[3] = (Vector3){ cosslice*vertices[3].x - sinslice*vertices[3].z, vertices[3].y, sinslice*vertices[3].x + cosslice*vertices[3].z };
+                    vertices[2] = (Vector3){ cosslice*vertices[0].x - sinslice*vertices[0].z, vertices[0].y, sinslice*vertices[0].x + cosslice*vertices[0].z }; // Rotation matrix around y axis
+                    vertices[3] = (Vector3){ cosslice*vertices[1].x - sinslice*vertices[1].z, vertices[1].y, sinslice*vertices[1].x + cosslice*vertices[1].z };
 
                     rlNormal3f(vertices[0].x, vertices[0].y, vertices[0].z);
                     rlVertex3f(vertices[0].x, vertices[0].y, vertices[0].z);
@@ -531,7 +532,7 @@ void DrawSphereEx(Vector3 centerPos, float radius, int rings, int slices, Color 
                 }
 
                 vertices[2] = vertices[3]; // Rotate around z axis to set up  starting vertices for next ring
-                vertices[3] = (Vector3){ cosring*vertices[3].x + sinring*vertices[3].y, -sinring*vertices[3].x + cosring*vertices[3].y, vertices[3].z }; // Rotation matrix around z axis
+                vertices[3] = (Vector3){ cosring*vertices[2].x + sinring*vertices[2].y, -sinring*vertices[2].x + cosring*vertices[2].y, vertices[2].z }; // Rotation matrix around z axis
             }
         rlEnd();
     rlPopMatrix();
