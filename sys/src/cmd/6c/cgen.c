@@ -3,6 +3,21 @@
 /* ,x/^(print|prtree)\(/i/\/\/ */
 int castup(Type*, Type*);
 
+/* A fixed register can hold a wider value than the operation borrowing it. */
+static void
+savereg(Node *save, Node *reg, Node *n)
+{
+	Node full;
+
+	full = *n;
+	full.type = types[TUVLONG];
+	regsalloc(save, &full);
+	/* The slot can also replace an operand of the borrowing expression. */
+	save->type = n->type;
+	save->etype = n->type->etype;
+	gins(AMOVQ, reg, save);
+}
+
 void
 cgen(Node *n, Node *nn)
 {
@@ -191,11 +206,10 @@ cgen(Node *n, Node *nn)
 		 * get nod to be D_CX
 		 */
 		if(nodreg(&nod, nn, D_CX)) {
-			regsalloc(&nod1, n);
-			gmove(&nod, &nod1);
+			savereg(&nod1, &nod, n);
 			cgen(n, &nod);		/* probably a bug */
 			gmove(&nod, nn);
-			gmove(&nod1, &nod);
+			gins(AMOVQ, &nod1, &nod);
 			break;
 		}
 		reg[D_CX]++;
@@ -374,8 +388,7 @@ cgen(Node *n, Node *nn)
 		 * get nod1 to be D_DX
 		 */
 		if(nodreg(&nod, nn, D_AX)) {
-			regsalloc(&nod2, n);
-			gmove(&nod, &nod2);
+			savereg(&nod2, &nod, n);
 			v = reg[D_AX];
 			reg[D_AX] = 0;
 
@@ -391,13 +404,12 @@ cgen(Node *n, Node *nn)
 			} else
 				cgen(n, nn);
 
-			gmove(&nod2, &nod);
+			gins(AMOVQ, &nod2, &nod);
 			reg[D_AX] = v;
 			break;
 		}
 		if(nodreg(&nod1, nn, D_DX)) {
-			regsalloc(&nod2, n);
-			gmove(&nod1, &nod2);
+			savereg(&nod2, &nod1, n);
 			v = reg[D_DX];
 			reg[D_DX] = 0;
 
@@ -413,7 +425,7 @@ cgen(Node *n, Node *nn)
 			} else
 				cgen(n, nn);
 
-			gmove(&nod2, &nod1);
+			gins(AMOVQ, &nod2, &nod1);
 			reg[D_DX] = v;
 			break;
 		}
@@ -484,12 +496,11 @@ cgen(Node *n, Node *nn)
 		 * get nod to be D_CX
 		 */
 		if(nodreg(&nod, nn, D_CX)) {
-			regsalloc(&nod1, n);
-			gmove(&nod, &nod1);
+			savereg(&nod1, &nod, n);
 			cgen(n, &nod);
 			if(nn != Z)
 				gmove(&nod, nn);
-			gmove(&nod1, &nod);
+			gins(AMOVQ, &nod1, &nod);
 			break;
 		}
 		reg[D_CX]++;
@@ -706,8 +717,7 @@ cgen(Node *n, Node *nn)
 		 * get nod1 to be D_DX
 		 */
 		if(nodreg(&nod, nn, D_AX)) {
-			regsalloc(&nod2, n);
-			gmove(&nod, &nod2);
+			savereg(&nod2, &nod, n);
 			v = reg[D_AX];
 			reg[D_AX] = 0;
 
@@ -723,13 +733,12 @@ cgen(Node *n, Node *nn)
 			} else
 				cgen(n, nn);
 
-			gmove(&nod2, &nod);
+			gins(AMOVQ, &nod2, &nod);
 			reg[D_AX] = v;
 			break;
 		}
 		if(nodreg(&nod1, nn, D_DX)) {
-			regsalloc(&nod2, n);
-			gmove(&nod1, &nod2);
+			savereg(&nod2, &nod1, n);
 			v = reg[D_DX];
 			reg[D_DX] = 0;
 
@@ -745,7 +754,7 @@ cgen(Node *n, Node *nn)
 			} else
 				cgen(n, nn);
 
-			gmove(&nod2, &nod1);
+			gins(AMOVQ, &nod2, &nod1);
 			reg[D_DX] = v;
 			break;
 		}

@@ -4,10 +4,12 @@ test:V:
 	for(mode in optimized unoptimized){
 		flags=()
 		if(~ $mode unoptimized) flags=-N
-		../$O.out $flags -o compare.6 compare.c
-		6l -o 6.compare compare.6
-		./6.compare
+		for(t in compare spill){
+			../$O.out $flags -o $t.6 $t.c
+			6l -o 6.$t $t.6
+			./6.$t
+		}
 	}
 
 clean nuke:V:
-	rm -f compare.6 6.compare
+	rm -f compare.6 6.compare spill.6 6.spill

@@ -10,6 +10,9 @@ function assert(actual, expected) {
 }
 
 function test_numbers() {
+    // Date.now() must retain the high bits of the millisecond timestamp.
+    const wall = os.now();
+    assert(Math.abs(Date.now() - wall) < 5000);
     assert(NaN === NaN, false);
     assert(NaN == 0, false);
     assert(NaN < 0, false);

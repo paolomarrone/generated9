@@ -55,7 +55,8 @@ install userland, run `cd /sys/src` and `mk install` inside generated9.
 
 ## Native programs
 
-QuickJS and Eigenmath need the amd64 compiler's NaN comparison fix.
+QuickJS needs the amd64 compiler's NaN comparison and register-save fixes;
+Eigenmath needs the comparison fix.
 Rebuild `6c` before building either port, then clean any old port objects:
 
 ```rc
