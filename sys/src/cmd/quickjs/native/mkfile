@@ -1,0 +1,18 @@
+</$objtype/mkfile
+
+LIB=/$objtype/lib/libquickjs.a
+<../mkcore
+OFILES=${QJSCORE:%=%.$O} ${QJSMATH:%=math_%.$O} native.$O
+HFILES=../native.h ../plan9.h `{echo ../*.h ../math/*.h}
+CFLAGS=-p -DPLAN9 -DPLAN9_NATIVE -D_$objtype -I..
+
+</sys/src/cmd/mksyslib
+
+%.$O: ../%.c
+	$CC $CFLAGS -o $target ../$stem.c
+
+math_%.$O: ../math/%.c
+	$CC $CFLAGS -o $target ../math/$stem.c
+
+native.$O: native.c
+	$CC $CFLAGS -o $target native.c

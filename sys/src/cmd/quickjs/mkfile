@@ -2,20 +2,8 @@
 
 TARG=qjs qjsc
 BIN=/$objtype/bin
-OFILES=quickjs.$O quickjs-libc.$O cutils.$O \
-	libregexp.$O libunicode.$O dtoa.$O plan9.$O poll9.$O \
-	math/__cos.$O math/__expo2.$O math/__math_divzero.$O math/__math_invalid.$O \
-	math/__math_oflow.$O math/__math_uflow.$O math/__math_xflow.$O math/__rem_pio2.$O \
-	math/__rem_pio2_large.$O math/__sin.$O math/__tan.$O math/acos.$O \
-	math/acosh.$O math/asin.$O math/asinh.$O math/atan.$O \
-	math/atan2.$O math/atanh.$O math/cbrt.$O math/ceil.$O \
-	math/cos.$O math/cosh.$O math/exp.$O math/exp_data.$O \
-	math/expm1.$O math/fabs.$O math/floor.$O math/fmod.$O \
-	math/frexp.$O math/hypot.$O math/ldexp.$O math/log.$O math/log10.$O \
-	math/log1p.$O math/log2.$O math/log2_data.$O math/log_data.$O \
-	math/modf.$O math/pow.$O math/pow_data.$O math/round.$O \
-	math/scalbn.$O math/sin.$O math/sinh.$O math/sqrt.$O \
-	math/sqrt_data.$O math/tan.$O math/tanh.$O math/trunc.$O
+<mkcore
+OFILES=${QJSCORE:%=%.$O} ${QJSMATH:%=math/%.$O} quickjs-libc.$O plan9.$O poll9.$O
 HFILES=poll9.h quickjs.h quickjs-libc.h cutils.h plan9.h list.h \
 	dtoa.h libregexp.h libunicode.h libunicode-table.h \
 	quickjs-atom.h quickjs-opcode.h libregexp-opcode.h \

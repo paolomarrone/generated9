@@ -24,7 +24,11 @@
 #ifndef LIBUNICODE_H
 #define LIBUNICODE_H
 
+#ifdef PLAN9_NATIVE
+#include "native.h"
+#else
 #include <stdint.h>
+#endif
 
 /* unicode standard version */
 #define LIBUNICODE_UNICODE_VERSION_MAJOR 17

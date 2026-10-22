@@ -1,5 +1,7 @@
 #include "libm.h"
+#ifndef PLAN9_NATIVE
 #include <stdint.h>
+#endif
 
 double fmod(double x, double y)
 {

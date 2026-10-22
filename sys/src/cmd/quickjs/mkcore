@@ -1,0 +1,12 @@
+QJSCORE=quickjs cutils libregexp libunicode dtoa support
+QJSMATH=\
+	__cos __expo2 __math_divzero __math_invalid __math_oflow \
+	__math_uflow __math_xflow __rem_pio2 __rem_pio2_large __sin \
+	__tan acos acosh asin asinh \
+	atan atan2 atanh cbrt ceil \
+	cos cosh exp exp_data expm1 \
+	fabs floor fmod frexp hypot \
+	ldexp log log10 log1p log2 \
+	log2_data log_data modf pow pow_data \
+	round scalbn sin sinh sqrt \
+	sqrt_data tan tanh trunc

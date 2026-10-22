@@ -1,5 +1,7 @@
 #include "libm.h"
+#ifndef PLAN9_NATIVE
 #include <stdint.h>
+#endif
 
 double scalbn(double x, int n)
 {

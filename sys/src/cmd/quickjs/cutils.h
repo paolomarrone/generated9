@@ -25,9 +25,13 @@
 #ifndef CUTILS_H
 #define CUTILS_H
 
+#ifdef PLAN9_NATIVE
+#include "native.h"
+#else
 #include <stdlib.h>
 #include <string.h>
 #include <inttypes.h>
+#endif
 
 #ifdef PLAN9
 #include "plan9.h"

@@ -1,7 +1,9 @@
 /* Compressed unicode tables */
 /* Automatically generated file - do not edit */
 
+#ifndef PLAN9_NATIVE
 #include <stdint.h>
+#endif
 
 static const uint32_t case_conv_table1[378] = {
     0x00209a30, 0x00309a00, 0x005a8173, 0x00601730,

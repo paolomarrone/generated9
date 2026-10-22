@@ -2,7 +2,9 @@
 #define _LIBM_H
 
 #include "../plan9.h"
+#ifndef PLAN9_NATIVE
 #include <float.h>
+#endif
 
 typedef double double_t;
 #define FLT_EVAL_METHOD 0

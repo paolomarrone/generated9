@@ -1,6 +1,8 @@
 #include "libm.h"
+#ifndef PLAN9_NATIVE
 #include <stdint.h>
 #include <float.h>
+#endif
 
 #if FLT_EVAL_METHOD > 1U && LDBL_MANT_DIG == 64
 #define SPLIT (4294967296.0 + 1)

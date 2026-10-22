@@ -25,9 +25,13 @@
 #ifndef QUICKJS_H
 #define QUICKJS_H
 
+#ifdef PLAN9_NATIVE
+#include "native.h"
+#else
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
+#endif
 
 #ifdef PLAN9
 #include "plan9.h"

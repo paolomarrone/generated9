@@ -1,6 +1,9 @@
 #ifndef QUICKJS_PLAN9_H
 #define QUICKJS_PLAN9_H
 
+#ifdef PLAN9_NATIVE
+#include "native.h"
+#else
 #include <stdlib.h>
 #include <stdint.h>
 #include <math.h>
@@ -9,6 +12,7 @@
 #define INTPTR_MAX INT64_MAX
 #else
 #define INTPTR_MAX INT32_MAX
+#endif
 #endif
 #define UINT64_C(n) n##ULL
 #define CONFIG_VERSION "2026-06-04"

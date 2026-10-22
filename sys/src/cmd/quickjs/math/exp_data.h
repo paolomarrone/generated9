@@ -6,7 +6,9 @@
 #define _EXP_DATA_H
 
 #include "libm.h"
+#ifndef PLAN9_NATIVE
 #include <stdint.h>
+#endif
 
 #define EXP_TABLE_BITS 7
 #define EXP_POLY_ORDER 5

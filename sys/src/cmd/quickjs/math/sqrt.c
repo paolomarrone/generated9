@@ -1,5 +1,7 @@
+#ifndef PLAN9_NATIVE
 #include <stdint.h>
 #include <math.h>
+#endif
 #include "libm.h"
 #include "sqrt_data.h"
 

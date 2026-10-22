@@ -22,10 +22,15 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+#ifdef PLAN9_NATIVE
+#include "native.h"
+#else
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
+
+#endif
 
 #include "cutils.h"
 

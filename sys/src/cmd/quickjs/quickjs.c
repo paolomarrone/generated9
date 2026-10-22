@@ -22,6 +22,9 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+#ifdef PLAN9_NATIVE
+#include "native.h"
+#else
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
@@ -40,6 +43,8 @@
 #include <malloc.h>
 #elif defined(__FreeBSD__)
 #include <malloc_np.h>
+#endif
+
 #endif
 
 #include "cutils.h"
@@ -47301,7 +47306,12 @@ static int getTimezoneOffset(int64_t time)
         }
     }
     ti = time;
-#if defined(_WIN32) || defined(PLAN9)
+#if defined(PLAN9_NATIVE)
+    {
+        Tm tm;
+        res = -tmtime(&tm, ti, tzload("local"))->tzoff / 60;
+    }
+#elif defined(_WIN32) || defined(PLAN9)
     {
         struct tm *tm;
         time_t gm_ti, loc_ti;

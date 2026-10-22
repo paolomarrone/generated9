@@ -1,0 +1,13 @@
+Native QuickJS core
+
+    mk install
+
+Builds /$objtype/lib/libquickjs.a with the Plan 9 compiler and native libc.
+The source and math routines are shared with the APE build; see ../UPSTREAM.
+Native libc support is in ../native.h and native.c. No std/os event
+loop or POSIX I/O layer is included. The first client is ../../rayjs.
+
+Compile clients with -p -DPLAN9 -DPLAN9_NATIVE -D_$objtype and include
+../quickjs.h, which supplies the native headers. Link libquickjs.a before
+other libraries so its IEEE 754 math implementations are selected.
+For tests, run mk test in ../../rayjs (native) and .. (APE).

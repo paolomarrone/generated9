@@ -24,8 +24,12 @@
 #ifndef LIBREGEXP_H
 #define LIBREGEXP_H
 
+#ifdef PLAN9_NATIVE
+#include "native.h"
+#else
 #include <stddef.h>
 #include <stdint.h>
+#endif
 
 #define LRE_FLAG_GLOBAL     (1 << 0)
 #define LRE_FLAG_IGNORECASE (1 << 1)

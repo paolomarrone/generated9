@@ -18,7 +18,9 @@
  */
 
 #include "libm.h"
+#ifndef PLAN9_NATIVE
 #include <stdint.h>
+#endif
 
 static const double
 ivln10hi  = 4.34294481878168880939e-01, /* 0x3fdbcb7b, 0x15200000 */

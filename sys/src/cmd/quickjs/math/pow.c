@@ -5,8 +5,10 @@
  * SPDX-License-Identifier: MIT
  */
 
+#ifndef PLAN9_NATIVE
 #include <math.h>
 #include <stdint.h>
+#endif
 #include "libm.h"
 #include "exp_data.h"
 #include "pow_data.h"

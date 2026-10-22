@@ -2,7 +2,9 @@
 #define _SQRT_DATA_H
 
 #include "libm.h"
+#ifndef PLAN9_NATIVE
 #include <stdint.h>
+#endif
 
 /* if x in [1,2): i = (int)(64*x);
    if x in [2,4): i = (int)(32*x-64);
