@@ -400,7 +400,7 @@ wantoffer(uchar *pkt)
 	if(nhgets(ph->sessid) != 0x0000)
 		return bad("bad session id");
 
-	for(i=0;; i++){
+	for(i=0; srvname[0] != '\0'; i++){
 		if((s = findtag(pkt, TagSrvName, &len, i)) == nil)
 			return bad("no matching service name");
 		if(len == strlen(srvname) && memcmp(s, srvname, len) == 0)

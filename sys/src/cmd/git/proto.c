@@ -46,8 +46,8 @@ parsecaps(char *caps, Conn *c)
 			if((t = strchr(s, ':')) == nil)
 				continue;
 			*t++ = '\0';
-			snprint(c->symfrom, sizeof(c->symfrom), s);
-			snprint(c->symto, sizeof(c->symto), t);
+			snprint(c->symfrom, sizeof(c->symfrom), "%s", s);
+			snprint(c->symto, sizeof(c->symto), "%s", t);
 		}
 	}
 }

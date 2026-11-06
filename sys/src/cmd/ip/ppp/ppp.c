@@ -2222,9 +2222,20 @@ getchap(PPP *ppp, Block *b)
 	vlen = m->data[0];
 	switch(m->code){
 	case Cchallenge:
+		if(vlen > len - 5 || vlen < 1) {
+			netlog("ppp: chap: bad challenge len\n");
+			break;
+		}
+		/* challenge */
+		p = m->data+1;
+		n = vlen;
 		id = m->id;
+		if(c->proto == APmd5){
+			*(--p) = id; /* prepend message id */
+			n++;
+		}
 		memset(ppp->chapname, 0, sizeof(ppp->chapname));
-		nresp = auth_respondAI(m->data+1, vlen,
+		nresp = auth_respondAI(p, n,
 			ppp->chapname, sizeof(ppp->chapname), 
 			resp, sizeof(resp), &c->ai,
 			auth_getkey,

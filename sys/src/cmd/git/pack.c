@@ -1129,7 +1129,7 @@ expandprefix(Hash *rh, Hash h, int npfx)
 	for(i = 0; i < npackf; i++)
 		if(searchindex(packf[i].idx, packf[i].nidx, h, npfx, rh) != -1)
 			return 0;
-	sprint(buf, ".git/objects/%x", h.h[0]);
+	sprint(buf, ".git/objects/%02x", h.h[0]);
 	if((fd = open(buf, OREAD)) == -1)
 		return -1;
 	ndir = dirreadall(fd, &d);
@@ -1137,7 +1137,7 @@ expandprefix(Hash *rh, Hash h, int npfx)
 	if(ndir == -1)
 		return -1;
 	for(i = 0; i < ndir; i++){
-		snprint(buf, sizeof(buf), "%x%s", h.h[0], d[i].name);
+		snprint(buf, sizeof(buf), "%02x%s", h.h[0], d[i].name);
 		if(hparse(rh, buf) == 0 && hashcmp(h.h, rh->h, npfx) == 0){
 			free(d);
 			return 0;

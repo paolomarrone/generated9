@@ -217,6 +217,10 @@ segmentremove(Chan *c)
 	lock(&globalseglock);
 	x = SEG(c);
 	g = globalseg[x];
+	if(g != nil && strcmp(g->uid, up->user) && !iseve()){
+		unlock(&globalseglock);
+		error(Eperm);
+	}
 	globalseg[x] = nil;
 	unlock(&globalseglock);
 	if(g != nil)
@@ -248,6 +252,9 @@ segmentcreate(Chan *c, char *name, int omode, ulong perm)
 	Globalseg *g;
 
 	if(TYPE(c) != Qtopdir)
+		error(Eperm);
+
+	if(strcmp("none", up->user) == 0)
 		error(Eperm);
 
 	if(strlen(name) >= sizeof(up->genbuf))

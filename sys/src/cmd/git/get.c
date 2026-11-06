@@ -331,7 +331,7 @@ skip:;
 		if(hasheq(&have[i], &Zhash) || oshas(&hadobj, have[i]))
 			continue;
 		if((o = readobject(have[i])) == nil)
-			sysfatal("missing exected object: %H", have[i]);
+			sysfatal("missing expected object: %H", have[i]);
 		if(fmtpkt(c, "have %H", o->hash) == -1)
 			sysfatal("write: %r");
 		enqueueparent(&haveq, o);
@@ -347,7 +347,7 @@ skip:;
 	 */
 	for(i = 0; i < nheads; i++){
 		if((o = readobject(heads[i])) == nil)
-			sysfatal("missing exected object: %H", have[i]);
+			sysfatal("missing expected object: %H", heads[i]);
 		if(fmtpkt(c, "have %H", o->hash) == -1)
 			sysfatal("write: %r");
 		enqueueparent(&haveq, o);

@@ -271,7 +271,7 @@ parseconf(Usbdev *d, Conf *c, uchar *b, int n)
 	}
 	c->cval = dc->bConfigurationValue;
 	c->attrib = dc->bmAttributes;
-	c->milliamps = dc->MaxPower*2;
+	c->milliamps = dc->MaxPower * ((d->ver >= 0x0300)? 8: 2);
 	l = GET2(dc->wTotalLength);
 	if(n < l){
 		werrstr("truncated configuration info");

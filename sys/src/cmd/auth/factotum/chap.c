@@ -35,7 +35,7 @@ enum {
 
 static int dochal(State *s);
 static int doreply(State *s, uchar *reply, int nreply);
-static int dochap(char *passwd, int id, char chal[ChapChallen], uchar *resp, int resplen);
+static int dochap(char *passwd, char id, char *chal, int nchal, uchar *resp, int resplen);
 static int domschap(char *passwd, uchar chal[MSchallen], uchar *resp, int resplen);
 static int dontlmv2(char *passwd, char *user, char *dom, uchar chal[MSchallen], uchar *resp, int resplen);
 static void nthash(uchar hash[MShashlen], char *passwd);
@@ -246,9 +246,10 @@ chapwrite(Fsstate *fss, void *va, uint n)
 			s->nsecret = 16+20;
 			break;
 		case AuthChap:
-			if(n < ChapChallen+1)
+			/* id+chal, chal must be nonempty in RFC 1994 */
+			if(n < 1+1)
 				break;
-			s->nresp = dochap(pass, *a, a+1, s->resp, sizeof(s->resp));
+			s->nresp = dochap(pass, *a, a+1, n-1, s->resp, sizeof(s->resp));
 			break;
 		}
 		closekey(k);
@@ -467,7 +468,7 @@ Proto chap = {
 .read=	chapread,
 .close=	chapclose,
 .addkey= replacekey,
-.keyprompt= "!password?"
+.keyprompt= "user? !password?"
 };
 
 Proto mschap = {
@@ -718,22 +719,16 @@ dontlmv2(char *passwd, char *user, char *dom, uchar chal[MSchallen], uchar *resp
 }
 
 static int
-dochap(char *passwd, int id, char chal[ChapChallen], uchar *resp, int resplen)
+dochap(char *passwd, char id, char *chal, int nchal, uchar *resp, int resplen)
 {
-	char buf[1+ChapChallen+MAXNAMELEN+1];
-	int n;
+	DigestState *s;
 
 	if(resplen < ChapResplen)
 		return 0;
 
-	memset(buf, 0, sizeof buf);
-	*buf = id;
-	n = strlen(passwd);
-	if(n > MAXNAMELEN)
-		n = MAXNAMELEN-1;
-	strncpy(buf+1, passwd, n);
-	memmove(buf+1+n, chal, ChapChallen);
-	md5((uchar*)buf, 1+n+ChapChallen, resp, nil);
+	s = md5((uchar*)&id, 1, nil, nil);
+	md5((uchar*)passwd, strlen(passwd), nil, s);
+	md5((uchar*)chal, nchal, resp, s);
 
 	return ChapResplen;
 }
