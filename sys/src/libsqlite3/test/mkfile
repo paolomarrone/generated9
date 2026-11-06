@@ -5,8 +5,17 @@ OFILES=sqlite.$O
 HFILES=/sys/include/sqlite3.h
 LIB=/$objtype/lib/libsqlite3.a
 CFLAGS=$CFLAGS -p
+CLEANFILES=$O.bench
 
 </sys/src/cmd/mkone
+
+bench:V: $O.bench
+
+$O.bench: bench.$O $LIB
+	$LD $LDFLAGS -o $target $prereq
+
+bench.$O: bench.c $HFILES
+	$CC $CFLAGS -DPLAN9 bench.c
 
 test:V: $O.out
 	@{

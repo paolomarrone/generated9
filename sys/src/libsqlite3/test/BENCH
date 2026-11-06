@@ -1,0 +1,52 @@
+SQLite benchmark
+
+Install the library, then build and run inside generated9:
+
+    cd /sys/src/libsqlite3/test
+    mk bench
+    ./6.bench :memory:
+    ./6.bench -x :memory:
+
+For file I/O, use a new database on a server satisfying sqlite3(2):
+
+    rfork n
+    ramfs -m /mnt
+    ./6.bench /mnt/normal.db
+    ./6.bench -x /mnt/exclusive.db
+
+Existing files are refused; completed databases are left for inspection.
+Default locking is NORMAL; -x selects EXCLUSIVE for this connection only.
+mk test does not run the benchmark. mk clean removes its build products.
+
+The workload has 100,000 rows, prepared inserts and primary-key lookups,
+index creation, sorting, updates and five single-row commits per sync mode.
+SQLite uses a 16 MiB page cache, 4096-byte pages and memory for temporary
+tables. Journals use DELETE, or MEMORY for an in-memory database.
+FULL sync is used until the final OFF comparison. OFF is diagnostic only.
+Counts, checksums and integrity_check must pass before the final "ok".
+
+Output columns are test, operation count, elapsed milliseconds, client CPU
+milliseconds and checksum. Startup and printing are outside the timed regions.
+Plan 9 CPU time has coarse resolution and excludes file-server processes.
+Use separate database names for repeated runs and compare medians. Record
+CPU, VM settings, SQLite version, cache settings and the storage path.
+A gefs image served by u9fs and a virtio disk have very different I/O costs;
+ramfs is volatile. Timing FULL sync does not certify power-loss durability.
+
+Optional Linux comparison
+
+bench.c also builds against the original amalgamation recorded in ../UPSTREAM.
+From this directory, set src to the extracted upstream directory and match
+the feature flags in ../plan9.h. For the current build:
+
+    src=/path/to/sqlite-amalgamation-3540100
+    cc -O2 -DNDEBUG -DSQLITE_THREADSAFE=0 \
+        -DSQLITE_OMIT_LOAD_EXTENSION=1 -DSQLITE_OMIT_WAL=1 \
+        -DSQLITE_OMIT_LOCALTIME=1 -DSQLITE_MAX_MMAP_SIZE=0 \
+        -DSQLITE_POWERSAFE_OVERWRITE=0 -DSQLITE_DISABLE_INTRINSIC=1 \
+        -DSQLITE_MAX_ALLOCATION_SIZE=0x3fffffff -I"$src" \
+        bench.c "$src/sqlite3.c" -lm -o /tmp/sqlite-bench
+    /tmp/sqlite-bench :memory:
+
+Use the same workload and locking mode. An in-memory comparison includes
+compiler, libc and operating-system differences, not just VM overhead.

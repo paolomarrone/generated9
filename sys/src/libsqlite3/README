@@ -33,6 +33,8 @@ death, and recovery at each VFS xWrite/xSync call in a transaction.
 It leaves test.db in the supplied directory.
 These are application-crash tests, not a power-loss certification of the server.
 
+For performance measurements and host comparisons, see test/BENCH.
+
 Optional numerical comparison against the host's Python SQLite:
 
     python3 sys/src/libsqlite3/test/compare.py generate usr/glenda/tmp/sqlite-compare
