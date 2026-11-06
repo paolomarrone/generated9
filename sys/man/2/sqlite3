@@ -1,0 +1,80 @@
+.TH SQLITE3 2
+.SH NAME
+sqlite3 \- native SQLite library and Plan 9 file interface
+.SH SYNOPSIS
+.EX
+#include <u.h>
+#include <libc.h>
+#include <sqlite3.h>
+.EE
+.SH DESCRIPTION
+.I Libsqlite3
+provides the SQLite C API with a native VFS named
+.BR plan9 .
+The header selects the library. Compile clients with
+.BR -p .
+The SQL language, C interfaces and database format follow upstream SQLite.
+.PP
+The VFS opens database files with
+.BR DMEXCL .
+Exclusivity lasts until the connection closes, including between transactions;
+read-only connections also exclude other connections.
+The SQLite lock callbacks record the pager's logical lock state within this
+stronger file lock.
+A competing open fails; retry opening after the owner closes.
+SQLite busy timeouts do not retry failed opens.
+.PP
+New databases are created exclusively with mode
+.BR DMEXCL|0666 .
+Existing mutable databases must already have
+.B DMEXCL
+set. An ordinary file is rejected without changing its contents or mode.
+The VFS uses positioned I/O, length changes through
+.IR stat (2),
+and
+.B ORCLOSE
+for temporary files in
+.BR /tmp .
+.PP
+Synchronization sends an empty
+.B wstat
+to the file; journal deletion also synchronizes the parent directory.
+The server must hold exclusive opens until clunk and implement the stable-storage
+meaning of empty wstat described in
+.IR stat (5).
+No atomic-write or powersafe-overwrite properties are assumed.
+.PP
+.I Gefs
+and
+.I ramfs
+provide lifetime exclusive opens; ramfs data is volatile.
+.I U9fs
+does not provide the required semantics and rejects database creation.
+Servers that expire exclusive-use locks, such as
+.IR cwfs ,
+are unsupported: loss of the database lock cannot fence writes to its journal.
+Durability still depends on the server and its backing storage.
+.PP
+An explicit
+.B immutable=1
+URI opens a read-only snapshot without requiring DMEXCL.
+The caller must ensure that no process changes the file while it is open.
+Do not rename, replace, remove, or clear DMEXCL on an open database.
+Keep the database and its adjacent journals together in the namespace.
+Copy databases between systems only after closing their connections.
+.PP
+The build has no internal mutexes; callers must serialize access to SQLite
+state. Do not use inherited connections after fork.
+Initialization disables floating-point traps for SQLite's IEEE arithmetic.
+WAL, memory mapping, loadable extensions and the localtime date modifier
+are omitted. Rollback journals, JSON and UTC date functions are available.
+.SH SOURCE
+.B /sys/src/libsqlite3
+.SH SEE ALSO
+.IR sqlite3 (1),
+.IR open (2),
+.IR stat (5)
+.br
+https://www.sqlite.org/cintro.html
+.br
+https://www.sqlite.org/c3ref/intro.html

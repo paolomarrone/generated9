@@ -1,0 +1,72 @@
+.TH SQLITE3 1
+.SH NAME
+sqlite3 \- execute SQL on a SQLite database
+.SH SYNOPSIS
+.B sqlite3
+[
+.B -hr
+]
+[
+.B -s
+.I separator
+]
+.I database
+[
+.I sql
+]
+.SH DESCRIPTION
+.I Sqlite3
+executes the SQL argument, or reads SQL from standard input.
+Complete statements are executed at line boundaries;
+remaining input is executed at EOF.
+Queries may span lines and contain multiple statements.
+SQL errors stop execution and produce a non-empty exit status.
+There are no dot commands or interactive prompts.
+.PP
+Each result row is written on one line, with columns separated by tabs.
+.B -s
+sets the separator and
+.B -h
+prints column names before each query's first row.
+Values use SQLite's text conversion; NULL is empty.
+Separators, newlines and binary data in values are not escaped.
+Use SQL functions such as
+.B hex
+or
+.B json_object
+when an unambiguous representation is needed.
+.PP
+.B -r
+opens an existing database read-only.
+The name
+.B :memory:
+creates an in-memory database.
+SQLite
+.B file:
+URIs are accepted.
+.PP
+Disk databases require the exclusive-use and synchronization semantics
+described in
+.IR sqlite3 (2).
+New database files have
+.B DMEXCL
+set; an imported database needs
+.BR "chmod +l" .
+The file remains exclusively open until the command exits.
+.SH EXAMPLES
+.EX
+sqlite3 :memory: 'select sqlite_version(), 6*7;'
+sqlite3 /n/data/catalog.db <schema.sql
+sqlite3 -h /n/data/catalog.db 'select * from items;'
+sqlite3 -r 'file:/tmp/snapshot.db?immutable=1' 'pragma integrity_check;'
+.EE
+The last example requires a snapshot that will not change while open.
+.SH SOURCE
+.B /sys/src/cmd/sqlite3
+.SH SEE ALSO
+.IR sqlite3 (2),
+.IR chmod (1),
+.IR gefs (4),
+.IR ramfs (4)
+.br
+https://www.sqlite.org/lang.html

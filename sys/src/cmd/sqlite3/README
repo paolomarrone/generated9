@@ -1,0 +1,19 @@
+Native SQLite command
+
+Install /sys/src/libsqlite3 first, then:
+
+    mk install
+    mk test
+    sqlite3 :memory: 'select sqlite_version(), 6*7;'
+
+For a temporary database:
+
+    rfork n
+    ramfs -m /mnt
+    sqlite3 /mnt/example.db 'create table t(n integer); insert into t values(42);'
+    sqlite3 /mnt/example.db 'select * from t;'
+
+For persistent data, use a server satisfying sqlite3(2), such as gefs.
+The checkout's u9fs does not support the required exclusive-use files.
+See sqlite3(1) for input, output and options, and ../../libsqlite3/README
+for the library and tests. This command is new code under the root LICENSE.

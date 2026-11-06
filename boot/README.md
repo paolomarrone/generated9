@@ -60,7 +60,7 @@ The pinned bootstrap still includes the old `news` binary. Remove it with
 
 QuickJS needs the amd64 compiler's NaN comparison and register-save fixes;
 Eigenmath needs the comparison fix.
-Rebuild `6c` before building either port, then clean any old port objects:
+Use the rebuilt `6c` for these ports and SQLite, then clean old port objects:
 
 ```rc
 cd /sys/src/cmd/6c
@@ -73,6 +73,7 @@ Build instructions:
 
 - [QuickJS](../sys/src/cmd/quickjs/README.Plan9): JavaScript, APE and a PPM ray tracer.
 - [Eigenmath](../sys/src/cmd/eigenmath/README.Plan9): symbolic mathematics.
+- [SQLite](../sys/src/libsqlite3/README): native SQL library and command.
 - [GPU.md](GPU.md): native graphics, libraries and games.
 - [VOID.md](VOID.md): Void Linux with Xfce inside `vmx`.
 

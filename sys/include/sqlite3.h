@@ -32,7 +32,9 @@
 */
 #ifndef SQLITE3_H
 #define SQLITE3_H
-#include <stdarg.h>     /* Needed for the definition of va_list */
+#pragma lib "libsqlite3.a"
+#pragma src "/sys/src/libsqlite3"
+/* Include <u.h> before this header for va_list and 64-bit types. */
 
 /*
 ** Make sure we can call this stuff from C++.

@@ -107,6 +107,14 @@ polling in virglrenderer 1.3.0 at `ca50e008863837e094747a69974dde3ae148aeaa`.
 It preserves the Red Hat 2014 copyright and MIT notice. This library runs
 only in the outer QEMU; build instructions are in [VOID.md](boot/VOID.md).
 
+## SQLite
+
+[SQLite 3.54.1](https://www.sqlite.org/) is in the public domain.
+The amalgamation and public header retain their original notices; exact source
+ID, archive checksums and local adaptations are in
+[UPSTREAM](sys/src/libsqlite3/UPSTREAM) and [LICENSE](sys/src/libsqlite3/LICENSE).
+The native VFS, command and tests are new generated9 code under the root license.
+
 ## QuickJS
 
 [QuickJS 2026-06-04](https://bellard.org/quickjs/) by Fabrice Bellard and

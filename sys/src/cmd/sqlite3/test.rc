@@ -1,0 +1,52 @@
+#!/bin/rc
+sql=$1
+tmp=/tmp/sqlite-cli-$pid
+mkdir $tmp || exit mkdir
+fn sigexit { rm -rf $tmp }
+fn fail { echo $* >[1=2]; exit 'sqlite3 CLI test failed' }
+
+cat >$tmp/input <<'EOF'
+create table t(n integer, s text);
+create trigger tr after insert on t begin
+ update t set n=n+1 where rowid=new.rowid;
+end;
+insert into t values(41, 'caffè ☃; SQL');
+select n, s from t;
+EOF
+echo '42|caffè ☃; SQL' >$tmp/want
+if(! $sql -s '|' :memory: <$tmp/input >$tmp/got)
+	fail 'stdin execution'
+cmp -s $tmp/got $tmp/want || fail 'trigger or UTF-8 output'
+echo 'n|s' >$tmp/want
+echo '42|caffè ☃; SQL' >>$tmp/want
+if(! $sql -h -s '|' :memory: <$tmp/input >$tmp/got)
+	fail 'header execution'
+cmp -s $tmp/got $tmp/want || fail 'header output'
+
+echo -n 'select 6*7' | $sql :memory: >$tmp/got
+echo 42 >$tmp/want
+cmp -s $tmp/got $tmp/want || fail 'input without final newline'
+if(! $sql :memory: </dev/null >$tmp/got)
+	fail 'empty input'
+test -s $tmp/got && fail 'empty input produced output'
+echo 42 >$tmp/want
+$sql :memory: 'select 42;' >$tmp/got || fail 'SQL argument'
+cmp -s $tmp/got $tmp/want || fail 'SQL argument output'
+
+awk 'BEGIN {printf "select length("; printf "\047"; for(i=0;i<20000;i++) printf "x"; print "\047);"}' >$tmp/long
+echo 20000 >$tmp/want
+$sql :memory: <$tmp/long >$tmp/got || fail 'long input'
+cmp -s $tmp/got $tmp/want || fail 'long input output'
+
+if($sql :memory: 'select from;' >$tmp/got >[2]$tmp/error)
+	fail 'syntax error succeeded'
+if($sql :memory: 'create table t(x unique); insert into t values(1),(1);' >$tmp/got >[2]$tmp/error)
+	fail 'constraint error succeeded'
+awk 'BEGIN {printf "select 1;%cselect 2;", 0}' >$tmp/nul
+if($sql :memory: <$tmp/nul >$tmp/got >[2]$tmp/error)
+	fail 'NUL input succeeded'
+if($sql :memory: 'select 1' >[1=0] </dev/null >[2]$tmp/error)
+	fail 'output error succeeded'
+if($sql :memory: <[0=1] >$tmp/got >[2]$tmp/error)
+	fail 'input error succeeded'
+echo 'PASS: CLI input, UTF-8, triggers, headers, long lines and errors'

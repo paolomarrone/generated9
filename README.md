@@ -33,6 +33,9 @@ Meanwhile, this is where we differ now:
   connects QuickJS to native raylib; Gemrun is a 3D game written in JavaScript.
 - An optional [Go bootstrap and gojq workflow](boot/README.md#go-and-gojq),
   using upstream's existing Plan 9 support without changes to Go or gojq.
+- Native [SQLite](sys/src/libsqlite3/README), with a Plan 9 VFS and SQL command.
+  Mutable databases require lifetime exclusive-use files and wstat sync barriers;
+  tested on ramfs and gefs, not the checkout's u9fs.
 - Fixes for amd64 compiler NaN comparisons and register spills, HDA playback
   underruns, alongside graphics batching and reduced display copying.
 

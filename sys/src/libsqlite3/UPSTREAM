@@ -7,3 +7,12 @@ SHA-256: 0a9c8e34352dad46006aa82836d5383bff9dc6bc9ce5a60553c05aa30e6ad1f9
 Imported sqlite3.c and sqlite3.h (installed in /sys/include).
 SQLite is in the public domain; its notices remain in both files.
 See https://www.sqlite.org/copyright.html and LICENSE.
+
+Local changes:
+- Native headers replace standard includes through SQLITE_CUSTOM_INCLUDE.
+- LARGEST_INT64 uses an explicitly signed 64-bit constant: Plan 9's integer
+  promotions otherwise make the original expression unsigned.
+- The public header uses Plan 9 library/source pragmas and the caller's u.h.
+
+plan9.[ch], mkfile, test/ and ../../cmd/sqlite3 are new generated9 code,
+under the repository root LICENSE. No earlier Plan 9 port was imported.

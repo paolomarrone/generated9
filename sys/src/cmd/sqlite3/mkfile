@@ -1,0 +1,13 @@
+</$objtype/mkfile
+
+TARG=sqlite3
+BIN=/$objtype/bin
+OFILES=main.$O
+HFILES=/sys/include/sqlite3.h
+LIB=/$objtype/lib/libsqlite3.a
+CFLAGS=$CFLAGS -p
+
+</sys/src/cmd/mkone
+
+test:V: $O.out
+	rc test.rc ./$O.out

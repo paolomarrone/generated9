@@ -35,6 +35,7 @@ LIBS=\
 	libsat\
 	libscribble\
 	libsec\
+	libsqlite3\
 	libstdio\
 	libsunrpc\
 	libthread\

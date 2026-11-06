@@ -1,0 +1,48 @@
+SQLite for generated9
+
+Build with the native Plan 9 compiler and libc:
+
+    cd /sys/src/libsqlite3
+    mk install
+    mk test
+    cd /sys/src/cmd/sqlite3
+    mk install
+    mk test
+
+Compile clients with -p and include <u.h>, <libc.h>, <sqlite3.h>.
+The header selects libsqlite3.a. No APE or host compiler is needed.
+On amd64, use the rebuilt 6c described in boot/README.md.
+
+See sqlite3(1) for the command and sqlite3(2) for the VFS contract and limits.
+Database files require DMEXCL for the connection's lifetime and stable-storage
+wstat barriers. Use gefs for persistent storage or ramfs for temporary data.
+u9fs rejects DMEXCL; lease-expiring servers such as cwfs are not supported.
+The database format is unchanged. Closed databases can be copied to other
+systems; import a database onto a suitable server and set chmod +l before use.
+
+mk test uses a private ramfs. To test a persistent server, create an empty
+directory there and run:
+
+    cd /sys/src/libsqlite3/test
+    mk
+    ./6.out /n/fs/sqlite-test
+
+The suite checks SQL and numeric boundaries, bindings, attached databases,
+journal modes, vacuum, file I/O, exclusive opens, renamed databases, process
+death, and recovery at each VFS xWrite/xSync call in a transaction.
+It leaves test.db in the supplied directory.
+These are application-crash tests, not a power-loss certification of the server.
+
+Optional numerical comparison against the host's Python SQLite:
+
+    python3 sys/src/libsqlite3/test/compare.py generate usr/glenda/tmp/sqlite-compare
+
+Inside generated9:
+
+    sqlite3 :memory: </tmp/sqlite-compare/numeric.sql >/tmp/sqlite-compare/numeric.out
+
+Then on the host:
+
+    python3 sys/src/libsqlite3/test/compare.py check usr/glenda/tmp/sqlite-compare
+
+Runtime validation: amd64, ramfs and gefs. Sources and licenses: UPSTREAM.

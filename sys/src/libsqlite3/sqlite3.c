@@ -353,7 +353,9 @@
 */
 #ifndef SQLITE3_H
 #define SQLITE3_H
+#ifndef SQLITE_OS_PLAN9
 #include <stdarg.h>     /* Needed for the definition of va_list */
+#endif
 
 /*
 ** Make sure we can call this stuff from C++.
@@ -15123,9 +15125,13 @@ struct fts5_api {
 /*
 ** Include standard header files as necessary
 */
+#ifndef SQLITE_OS_PLAN9
 #include <stdint.h>
+#endif
 #ifdef HAVE_INTTYPES_H
+#ifndef SQLITE_OS_PLAN9
 #include <inttypes.h>
+#endif
 #endif
 
 /*
@@ -15829,12 +15835,14 @@ SQLITE_PRIVATE void sqlite3HashClear(Hash*);
 
 /************** End of parse.h ***********************************************/
 /************** Continuing where we left off in sqliteInt.h ******************/
+#ifndef SQLITE_OS_PLAN9
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
 #include <stddef.h>
 #include <ctype.h>
+#endif
 
 /*
 ** Use a macro to replace memcpy() if compiled with SQLITE_INLINE_MEMCPY.
@@ -16226,7 +16234,7 @@ typedef INT16_TYPE LogEst;
 ** These macros are designed to work correctly on both 32-bit and 64-bit
 ** compilers.
 */
-#define LARGEST_INT64  (0xffffffff|(((i64)0x7fffffff)<<32))
+#define LARGEST_INT64  ((i64)0x7fffffffffffffffLL)
 #define LARGEST_UINT64 (0xffffffff|(((u64)0xffffffff)<<32))
 #define SMALLEST_INT64 (((i64)-1) - LARGEST_INT64)
 
@@ -25803,7 +25811,9 @@ SQLITE_API int sqlite3_db_status(
 /* #include "sqliteInt.h" */
 /* #include <stdlib.h> */
 /* #include <assert.h> */
+#ifndef SQLITE_OS_PLAN9
 #include <time.h>
+#endif
 
 #ifndef SQLITE_OMIT_DATETIME_FUNCS
 
@@ -36853,7 +36863,9 @@ SQLITE_PRIVATE void sqlite3UtfSelfTest(void){
 /* #include "sqliteInt.h" */
 /* #include <stdarg.h> */
 #ifndef SQLITE_OMIT_FLOATING_POINT
+#ifndef SQLITE_OS_PLAN9
 #include <math.h>
+#endif
 
 /* Work around a bug in older Microsoft compilers
 ** Forum post 2026-04-10T06:33:11z */
@@ -194738,7 +194750,7 @@ typedef sqlite3_int64 i64;        /* 8-byte signed integer */
 # define TESTONLY(X)
 #endif
 
-#define LARGEST_INT64  (0xffffffff|(((i64)0x7fffffff)<<32))
+#define LARGEST_INT64  ((i64)0x7fffffffffffffffLL)
 #define SMALLEST_INT64 (((i64)-1) - LARGEST_INT64)
 
 #if !defined(deliberate_fall_through)
@@ -224091,7 +224103,9 @@ static void rtreecheck(
 #  define safe_isxdigit(x) sqlite3Isxdigit(x)
 #else
    /* Use the standard library for separate compilation */
+#ifndef SQLITE_OS_PLAN9
 #include <ctype.h>  /* amalgamator: keep */
+#endif
 #  define safe_isdigit(x)  isdigit((unsigned char)(x))
 #  define safe_isalnum(x)  isalnum((unsigned char)(x))
 #  define safe_isxdigit(x) isxdigit((unsigned char)(x))
@@ -246019,7 +246033,9 @@ static int sqlite3Fts5ParserFallback(int iToken){
 
 
 /* #include "fts5Int.h" */
+#ifndef SQLITE_OS_PLAN9
 #include <math.h>                 /* amalgamator: keep */
+#endif
 
 /*
 ** Object used to iterate through all "coalesced phrase instances" in

@@ -1,0 +1,10 @@
+</$objtype/mkfile
+
+LIB=/$objtype/lib/libsqlite3.a
+OFILES=sqlite3.$O plan9.$O
+HFILES=plan9.h /sys/include/sqlite3.h
+CFLAGS=-p -D_$objtype -DSQLITE_CUSTOM_INCLUDE=plan9.h -I.
+
+</sys/src/cmd/mksyslib
+
+test:VQ: $LIB

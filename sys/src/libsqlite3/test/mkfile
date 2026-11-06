@@ -1,0 +1,22 @@
+</$objtype/mkfile
+
+TARG=sqlite
+OFILES=sqlite.$O
+HFILES=/sys/include/sqlite3.h
+LIB=/$objtype/lib/libsqlite3.a
+CFLAGS=$CFLAGS -p
+
+</sys/src/cmd/mkone
+
+test:V: $O.out
+	@{
+		rfork n
+		dir=/tmp/sqlite-test-$pid
+		mkdir $dir || exit mkdir
+		ramfs -m $dir || exit ramfs
+		./$O.out $dir
+		st=$status
+		unmount $dir
+		rm $dir
+		exit $st
+	}
