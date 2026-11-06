@@ -27,8 +27,9 @@ were consulted but not imported.
 ## u9fs
 
 The 34 original files in [u9fs](sys/src/cmd/unix/u9fs) were imported unchanged
-from that same rsc/plan9 revision. See its [UPSTREAM](sys/src/cmd/unix/u9fs/UPSTREAM)
-and [LICENSE](sys/src/cmd/unix/u9fs/LICENSE). The required permission notice:
+from that same rsc/plan9 revision. Local permission fixes are recorded in
+[UPSTREAM](sys/src/cmd/unix/u9fs/UPSTREAM). See also
+[LICENSE](sys/src/cmd/unix/u9fs/LICENSE). The required permission notice:
 
 ```text
 The authors of this software are Bob Flandrena, Ken Thompson,

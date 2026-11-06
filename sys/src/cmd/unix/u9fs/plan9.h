@@ -1,8 +1,8 @@
 #ifdef __APPLE__
 #define	_DARWIN_C_SOURCE
 #else
-/* magic to get SUSV2 standard, including pread, pwrite*/
-#define _XOPEN_SOURCE 500
+/* POSIX.1-2008, including faccessat */
+#define _XOPEN_SOURCE 700
 #endif
 /* magic to get 64-bit pread/pwrite */
 #define _LARGEFILE64_SOURCE

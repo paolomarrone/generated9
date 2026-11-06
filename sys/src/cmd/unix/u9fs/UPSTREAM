@@ -6,4 +6,7 @@ The 34 original files were imported without modifications. Their original
 authors are Bob Flandrena, Ken Thompson, Rob Pike, and Russ Cox. See LICENSE
 in this directory for the complete original Lucent permission notice.
 
+Local changes check OEXEC with the server's effective credentials and reject
+DMEXCL in create and wstat. The host must provide POSIX.1-2008 faccessat.
+
 This UPSTREAM file is a generated9 addition; see the repository root LICENSE.

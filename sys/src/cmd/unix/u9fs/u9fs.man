@@ -281,6 +281,11 @@ flag enables chatty debugging.
 .IR ip (3),
 .IR nfsserver (8)
 .SH BUGS
+Exclusive-use files are not supported.
+Attempts to set
+.B DMEXCL
+in create or wstat fail.
+.LP
 The implementation of devices is unsatisfactory.
 .LP
 Semantics like remove-on-close or the

@@ -121,6 +121,7 @@ char	Ebadoffset[] =	"bad offset in directory read";
 char	Ebadusefid[] =	"bad use of fid";
 char	Edirchange[] =	"wstat can't convert between files and directories";
 char	Eexist[] =	"file or directory already exists";
+char	Eexcl[] =	"exclusive use not supported";
 char	Efidactive[] =	"fid already in use";
 char	Enotdir[] =	"not a directory";
 char	Enotingroup[] =	"not a member of proposed group";
@@ -955,6 +956,10 @@ rwstat(Fcall *rx, Fcall *tx)
 	 * Same situation for d.mtime and d.length (although that last check
 	 * is admittedly superfluous, given the current lack of 128-bit machines).
 	 */
+	if((u32int)d.mode != (u32int)~0 && (d.mode&DMEXCL)){
+		seterror(tx, Eexcl);
+		return;
+	}
 	gid = (gid_t)-1;
 	if(d.gid[0] != '\0'){
 		User *g;
@@ -1594,17 +1599,12 @@ useropen(Fid *fid, int omode, char **ep)
 			return -1;
 		}
 	}else{
-		/*
-		 * This is wrong because access used the real uid
-		 * and not the effective uid.  Let the open sort it out.
-		 *
-		if(access(fid->path, a) < 0){
+		rpath = rootpath(fid->path);
+		/* open checks read/write permission, but not execute permission. */
+		if((a&X_OK) && faccessat(AT_FDCWD, rpath, a, AT_EACCESS) < 0){
 			*ep = strerror(errno);
 			return -1;
 		}
-		 *
-		 */
-		rpath = rootpath(fid->path);
 		if((fid->fd = open(rpath, o)) < 0){
 			*ep = strerror(errno);
 			return -1;
@@ -1622,6 +1622,10 @@ usercreate(Fid *fid, char *elem, int omode, long perm, char **ep)
 	struct stat st, parent;
 	User *u;
 
+	if(perm&DMEXCL){
+		*ep = Eexcl;
+		return -1;
+	}
 	rpath = rootpath(fid->path);
 	if(stat(rpath, &parent) < 0){
 		*ep = strerror(errno);

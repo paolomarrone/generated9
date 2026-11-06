@@ -1,6 +1,6 @@
 *U9fs* serves the Plan 9 protocol 9P from user-space on other operating systems.
 
-It runs on many POSIX-compatible systems, including Linux and MacOS X.
+It requires POSIX.1-2008 faccessat with AT_EACCESS, as on Linux and macOS.
 Currently, it must first be compiled. See the comments at the top of the makefile
 for a few special instructions. Ordinarily, you should be able to type:
 
@@ -8,6 +8,8 @@ for a few special instructions. Ordinarily, you should be able to type:
 to create an executable called u9fs.
 
 See the manual page u9fs.man for details of options and arguments.
+Run `boot/test` from the generated9 checkout root to check file sharing and
+permission handling in a native guest.
 
 Unfortunately, installing the program to run automatically under inetd, xinetd or equivalent
 is rather system-dependent. (MacOS X is an extreme case.) The rest of this file will list

@@ -12,7 +12,7 @@ and host network configuration are not required.
 ./boot/getbin            # install the amd64 bootstrap runtime
 ./boot/qemu              # serial console; quit with Ctrl-a x
 ./boot/qemu -vga         # rio desktop and serial console
-./boot/test              # boot, native C build and file sharing test
+./boot/test              # boot, native C build, file sharing and permissions
 ```
 
 `getbin` verifies and extracts the pinned `9front-11952.amd64.iso.gz`.
