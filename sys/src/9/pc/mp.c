@@ -424,7 +424,10 @@ Findbus:
 			dno = BUSDNO(pci->tbdf);
 			goto Findbus;
 		}
-		print("mpintrassign: can't find bus type %d, number %d\n", type, bno);
+		/* The legacy IRQ fallback may still succeed. */
+		if(getconf("*apicdebug"))
+			print("mpintrassign: no bus for %T irq %d (%s)\n",
+				tbdf, v->irq, v->name);
 		return -1;
 	}
 
