@@ -53,6 +53,9 @@ mk
 Restart QEMU with `-kernel sys/src/9/pc64/9pc64` to use it. To rebuild and
 install userland, run `cd /sys/src` and `mk install` inside generated9.
 
+The pinned bootstrap still includes the old `news` binary. Remove it with
+`rm -f /amd64/bin/news` to use upstream's `/rc/bin/news`.
+
 ## Native programs
 
 QuickJS needs the amd64 compiler's NaN comparison and register-save fixes;
