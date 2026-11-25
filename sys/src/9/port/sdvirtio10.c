@@ -78,7 +78,8 @@ enum {
 
 enum {
 	Vblk_capacity = 0,
-	Vblk_sz = 8
+	Vblk_size_max = 8,
+	Fsizemax = 1<<1,
 };
 
 struct Vqueue
@@ -115,12 +116,12 @@ struct Vdev
 	Pcidev	*pci;
 
 	uvlong	port;
-	ulong	feat[2];
+	long	maxsect;	/* maximum sectors per block request */
 
 	int	nqueue;
 	Vqueue	*queue[16];
 
-	Vio	dev;	/* device specific config (for scsi) */
+	Vio	dev;	/* device specific config */
 
 	/* registers */
 	Vio	cfg;
@@ -213,6 +214,7 @@ viopnpdevs(int typ)
 	Pcidev *p;
 	int cap, bar;
 	int n, i;
+	u32int feat, maxio;
 	uvlong mask;
 
 	h = t = nil;
@@ -256,19 +258,32 @@ Baddev:
 
 		/* negotiate feature bits */
 		vout32(&cfg, Vconf_devfeatsel, 1);
-		vd->feat[1] = vin32(&cfg, Vconf_devfeat);
+		vout32(&cfg, Vconf_drvfeatsel, 1);
+		vout32(&cfg, Vconf_drvfeat, vin32(&cfg, Vconf_devfeat) & 1);
 
 		vout32(&cfg, Vconf_devfeatsel, 0);
-		vd->feat[0] = vin32(&cfg, Vconf_devfeat);
-
-		vout32(&cfg, Vconf_drvfeatsel, 1);
-		vout32(&cfg, Vconf_drvfeat, vd->feat[1] & 1);
-
+		feat = typ == TypBlk ? vin32(&cfg, Vconf_devfeat) & Fsizemax : 0;
 		vout32(&cfg, Vconf_drvfeatsel, 0);
-		vout32(&cfg, Vconf_drvfeat, 0);
+		vout32(&cfg, Vconf_drvfeat, feat);
 
 		vout8(&cfg, Vconf_status, vin8(&cfg, Vconf_status) | FeaturesOk);
-
+		if((vin8(&cfg, Vconf_status) & FeaturesOk) == 0)
+			goto Baddev;
+		if(typ == TypBlk){
+			n = feat & Fsizemax ? Vblk_size_max+4 : Vblk_capacity+8;
+			if(virtiomapregs(p, virtiocap(p, 4), n, &vd->dev) == nil)
+				goto Baddev;
+			maxio = feat & Fsizemax ? vin32(&vd->dev, Vblk_size_max) : 0;
+			/* Some devices offer size_max but leave it zero. */
+			if(maxio == 0 || maxio > SDmaxio)
+				maxio = SDmaxio;
+			vd->maxsect = maxio/512;
+			if(vd->maxsect == 0){
+				print("sdvirtio: segment smaller than a sector\n");
+				virtiounmap(&vd->dev, n);
+				goto Baddev;
+			}
+		}
 
 		for(i=0; i<nelem(vd->queue); i++){
 			vout16(&cfg, Vconf_queuesel, i);
@@ -539,19 +554,18 @@ vioscsireq(SDreq *r)
 static long
 viobio(SDunit *u, int lun, int write, void *a, long count, uvlong lba)
 {
-	long ss, cc, max, ret;
+	long ss, cc, ret;
 	Vdev *vd;
 
 	vd = u->dev->ctlr;
 	if(vd->typ == TypSCSI)
 		return scsibio(u, lun, write, a, count, lba);
 
-	max = 32;
 	ss = u->secsize;
 	ret = 0;
 	while(count > 0){
-		if((cc = count) > max)
-			cc = max;
+		if((cc = count) > vd->maxsect)
+			cc = vd->maxsect;
 		if(vioblkreq(vd, write != 0, (uchar*)a + ret, cc, ss, lba) != 0)
 			error(Eio);
 		ret += cc*ss;
@@ -668,8 +682,6 @@ viopnp(void)
 		if(vd->nqueue == 0)
 			continue;
 
-		if(virtiomapregs(vd->pci, virtiocap(vd->pci, 4), Vblk_sz, &vd->dev) == nil)
-			break;
 		if((s = malloc(sizeof(*s))) == nil)
 			break;
 		s->ctlr = vd;
