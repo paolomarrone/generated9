@@ -1,0 +1,9 @@
+</$objtype/mkfile
+
+TARG=check
+OFILES=check.$O
+HFILES=
+</sys/src/cmd/mkone
+
+test:V: $O.out
+	rc test.rc

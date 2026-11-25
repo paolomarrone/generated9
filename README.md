@@ -27,6 +27,8 @@ Meanwhile, this is where we differ now:
 - Native [Neverball and Neverputt](sys/src/games/neverball/README), plus
   [Arkanoid, Asteroids and Missile Commander](sys/src/games/raygames/README)
   on raylib. Built with the Plan 9 C toolchain.
+- [beat](sys/man/1/beat), a four-voice drum sequencer with a rio grid, text
+  patterns and OPL3 playback.
 - [Orbit 9](sys/src/games/pinball/README), an original native pinball game
   with fixed-step physics, missions and synthesized sound.
 - [QuickJS](sys/src/cmd/quickjs/README.Plan9) for JavaScript and

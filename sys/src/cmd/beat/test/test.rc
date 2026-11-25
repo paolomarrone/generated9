@@ -1,0 +1,57 @@
+rfork ne
+ramfs -m /tmp || exit $status
+fn pattern {
+	echo bpm $1
+	echo 'kick x...x...x...x...'
+	echo 'snare ....x.......x...'
+	echo 'hat x.x.x.x.x.x.x.x.'
+	echo 'clap ..............x.'
+}
+fn reject {
+	if(../$O.out /tmp/bad >/tmp/out >[2]/dev/null){
+		echo 'accepted invalid pattern'
+		exit invalid
+	}
+	if(! ~ `{wc -c </tmp/out} 0)
+		exit 'partial output on error'
+}
+for(bpm in 30 120 137 300){
+	pattern $bpm >/tmp/bar
+	../$O.out /tmp/bar >/tmp/opl || exit $status
+	games/opl3 /tmp/opl >/tmp/pcm || exit $status
+	./$O.out $bpm /tmp/opl /tmp/pcm || exit $status
+}
+../$O.out </tmp/bar >/tmp/stdin && cmp /tmp/stdin /tmp/opl || exit $status
+voices=(kick snare hat clap)
+played=()
+for(v in (silent $voices)){
+	{
+		echo bpm 300
+		for(row in $voices){
+			if(~ $row $v) echo $row x...............
+			if not echo $row ................
+		}
+	} >/tmp/bar
+	../$O.out /tmp/bar >/tmp/opl || exit $status
+	games/opl3 /tmp/opl >/tmp/$v || exit $status
+	flags=()
+	if(~ $v silent) flags=silent
+	./$O.out 300 /tmp/opl /tmp/$v $flags || exit $status
+	for(prev in $played)
+		if(cmp -s /tmp/$v /tmp/$prev)
+			exit 'identical voices'
+	played=($played $v)
+}
+for(bpm in 0 29 301 120x){
+	pattern $bpm >/tmp/bad
+	reject
+}
+for(extra in ('kick ................' 'bpm 120' 'foo ................')){
+	{pattern 120; echo $extra} >/tmp/bad
+	reject
+}
+for(line in ('' 'clap x' 'clap x..............?' 'clap ................ extra')){
+	{pattern 120 | sed '/^clap /d'; echo $line} >/tmp/bad
+	reject
+}
+echo 'PASS: OPL and PCM duration, four distinct voices and silence, stdin, malformed and incomplete patterns'

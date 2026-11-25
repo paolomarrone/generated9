@@ -1,0 +1,79 @@
+.TH BEAT 1
+.SH NAME
+beat \- drum sequencer and pattern editor
+.SH SYNOPSIS
+.B beat
+[
+.I pattern
+]
+.br
+.B beat -e
+[
+.B -p
+]
+.I pattern
+.SH DESCRIPTION
+.I Beat
+reads a bar of four quarter notes from
+.I pattern
+or standard input and writes a timed OPL3 register stream to standard output.
+Play the bar or record stereo PCM with
+.IR opl3 (1):
+.EX
+beat rhythm | games/opl3 >/dev/audio
+beat rhythm | games/opl3 >bar.pcm
+.EE
+.PP
+A pattern has a tempo in quarter notes per minute (30 to 300)
+and four rows of sixteen steps.
+An
+.B x
+plays a hit and a dot is a rest.
+Lines may appear in any order.
+Blank lines and text following
+.B #
+are ignored.
+.EX
+bpm   120
+kick  x...x...x...x...
+snare ....x.......x...
+hat   x.x.x.x.x.x.x.x.
+clap  ..............x.
+.EE
+.PP
+.B -e
+opens the pattern in a window and creates it with the rhythm above
+if it does not exist.
+Click a cell to toggle a hit.
+Space starts or stops the loop;
+.B +
+and
+.B -
+change the tempo by one.
+Changes take effect as the next steps are played.
+Type
+.B s
+to write the pattern,
+.B q
+to quit, or
+.B Q
+to discard unsaved changes and quit.
+Saving writes the four rows and tempo in canonical order.
+.PP
+The editor normally plays through
+.B games/opl3
+and
+.BR /dev/audio .
+With
+.B -p
+it writes the played steps to standard output.
+The stream includes live edits and omits time spent stopped.
+To listen and record the same performance:
+.EX
+beat -ep rhythm | games/opl3 | tee /tmp/take.pcm >/dev/audio
+.EE
+.SH SOURCE
+.B /sys/src/cmd/beat
+.SH SEE ALSO
+.IR opl3 (1),
+.IR audio (1)
