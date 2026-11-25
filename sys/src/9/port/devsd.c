@@ -1141,12 +1141,18 @@ sdfakescsi(SDreq *r)
 	}
 }
 
+static u32int
+scsi32(uchar *p)
+{
+	return (u32int)p[0]<<24 | p[1]<<16 | p[2]<<8 | p[3];
+}
+
 int
 sdfakescsirw(SDreq *r, uvlong *llba, int *nsec, int *rwp)
 {
 	uchar *c;
-	int rw, count;
-	uvlong lba;
+	int rw;
+	uvlong lba, count;
 
 	c = r->cmd;
 	rw = SDread;
@@ -1160,22 +1166,21 @@ sdfakescsirw(SDreq *r, uvlong *llba, int *nsec, int *rwp)
 		break;
 	case 0x28:	/* read10 */
 	case 0x2a:
-		lba = c[2]<<24 | c[3]<<16 | c[4]<<8 | c[5];
+		lba = scsi32(c+2);
 		count = c[7]<<8 | c[8];
 		break;
 	case 0xa8:	/* read12 */
 	case 0xaa:
-		lba = c[2]<<24 | c[3]<<16 | c[4]<<8 | c[5];
-		count = c[6]<<24 | c[7]<<16 | c[8]<<8 | c[9];
+		lba = scsi32(c+2);
+		count = scsi32(c+6);
 		break;
 	case 0x88:	/* read16 */
 	case 0x8a:
 		/* ata commands only go to 48-bit lba */
 		if(c[2] || c[3])
 			return sdsetsense(r, SDcheck, 3, 0xc, 2);
-		lba = (uvlong)c[4]<<40 | (uvlong)c[5]<<32;
-		lba |= c[6]<<24 | c[7]<<16 | c[8]<<8 | c[9];
-		count = c[10]<<24 | c[11]<<16 | c[12]<<8 | c[13];
+		lba = (uvlong)scsi32(c+2)<<32 | scsi32(c+6);
+		count = scsi32(c+10);
 		break;
 	default:
 		print("%s: bad cmd 0x%.2ux\n", r->unit->name, c[0]);
@@ -1184,7 +1189,7 @@ sdfakescsirw(SDreq *r, uvlong *llba, int *nsec, int *rwp)
 	}
 	if(r->data == nil)
 		return SDok;
-	if(r->dlen < count * r->unit->secsize)
+	if(count * r->unit->secsize > r->dlen)
 		count = r->dlen/r->unit->secsize;
 	if(rwp)
 		*rwp = rw;
