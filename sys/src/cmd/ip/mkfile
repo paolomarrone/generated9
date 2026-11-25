@@ -83,9 +83,3 @@ $O.ftpd:	ftpd.$O glob.$O
 
 $BIN/telnet:V:	$O.telnet
 	cp $prereq /$objtype/bin/telnet
-
-$BIN/snoopy:V:	$O.snoopy
-	cp $prereq /$objtype/bin/snoopy
-
-$BIN/sniffer:V:	$O.sniffer
-	cp $prereq /$objtype/bin/sniffer

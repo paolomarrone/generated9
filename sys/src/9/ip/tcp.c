@@ -529,7 +529,8 @@ tcpclose(Conv *c)
 		break;
 	case Established:
 		if(tcb->bypass != nil){
-			qhangup(tcb->bypass->rq, nil);
+			if(((Tcpctl*)tcb->bypass->ptcl)->bypass == c)
+				qhangup(tcb->bypass->rq, nil);
 			localclose(c, nil);
 			break;
 		}
@@ -1599,7 +1600,7 @@ tcpbypass(void *arg, Block *b)
 
 	if(o == nil || ((Tcpctl*)o->ptcl)->bypass != c){
 		freeblist(b);
-		return;
+		error(Ehungup);
 	}
 	qbwrite(o->rq, b);
 }

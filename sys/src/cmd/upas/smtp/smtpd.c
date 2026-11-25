@@ -21,6 +21,7 @@ int	trusted;
 int	logged;
 int	rejectcount;
 int	hardreject;
+int	barenl;  /* non-zero if line terminator isn't <CRLF> (RFC 5321 2.3.8) */
 
 Biobuf	bin;
 
@@ -36,6 +37,7 @@ int	sflag;
 int	authenticate;
 int	authenticated;
 int	passwordinclear;
+int	tlsactive;
 char	*tlscert;
 
 uchar	rsysip[IPaddrlen];
@@ -449,7 +451,7 @@ hello(String *himp, int extended)
 	reply("250%c%s you are %s\r\n", extended ? '-' : ' ', dom, him);
 	if (extended) {
 		reply("250-ENHANCEDSTATUSCODES\r\n");	/* RFCs 2034 and 3463 */
-		if(tlscert != nil)
+		if(tlscert != nil && !tlsactive)
 			reply("250-STARTTLS\r\n");
 		if (passwordinclear)
 			reply("250 AUTH CRAM-MD5 PLAIN LOGIN\r\n");
@@ -735,7 +737,7 @@ verify(String *path)
 }
 
 /*
- *  get a line that ends in crnl or cr, turn terminating crnl into a nl
+ *  get a line that ends in crnl, turn terminating crnl into a nl
  *
  *  return 0 on EOF
  */
@@ -766,10 +768,13 @@ getcrnl(String *s, Biobuf *fp)
 				s_putc(s, '\n');
 				goto out;
 			}
-			Bungetc(fp);
+			if(c != -1)
+				Bungetc(fp);
+			barenl = 1;
 			s_putc(s, '\r');
 			break;
 		case '\n':
+			barenl = 1;
 			s_putc(s, c);
 			goto out;
 		default:
@@ -1139,6 +1144,7 @@ pipemsg(int *byteswritten)
 	pipesig(&status);	/* set status to 1 on write to closed pipe */
 	sawdot = 0;
 	status = 0;
+	barenl = 0;  /* clear <CRLF> message termination violation indicator */
 	werrstr("");
 	piperror = nil;
 
@@ -1171,8 +1177,15 @@ pipemsg(int *byteswritten)
 
 		cp = s_to_c(line);
 		if(chkhdr(cp, s_len(line)) == -1){
-			status = 1;
 			piperror = "mail refused: illegal header chars";
+			status = 1;
+			break;
+		}
+
+		/* refuse bare <CR> or <LF> in header */
+		if(barenl){
+			piperror = "mail refused: illegal header line termination sequence";
+			status = 1;
 			break;
 		}
 
@@ -1208,6 +1221,13 @@ pipemsg(int *byteswritten)
 		}
 		if(n <= 0)
 			break;
+
+		/* refuse bare <CR> or <LF> in body */
+		if(barenl){
+			piperror = "mail refused: illegal body line termination sequence";
+			status = 1;
+			break;
+		}
 
 		/* a line with only a '.' ends the message */
 		cp = s_to_c(line);
@@ -1556,6 +1576,10 @@ starttls(void)
 		reply("500 5.5.1 illegal command or bad syntax\r\n");
 		return;
 	}
+	if (tlsactive) {		/* no nested handshake (RFC 3207 4.2) */
+		reply("503 5.5.1 TLS already active\r\n");
+		return;
+	}
 	chain = readcertchain(tlscert);
 	if (chain == nil) {
 		syslog(0, "smtpd", "TLS reading certificate chain from '%s' failed", tlscert);
@@ -1586,7 +1610,15 @@ starttls(void)
 	free(conn.cert);	/* client cert */
 	free(conn.sessionID);
 	passwordinclear = 1;
+	tlsactive = 1;
 	syslog(0, "smtpd", "started TLS with %s", him);
+	/* RFC 3207 4.2: discard all state learned before the handshake */
+	listfree(&senders);
+	listfree(&rcvers);
+	filterstate = ACCEPT;
+	logged = 0;
+	authenticated = 0;
+	him = "";		/* force client to EHLO again */
 }
 
 int
@@ -1608,9 +1640,9 @@ passauth(char *u, char *secret)
 	cs->resp = response;
 	cs->nresp = strlen(response);
 	ai = auth_response(cs);
+	auth_freechal(cs);
 	if(ai == nil)
 		return -1;
-	auth_freechal(cs);
 	auth_freeAI(ai);
 	return 0;
 }

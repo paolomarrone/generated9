@@ -293,6 +293,7 @@ struct Vmx {
 	Rendez cmdwait;
 	Lock cmdlock;
 	VmCmd *firstcmd, **lastcmd;
+	VmCmd *postponed;
 	VmMem mem;
 	
 	enum {
@@ -1299,6 +1300,15 @@ killcmds(Vmx *vmx, VmCmd *notme)
 {
 	VmCmd *p, *pn;
 	
+	for(p = vmx->postponed; p != nil; p = pn){
+		pn = p->next;
+		p->next = nil;
+		if(p == notme)
+			continue;
+		kstrcpy(p->errstr, Equit, ERRMAX);
+		cmdrelease(p, CMDFFAIL);
+	}
+	vmx->postponed = nil;
 	ilock(&vmx->cmdlock);
 	for(p = vmx->firstcmd; p != nil; p = pn){
 		pn = p->next;
@@ -1823,53 +1833,87 @@ gotcmd(void *vmxp)
 	Vmx *vmx = vmxp;
 	VmCmd *p;
 
-	/* Only this process removes commands; other processes append or cancel. */
-	for(p = vmx->firstcmd; p != nil; p = p->next)
-		if((p->flags & CMDFPOSTP) == 0 || p->scratched)
+	if(vmx->firstcmd != nil)
+		return 1;
+	for(p = vmx->postponed; p != nil; p = p->next)
+		if(p->scratched)
 			return 1;
 	return 0;
 }
 
-/* Deferred commands stay in the queue without blocking later commands. */
+static void
+markcmddone(VmCmd *p, VmCmd ***pp)
+{
+	if((p->flags & (CMDFFAIL|CMDFPOSTP)) == CMDFPOSTP){
+		**pp = p;
+		*pp = &p->next;
+	}else{
+		p->flags = p->flags & ~CMDFPOSTP;
+		cmdrelease(p, 0);
+	}
+}
+
+static VmCmd **
+markppcmddone(VmCmd **pp)
+{
+	VmCmd *p;
+	
+	p = *pp;
+	if((p->flags & (CMDFFAIL|CMDFPOSTP)) == CMDFPOSTP)
+		return &p->next;
+	*pp = p->next;
+	p->next = nil;
+	p->flags = p->flags & ~CMDFPOSTP;
+	cmdrelease(p, 0);
+	return pp;
+}
+
+
 static int
 runcmd(Vmx *vmx)
 {
 	VmCmd *p, **pp;
-	int progress;
+	int fresh;
 
-	progress = 0;
-	pp = &vmx->firstcmd;
-	for(;;){
-		ilock(&vmx->cmdlock);
-		p = *pp;
-		iunlock(&vmx->cmdlock);
-		if(p == nil)
-			break;
-		p->flags &= ~CMDFPOSTP;
+	fresh = 0;
+	for(pp = &vmx->postponed; p = *pp, p != nil; ){
 		if(waserror()){
 			kstrcpy(p->errstr, up->errstr, ERRMAX);
 			p->flags |= CMDFFAIL;
-		}else{
-			if(p->scratched)
-				error(Eintr);
-			p->retval = p->cmd(p, p->va);
-			poperror();
+			pp = markppcmddone(pp);
+			continue;
 		}
-		ilock(&vmx->cmdlock);
-		if((p->flags & (CMDFFAIL|CMDFPOSTP)) == CMDFPOSTP){
-			pp = &p->next;
-			iunlock(&vmx->cmdlock);
-		}else{
-			*pp = p->next;
-			if(vmx->lastcmd == &p->next)
-				vmx->lastcmd = pp;
-			p->next = nil;
-			iunlock(&vmx->cmdlock);
-			cmdrelease(p, 0);
-			progress = 1;
-		}
+		p->flags &= ~CMDFPOSTP;
+		p->retval = p->cmd(p, p->va);
+		poperror();
+		pp = markppcmddone(pp);
 	}
-	return progress;
+	for(;;){
+		ilock(&vmx->cmdlock);
+		p = vmx->firstcmd;
+		if(p == nil){
+			iunlock(&vmx->cmdlock);
+			break;
+		}
+		fresh = 1;
+		vmx->firstcmd = p->next;
+		if(vmx->lastcmd == &p->next)
+			vmx->lastcmd = &vmx->firstcmd;
+		iunlock(&vmx->cmdlock);
+		p->next = nil;
+		if(waserror()){
+			kstrcpy(p->errstr, up->errstr, ERRMAX);
+			p->flags |= CMDFFAIL;
+			markcmddone(p, &pp);
+			continue;
+		}
+		if(p->scratched)
+			error(Eintr);
+		p->retval = p->cmd(p, p->va);
+		poperror();
+		markcmddone(p, &pp);
+	}
+	return fresh && vmx->postponed != nil;
 }
 
 static void

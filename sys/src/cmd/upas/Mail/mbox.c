@@ -23,6 +23,13 @@ enum {
 	Nchan,
 };
 
+enum {
+	Snew   = L'★',
+	Sresp  = L'←',
+	Sseen  = L'⋯',
+	Sdel   = L'∉',
+	Stodel = L'∉',
+};
 
 char	*maildir	= "/mail/fs";
 char	*mailbox	= "mbox";
@@ -479,17 +486,18 @@ mbload(void)
 	qsort(mbox.mesg, mbox.nmesg, sizeof(Mesg*), cmpmesg);	
 }
 
-static char*
+static Rune
 getflag(Mesg *m)
 {
-	char* flag;
-
-	flag = "★";
-	if(m->flags & Fseen)	flag = " ";
-	if(m->flags & Fresp)	flag = "←";
-	if(m->flags & Fdel)	flag = "∉";
-	if(m->flags & Ftodel)	flag = "∉";
-	return flag;
+	if(m->flags & Ftodel)
+		return Stodel;
+	if(m->flags & Fdel)
+		return Sdel;
+	if(m->flags & Fresp)
+		return Sresp;
+	if(m->flags & Fseen)
+		return Sseen;
+	return Snew;
 }
 
 static void
@@ -528,7 +536,7 @@ fmtmesg(Biobuf *bp, char *fmt, Mesg *m, int depth)
 	int width, i, indent;
 	Tm tm;
 
-	Bprint(bp, "%-6s\t%s ", m->name, getflag(m));
+	Bprint(bp, "%-6s\t%C ", m->name, getflag(m));
 	for(p = fmt; *p; p++){
 		if(*p != '%'){
 			Bputc(bp, *p);
@@ -739,7 +747,7 @@ mbflush(char **, int)
 
 		removeid(m);
 		m->state |= Szap;
-		if(p == nil && nsub(m) != 0)
+		if(p == nil && m->nchild != 0)
 			p = placeholder(m->messageid, m->time, 1);
 		if(p != nil)
 			relinkmsg(p, m);
@@ -758,6 +766,39 @@ mbflush(char **, int)
 		
 	close(fd);
 	fprint(mbox.ctl, "clean\n");
+}
+
+static void
+mbmove(char **f, int nf)
+{
+	char *sel, *p, *e, *path;
+	int fd;
+	Mesg *m;
+
+	if(nf != 1){
+		fprint(2, "usage: Move folder\n");
+		return;
+	}
+	if((sel = winreadsel(&mbox)) == nil)
+		return;
+	path = estrjoin(maildir, "/ctl", nil);
+	if((fd = open(path, OWRITE)) != -1){
+		for(p = sel; p != nil; p = e){
+			if((e = strchr(p, '\n')) != nil)
+				*e++ = 0;
+			if(!matchmesg(&mbox, p))
+				continue;
+			if((m = mesglookup(p, nil)) == nil
+			|| (m->state & Sopen) || (m->flags & Fdel))
+				continue;
+			if(fprint(fd, "move %s %d %q", mailbox, atoi(m->name), f[0]) == -1)
+				fprint(2, "Move: %s: %r\n", m->name);
+		}
+		close(fd);
+	}else
+		fprint(2, "Move: open %s: %r\n", path);
+	free(path);
+	free(sel);
 }
 
 static void
@@ -957,7 +998,7 @@ static void
 nextunread(char **, int)
 {
 	fprint(mbox.ctl, "addr=dot\n");
-	fprint(mbox.addr, "/^[0-9]+\\/ *\t★.*");
+	fprint(mbox.addr, "/^[0-9]+\\/ *\t%C.*", Snew);
 	fprint(mbox.ctl, "dot=addr\n");
 	fprint(mbox.ctl, "show\n");
 }
@@ -972,6 +1013,7 @@ Fn mboxfn[] = {
 	{"Next", nextunread},
 	{"Mark", mbmark},
 	{"Filter", filter},
+	{"Move", mbmove},
 #ifdef NOTYET
 	{"Get", mbrefresh},
 #endif
@@ -997,8 +1039,10 @@ doevent(Event *ev)
 		break;
 	case 'x':
 	case 'X':
-		if((nf = tokenize(ev->text, f, nelem(f))) == 0)
+		if((nf = tokenize(ev->text, f, nelem(f) - 1)) == 0)
 			return;
+		if(ev->flags & 0x8)
+			f[nf++] = ev->arg;
 		for(p = mboxfn; p->fn != nil; p++)
 			if(strcmp(p->name, f[0]) == 0 && p->fn != nil){
 				p->fn(&f[1], nf - 1);
