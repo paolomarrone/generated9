@@ -120,6 +120,8 @@ games/missile
 
 See [raygames(1)](../sys/man/1/raygames) for controls and capture options.
 
+For Orbit 9, see the [pinball build instructions](../sys/src/games/pinball/README).
+
 For JavaScript graphics and the Gemrun game, build
 [rayjs](../sys/src/cmd/rayjs/README) after raylib.
 

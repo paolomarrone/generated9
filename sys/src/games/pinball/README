@@ -1,0 +1,16 @@
+Orbit 9
+
+Install libgpu, TinyGL and raylib as described in boot/GPU.md. In rio:
+
+    cd /sys/src/games/pinball
+    mk install
+    mk test
+    games/pinball -a
+
+See pinball(1) for rules and controls. To capture the demo:
+
+    games/pinball -ad -n 900 -o /tmp/pinball.png
+
+mk test runs the physics and game rules without a window. It exercises
+individual shots and plays ten simulated minutes using the player controls.
+Graphics and sound have been tested on amd64/QEMU with VirGL and HDA.

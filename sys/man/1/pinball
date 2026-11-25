@@ -1,0 +1,58 @@
+.TH PINBALL 1
+.SH NAME
+pinball \- Orbit 9 space pinball
+.SH SYNOPSIS
+.B games/pinball
+[
+.B -ad
+] [
+.B -n
+.I frames
+] [
+.B -o
+.I image.png
+]
+.SH DESCRIPTION
+.I Pinball
+plays a three-ball game on an original space-themed table.
+It runs in a rio window using raylib and VirGL.
+.PP
+Hold Space to compress the launch spring, then release it.
+Z or the left arrow operates the left flipper;
+slash or the right arrow operates the right flipper.
+The up arrow nudges the table. Three rapid nudges tilt it,
+disabling flippers, scoring, bonus and ball saving until the next ball.
+P pauses, R starts a new game and Q quits.
+Losing keyboard focus pauses an active game; P resumes it.
+.PP
+Hit the three left-hand relay targets, then five reactor bumpers,
+then shoot upward into the right-hand orbit ramp to complete a mission.
+Missions carry across balls. The ramp returns the ball to the left inlane.
+Lighting all three upper rollovers increases the multiplier;
+the rollovers reset after each completed mission or new ball.
+.PP
+Bumpers award 100 points, slingshots 50, relay targets 250,
+rollovers 500, the ramp 2000 and a completed mission 25000,
+each multiplied by the current multiplier (at most five).
+An additional bonus is collected when the ball drains unless tilted.
+The first eight seconds of play on each ball have a ball saver.
+A saved ball is served again without renewing the timer.
+The best score lasts for the current process.
+.PP
+.B -a
+enables synthesized effects through
+.BR /dev/audio .
+.B -d
+plays an automatic demonstration; R takes over with a new game.
+.B -n
+exits after the specified number of frames, advancing the simulation by
+exactly 1/60 second per unpaused frame.
+.B -o
+saves the final window image as PNG.
+The window may be resized; the table retains its proportions.
+.SH SOURCE
+.B /sys/src/games/pinball
+.SH SEE ALSO
+.IR raylib (2),
+.IR gpu (3),
+.IR rio (4)

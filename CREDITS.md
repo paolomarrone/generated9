@@ -204,6 +204,9 @@ Bundled codecs and utilities retain their notices in
 
 ## raylib games
 
+Orbit 9 (`sys/src/games/pinball`) is new generated9 code under the root
+[LICENSE](LICENSE), including its table artwork and synthesized sounds.
+
 Arkanoid, Asteroids and Missile Commander come from
 [raylib-games](https://github.com/raysan5/raylib-games/tree/318688c759eaf391b36b9f893355c038fcf56419/classics)
 at `318688c759eaf391b36b9f893355c038fcf56419`.

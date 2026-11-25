@@ -1,0 +1,14 @@
+</$objtype/mkfile
+
+TARG=test
+OFILES=test.$O physics.$O
+HFILES=../pinball.h
+CFLAGS=$CFLAGS -p
+
+</sys/src/cmd/mkone
+
+physics.$O: ../physics.c $HFILES
+	$CC $CFLAGS -o $target ../physics.c
+
+test:V: $O.out
+	./$O.out

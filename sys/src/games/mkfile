@@ -48,6 +48,7 @@ DIRS=\
 	nes\
 	neverball\
 	opl3\
+	pinball\
 	raygames\
 	snes\
 	sokoban\
